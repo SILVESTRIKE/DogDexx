@@ -17,8 +17,9 @@ from ultralytics.utils.plotting import Annotator, colors
 # ==============================================================================
 # 1. CONFIGURATION
 # ==============================================================================
-MODEL_PATH = "best_model.pt"
-DEVICE = "cuda"
+MODEL_PATH = "models/epoch90.pt"
+HUGGINGFACE_MODEL_URL = "https://huggingface.co/<user>/<repo>/resolve/main/epoch90.pt"
+DEVICE = "cpu"  # or 'cuda' if GPU is available
 IMAGE_CONF_THRESHOLD = 0.25
 VIDEO_CONF_THRESHOLD = 0.5
 STREAM_CONF_THRESHOLD = 0.4
@@ -39,6 +40,21 @@ app = FastAPI(
     description="An API to predict dog breeds from images and videos using a YOLOv8 model.",
     version="6.0.0",
 )
+
+
+# Tải model từ Hugging Face nếu chưa có file cục bộ
+if not os.path.exists(MODEL_PATH):
+    import requests
+    print(f"Downloading model from Hugging Face: {HUGGINGFACE_MODEL_URL}")
+    try:
+        response = requests.get(HUGGINGFACE_MODEL_URL, stream=True)
+        response.raise_for_status()
+        with open(MODEL_PATH, "wb") as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        print("Model downloaded successfully.")
+    except Exception as e:
+        print(f"Error downloading model: {e}")
 
 try:
     model = YOLO(MODEL_PATH)
