@@ -69,4 +69,27 @@ export class DirectoryService {
     }
     return breadcrumb;
   }
+  static async rename(
+    directoryId: string,
+    name: string
+  ): Promise<DirectoryDoc | null> {
+    return DirectoryModel.findOneAndUpdate(
+      { _id: directoryId, isDeleted: false },
+      { name },
+      { new: true }
+    );
+  }
+  static async move(
+    directoryId: string,
+    parent_id: string | null
+  ): Promise<DirectoryDoc | null> {
+    return DirectoryModel.findOneAndUpdate(
+      { _id: directoryId, isDeleted: false },
+      { parent_id },
+      { new: true }
+    );
+  }
+  static async getAll(): Promise<DirectoryDoc[]> {
+    return DirectoryModel.find({ isDeleted: false }).sort({ name: "asc" });
+  }
 }

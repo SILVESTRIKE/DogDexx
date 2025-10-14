@@ -10,6 +10,9 @@ declare global {
     export interface Request {
       user?: PlainUser;
       trial?: TrialPayload;
+      fingerprint?: {
+        hash: string;
+      };
     }
   }
 }

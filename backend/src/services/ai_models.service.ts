@@ -4,7 +4,7 @@ import {
   UpdateAIModelType,
 } from "../types/zod/ai_models.zod";
 import { Types } from "mongoose";
-import { NotFoundError } from "../errors";
+import { ConflictError } from "../errors";
 
 export class AIModelService {
   /**

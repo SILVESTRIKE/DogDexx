@@ -40,3 +40,11 @@ export const GetMediasQuerySchema = z.object({
   type: z.string().optional(),
   directory_id: objectIdSchema.optional(),
 });
+
+export const RenameDirectoryZodSchema = z.object({
+  name: z.string().min(1, "Tên không được để trống"),
+});
+
+export const MoveDirectoryZodSchema = z.object({
+  parent_id: objectIdSchema.optional(),
+});
