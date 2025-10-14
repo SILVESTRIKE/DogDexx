@@ -4,7 +4,7 @@ import { OtpModel, OtpType } from "../models/otp.model";
 import { sendEmail } from "./email.service";
 import { RegisterType } from "../types/zod/user.zod";
 import mongoose, { Types, ClientSession } from "mongoose";
-import { BadRequestError, NotFoundError } from "../errors";
+import { BadRequestError, ConflictError } from "../errors";
 import { DirectoryModel } from "../models/directory.model";
 
 export type PlainUser = {
@@ -12,7 +12,11 @@ export type PlainUser = {
   username: string;
   email: string;
   role: UserRole;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
   verify: boolean;
+  isGuest?: boolean;
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
@@ -23,29 +27,22 @@ export type PlainUser = {
 
 export const userService = {
   async getAll(): Promise<PlainUser[]> {
-    return UserModel.find({ isDeleted: false })
-      .select("-password")
-      .lean<PlainUser[]>();
+    return UserModel.find({ isDeleted: false }).select("-password");
   },
 
   async getById(id: string): Promise<PlainUser | null> {
-    return UserModel.findOne({ _id: id, isDeleted: false })
-      .select("-password")
-      .lean<PlainUser>();
+    return UserModel.findOne({ _id: id, isDeleted: false }).select("-password");
   },
 
   async getByEmail(
     email: string,
     selectPassword = false
-  ): Promise<(PlainUser & { password?: string }) | null> {
+  ): Promise<(UserDoc & { password?: string }) | null> {
     const query = UserModel.findOne({ email, isDeleted: false });
-    return (selectPassword ? query.select("+password") : query).lean<
-      PlainUser & { password?: string }
-    >();
+    return selectPassword ? query.select("+password") : query;
   },
 
   async createUser(data: RegisterType): Promise<PlainUser> {
-    // BỎ: Toàn bộ logic session và transaction
     try {
       const existed = await UserModel.findOne({ email: data.email });
       if (existed) {
@@ -65,7 +62,7 @@ export const userService = {
       await directory.save();
 
       // Update the user with the directoryId
-      user.directoryId = directory._id;
+      user.directory_id = directory._id;
       await user.save();
 
       await this.sendOtp(user.email);
@@ -80,13 +77,16 @@ export const userService = {
   // Sửa lại hàm sendOtp để không nhận session
   async sendOtp(email: string): Promise<{ message: string }> {
     const user = await UserModel.findOne({ email });
-    if (!user) throw new NotFoundError("Không tìm thấy người dùng");
+    if (!user) throw new ConflictError("Không tìm thấy người dùng");
     if (user.verify)
       throw new BadRequestError("Tài khoản này đã được xác thực rồi.");
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    await OtpModel.deleteMany({ email: email, type: OtpType.EMAIL_VERIFICATION });
-    
+    await OtpModel.deleteMany({
+      email: email,
+      type: OtpType.EMAIL_VERIFICATION,
+    });
+
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
     await new OtpModel({
       email: email,
@@ -106,7 +106,7 @@ export const userService = {
   async updateUser(
     id: string,
     data: Partial<UserDoc>
-  ): Promise<PlainUser | null> {
+  ): Promise<UserDoc | null> { // <-- Sửa lại kiểu trả về thành UserDoc
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
     }
@@ -115,10 +115,10 @@ export const userService = {
       data,
       { new: true, runValidators: true }
     )
-      .select("-password")
-      .lean<PlainUser>();
+      .select("-password");
+      
     if (!updatedUser)
-      throw new NotFoundError("Cập nhật thất bại, không tìm thấy người dùng.");
+      throw new ConflictError("Cập nhật thất bại, không tìm thấy người dùng.");
     return updatedUser;
   },
 
@@ -128,7 +128,7 @@ export const userService = {
       { isDeleted: true }
     );
     if (result.modifiedCount === 0)
-      throw new NotFoundError("Không tìm thấy người dùng để xóa.");
+      throw new ConflictError("Không tìm thấy người dùng để xóa.");
     return true;
   },
 

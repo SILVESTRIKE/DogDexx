@@ -9,6 +9,7 @@ import {
   VerifyEmailType,
   ForgotPasswordType,
   ResetPasswordType,
+  UpdateProfileType,
 } from "../types/zod/user.zod";
 
 export const userController = {
@@ -85,7 +86,10 @@ export const userController = {
     res.status(200).json(req.user);
   },
 
-  updateProfile: async (req: Request, res: Response) => {
+  updateProfile: async (
+    req: Request<{}, {}, UpdateProfileType>,
+    res: Response
+  ) => {
     const userId = req.user!._id.toString();
     const updatedUser = await userService.updateUser(userId, req.body);
     res.status(200).json(updatedUser);
