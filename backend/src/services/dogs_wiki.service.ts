@@ -43,6 +43,21 @@ export const wikiService = {
   },
 
   /**
+   * READ (Multiple by Slugs): Lấy thông tin của nhiều giống chó bằng mảng các slug.
+   * Được sử dụng bởi BFF để làm giàu dữ liệu dự đoán.
+   */
+  async getBreedsBySlugs(slugs: string[]): Promise<DogBreedWikiDoc[]> {
+    if (!slugs || slugs.length === 0) {
+      return [];
+    }
+    const breeds = await DogBreedWikiModel.find({
+      slug: { $in: slugs },
+      isDeleted: false,
+    });
+    return breeds;
+  },
+
+  /**
    * READ (Multiple): Lấy danh sách tất cả các giống chó (có phân trang và tìm kiếm)
    */
   async getAllBreeds(options: QueryOptions) {
