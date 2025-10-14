@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose, { Schema, Document, Types } from "mongoose";
 import { DirectoryDoc } from "./directory.model";
 
 export type MediaDoc = mongoose.Document & {
@@ -7,11 +7,10 @@ export type MediaDoc = mongoose.Document & {
   mediaPath: string; // Đường dẫn vật lý của file trên server/cloud
   description: string | null;
   type: string | null;
-  creator_id: mongoose.Types.ObjectId;
-  directory_id: DirectoryDoc["_id"];
+  creator_id?: mongoose.Types.ObjectId;
+  directory_id?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
-  // Thêm trường isDeleted để đánh dấu xóa mềm
   isDeleted: boolean;
 };
 
@@ -28,26 +27,25 @@ const mediaSchema = new mongoose.Schema<MediaDoc>(
     description: { type: String, default: null },
     type: { type: String, default: null },
     creator_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "User",
-      required: true,
+      required: false,
     },
     directory_id: {
-      type: mongoose.Schema.Types.ObjectId,
+      type: Schema.Types.ObjectId,
       ref: "Directory",
-      required: true,
+      required: false,
       index: true,
     },
-    isDeleted: { type: Boolean, default: false, select: false },
+    isDeleted: { type: Boolean, default: false },
   },
   {
-    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" }, // Sử dụng timestamps của Mongoose
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "medias",
     toJSON: {
       virtuals: true,
       transform(doc: any, ret: any) {
-        ret.id = ret._id;
-        delete ret.id;
+        ret.id = ret._id.toString();
         delete ret._id;
         delete ret.__v;
         delete ret.isDeleted;
@@ -55,7 +53,26 @@ const mediaSchema = new mongoose.Schema<MediaDoc>(
     },
     toObject: {
       virtuals: true,
+      transform(doc: any, ret: any) {
+        ret.id = ret._id.toString();
+        delete ret._id;
+        if (ret.creator_id instanceof Types.ObjectId) {
+          ret.creator_id = ret.creator_id.toString();
+        }
+        if (ret.directory_id instanceof Types.ObjectId) {
+          ret.directory_id = ret.directory_id.toString();
+        }
+        delete ret.__v;
+        delete ret.isDeleted;
+      },
     },
+  }
+);
+mediaSchema.index(
+  { createdAt: 1 },
+  {
+    expireAfterSeconds: 604800, // 7 ngày = 604800 giây
+    partialFilterExpression: { creator_id: { $eq: null } },
   }
 );
 
