@@ -7,9 +7,13 @@ ultralytics
 opencv-python-headless
 pillow
 python-multipart
-torch --index-url https://download.pytorch.org/whl/cu121
-torchvision --index-url https://download.pytorch.org/whl/cu121
-torchaudio --index-url https://download.pytorch.org/whl/cu121
+# nếu dùng local GPU với CUDA 12.1 thì dùng các dòng dưới, nếu không thì dùng torch, torchvision, torchaudio bình thường
+# torch --index-url https://download.pytorch.org/whl/cu121
+# torchvision --index-url https://download.pytorch.org/whl/cu121
+# torchaudio --index-url https://download.pytorch.org/whl/cu121
+torch
+torchvision
+torchaudio
 pydantic_settings
 imageio
 imageio[ffmpeg]

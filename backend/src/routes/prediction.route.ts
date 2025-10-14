@@ -92,7 +92,7 @@ router.post(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/PredictionHistoryResponse'
- *       400:
+*       400:
  *         description: Yêu cầu không hợp lệ
  *         content:
  *           application/json:
@@ -152,7 +152,7 @@ router.get(
  *                 progress:
  *                   type: number
  *                   example: 75
- *                 status:
+*                 status:
  *                   type: string
  *                   example: "processing"
  *       404:

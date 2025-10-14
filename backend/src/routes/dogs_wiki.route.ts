@@ -20,7 +20,7 @@ const router = Router();
  *         name: search
  *         schema:
  *           type: string
- *         description: Tìm kiếm giống chó theo tên (ví dụ: terrier)
+*         description: "Tìm kiếm giống chó theo tên (ví dụ: terrier)"
  *       - in: query
  *         name: page
  *         schema:
