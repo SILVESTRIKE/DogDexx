@@ -18,7 +18,7 @@ from ultralytics.utils.plotting import Annotator, colors
 # 1. CONFIGURATION
 # ==============================================================================
 MODEL_PATH = "models/epoch90.pt"
-HUGGINGFACE_MODEL_URL = "https://huggingface.co/<user>/<repo>/resolve/main/epoch90.pt"
+HUGGINGFACE_MODEL_URL = "https://huggingface.co/HakuDevon/Dog_Breed_ID/resolve/main/epoch90.pt"
 DEVICE = "cpu"  # or 'cuda' if GPU is available
 IMAGE_CONF_THRESHOLD = 0.25
 VIDEO_CONF_THRESHOLD = 0.5
