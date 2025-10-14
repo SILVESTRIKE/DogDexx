@@ -5,90 +5,55 @@ import { BadRequestError, TooMuchReqError } from "../errors";
 
 const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
-// Giới hạn cho từng vai trò
 const LIMITS = {
-  user: {
-    image: 100, // Cập nhật giới hạn ở đây
-    video: 5,
-  },
+  user: { image: 100, video: 5 },
 };
 
-// 1. Limiter cho Guest (vẫn dùng rate-limit dựa trên IP)
+// Limiter cho Guest: 5 lần/ngày/IP
 const guestLimiter = rateLimit({
-  windowMs: 7 * 24 * 60 * 60 * 1000, // 1 tuần
-  max: 1,
+  windowMs: 24 * 60 * 60 * 1000, // 1 ngày
+  max: 5,
   message: {
-    message:
-      "Bạn đã hết lượt dự đoán với tư cách khách. Vui lòng đăng ký để sử dụng nhiều hơn.",
+    message: "Bạn đã hết lượt dùng thử trong hôm nay. Vui lòng đăng ký để sử dụng nhiều hơn.",
   },
   standardHeaders: true,
   legacyHeaders: false,
 });
 
-// 2. Middleware chính, xử lý logic cho người dùng đã đăng nhập
-export const checkUsageLimit = (allowedTypes: ("image" | "video")[]) => {
-  return async (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user;
+export const checkUsageLimit = async (req: Request, res: Response, next: NextFunction) => {
+  // Nếu là khách -> dùng IP limiter
+  if (!req.user) {
+    return guestLimiter(req, res, next);
+  }
 
-    // --- XỬ LÝ GUEST ---
-    if (!user) {
-      return guestLimiter(req, res, next);
+  // Nếu là người dùng đã đăng nhập -> kiểm tra DB
+  try {
+    const dbUser = await UserModel.findById(req.user._id);
+    if (!dbUser) return next(new BadRequestError("Người dùng không hợp lệ."));
+    if (dbUser.role === "admin") return next();
+
+    const now = new Date();
+    if (now.getTime() - (dbUser.lastUsageResetAt?.getTime() || 0) > ONE_WEEK_IN_MS) {
+      dbUser.photoUploadsThisWeek = 0;
+      dbUser.videoUploadsThisWeek = 0;
+      dbUser.lastUsageResetAt = now;
+      await dbUser.save();
     }
 
-    // --- XỬ LÝ USER ĐÃ ĐĂNG NHẬP ---
-    try {
-      const dbUser = await UserModel.findById(user._id);
-      if (!dbUser) {
-        return next(new BadRequestError("Người dùng không hợp lệ."));
-      }
+    const type = (req as any).mediaType as 'image' | 'video';
+    if (!type) return next(new BadRequestError("Không thể xác định loại media."));
 
-      // Bypass cho premium và admin
-      if (dbUser.role === "premium" || dbUser.role === "admin") {
-        return next();
+    if (dbUser.role === "user") {
+      if (type === "image" && dbUser.photoUploadsThisWeek >= LIMITS.user.image) {
+        return next(new TooMuchReqError(`Bạn đã đạt giới hạn ${LIMITS.user.image} ảnh/tuần.`));
       }
-
-      // Logic reset số lượt hàng tuần
-      const now = new Date();
-      if (now.getTime() - dbUser.lastUsageResetAt.getTime() > ONE_WEEK_IN_MS) {
-        dbUser.photoUploadsThisWeek = 0;
-        dbUser.videoUploadsThisWeek = 0;
-        dbUser.lastUsageResetAt = now;
-        await dbUser.save();
+      if (type === "video" && dbUser.videoUploadsThisWeek >= LIMITS.user.video) {
+        return next(new TooMuchReqError(`Bạn đã đạt giới hạn ${LIMITS.user.video} video/tuần.`));
       }
-
-      // Lấy loại media từ body request
-      const type = req.body.type as 'image' | 'video';
-      if (!type || !allowedTypes.includes(type)) {
-        return next(new BadRequestError(`Loại media không được hỗ trợ. Chỉ chấp nhận: ${allowedTypes.join(', ')}`));
-      }
-
-      // Kiểm tra giới hạn
-      if (dbUser.role === "user") {
-        if (
-          type === "image" &&
-          dbUser.photoUploadsThisWeek >= LIMITS.user.image
-        ) {
-          return next(
-            new TooMuchReqError(
-              `Bạn đã đạt giới hạn ${LIMITS.user.image} ảnh/tuần.`
-            )
-          );
-        }
-        if (
-          type === "video" &&
-          dbUser.videoUploadsThisWeek >= LIMITS.user.video
-        ) {
-          return next(
-            new TooMuchReqError(
-              `Bạn đã đạt giới hạn ${LIMITS.user.video} video/tuần.`
-            )
-          );
-        }
-      }
-
-      next();
-    } catch (error) {
-      next(error);
     }
-  };
+
+    next();
+  } catch (error) {
+    next(error);
+  }
 };

@@ -36,7 +36,7 @@ const storage = multer.diskStorage({
 
     let fullPath: string;
 
-    if (req.user) {
+    if (req.user && req.user.isGuest !== true) {
       // Logged-in user
       const fileTypeDir = getFileTypeDir(file.mimetype);
       fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
@@ -83,7 +83,7 @@ const fileFilter = (
   cb: multer.FileFilterCallback
 ) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
-    // Attach mediaType to the request object for controllers to use
+    // Tự động phát hiện và gán loại media
     if (file.mimetype.startsWith("image/")) {
       (req as any).mediaType = "image";
     } else if (file.mimetype.startsWith("video/")) {
@@ -94,11 +94,24 @@ const fileFilter = (
     cb(new Error("Định dạng file không được hỗ trợ!"));
   }
 };
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILES = 10; // Maximum number of files in a single upload
+
 const multerOptions = {
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 20 },
+  limits: { 
+    fileSize: MAX_FILE_SIZE,
+  },
+};
+
+const multerMultipleOptions = {
+  ...multerOptions,
+  limits: {
+    ...multerOptions.limits,
+    files: MAX_FILES,
+  },
 };
 
 export const uploadSingle = multer(multerOptions).single("file");
-export const uploadMultiple = multer(multerOptions).array("files", 10);
+export const uploadMultiple = multer(multerMultipleOptions).array("files", MAX_FILES);

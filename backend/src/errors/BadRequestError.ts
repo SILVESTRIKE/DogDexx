@@ -5,14 +5,6 @@ export class BadRequestError extends CustomError{
     statusCode = 400;
     message: string = "";
     zodError?: ZodError
-
-    /**
-     * 
-     * @param err - can be a string or a ZodError
-     * If it's a ZodError, the message will be extracted from it.
-     * If it's a string, it will be used as the error message.
-     * If no argument is provided, it defaults to "Bad request".
-     */
     constructor(err?: string|ZodError) {
         super(err instanceof ZodError ? "Zod Error Bad Request" : err || "Bad request");
         if (err instanceof ZodError) {

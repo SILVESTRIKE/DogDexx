@@ -5,3 +5,5 @@ export * from "./NotAuthorizedError";
 export * from "./ValidationError";
 export * from "./TooMuchReqError";
 export * from "./AppError";
+export * from "./ConflictError";
+export * from "./ForbiddenError";
