@@ -17,8 +17,16 @@ import { adminFeedbackRouter } from "./routes/feedback.route";
 import { predictionHistoryRouter } from "./routes/prediction_history.route";
 import { adminPredictionHistoryRouter } from "./routes/admin_prediction_history.route";
 import swaggerUi from "swagger-ui-express";
-// @ts-ignore
-import swaggerSpec from "../swaggerConfig";
+
+import bffUserRoutes from './routes/bff_user.route';
+import bffPredictionRoutes from './routes/bff_prediction.route';
+import bffCollectionRoutes from './routes/bff_collection.route';
+import bffContentRoutes from './routes/bff_content.route';
+import bffAdminRoutes from './routes/bff_admin.route';
+import bffRealtimeRoutes from './routes/bff_realtime.route';
+
+// @ts-ignore - 
+import swaggerSpec from '../swaggerConfig';
 
 dotenv.config();
 const app = express();
@@ -49,7 +57,18 @@ app.get('/api-docs.json', (req, res) => {
 app.get("/test", (req, res) => {
   res.render("test");
 });
+import achievementRoute from './routes/achievement.route';
+
+// BFF Routes
+app.use('/bff/user', bffUserRoutes);
+app.use('/bff/predict', bffPredictionRoutes);
+app.use('/bff/collection', bffCollectionRoutes);
+app.use('/bff/content', bffContentRoutes);
+app.use('/bff/admin', bffAdminRoutes);
+app.use('/bff/live', bffRealtimeRoutes);
+
 app.use(authRoutes);
+app.use(achievementRoute);
 app.use(userRoutes);
 app.use(predictionRoutes);
 app.use(mediasRouter);

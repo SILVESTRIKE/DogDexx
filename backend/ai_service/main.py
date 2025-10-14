@@ -1,6 +1,7 @@
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from pymongo import MongoClient
 from ultralytics import YOLO
 import cv2
 import numpy as np
@@ -17,14 +18,72 @@ from ultralytics.utils.plotting import Annotator, colors
 # ==============================================================================
 # 1. CONFIGURATION
 # ==============================================================================
-MODEL_PATH = "models/epoch90.pt"
-HUGGINGFACE_MODEL_URL = "https://huggingface.co/HakuDevon/Dog_Breed_ID/resolve/main/epoch90.pt"
-DEVICE = "cpu"  # or 'cuda' if GPU is available
-IMAGE_CONF_THRESHOLD = 0.25
-VIDEO_CONF_THRESHOLD = 0.5
-STREAM_CONF_THRESHOLD = 0.4
-STREAM_HIGH_CONF_THRESHOLD = 0.8
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017/")
+DB_NAME = os.getenv("DB_NAME", "dog_breed_db")
 TRACKER_CONFIG = "bytetrack.yaml"
+
+# --- Dynamic Configuration Holder ---
+class Config:
+    def __init__(self):
+        self.mongo_client = MongoClient(MONGO_URI)
+        self.db = self.mongo_client[DB_NAME]
+        self.set_defaults() # Set defaults first
+        self.load() # Then try to load from DB
+
+    def load(self):
+        global model # Allow modifying the global model variable
+        print("Loading configuration from MongoDB...")
+        config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
+        if config_doc:
+            self.IMAGE_CONF_THRESHOLD = config_doc.get("image_conf", 0.25)
+            self.VIDEO_CONF_THRESHOLD = config_doc.get("video_conf", 0.5)
+            self.STREAM_CONF_THRESHOLD = config_doc.get("stream_conf", 0.4)
+            self.STREAM_HIGH_CONF_THRESHOLD = config_doc.get("stream_high_conf", 0.8)
+            self.DEVICE = config_doc.get("device", "cpu")
+            self.MODEL_PATH = config_doc.get("model_path", "models/epoch90.pt")
+            self.HUGGINGFACE_REPO = config_doc.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
+            print(f"Configuration loaded: IMAGE={self.IMAGE_CONF_THRESHOLD}, VIDEO={self.VIDEO_CONF_THRESHOLD}, DEVICE={self.DEVICE}, MODEL={self.MODEL_PATH}")
+        else:
+            print("No configuration found in DB, using default values.")
+            self.set_defaults()
+        
+        # --- Ensure model directory exists ---
+        model_dir = os.path.dirname(self.MODEL_PATH)
+        if model_dir and not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+
+        # --- Download model if it doesn't exist ---
+        if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
+            self.download_model()
+
+        # --- Reload the model with the new path and device ---
+        try:
+            print(f"Loading model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
+            model = YOLO(self.MODEL_PATH)
+            model.to(self.DEVICE)
+            print("YOLO model loaded/reloaded successfully.")
+        except Exception as e:
+            print(f"FATAL: Error loading YOLO model: {e}")
+            model = None
+
+    def download_model(self):
+        from huggingface_hub import hf_hub_download
+        print(f"Model not found at {self.MODEL_PATH}. Downloading from Hugging Face...")
+        try:
+            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.MODEL_PATH), local_dir=os.path.dirname(self.MODEL_PATH))
+            print("Model downloaded successfully.")
+        except Exception as e:
+            print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
+
+    def set_defaults(self):
+        self.IMAGE_CONF_THRESHOLD = 0.25
+        self.VIDEO_CONF_THRESHOLD = 0.5
+        self.STREAM_CONF_THRESHOLD = 0.4
+        self.STREAM_HIGH_CONF_THRESHOLD = 0.8
+        self.DEVICE = "cpu"
+        self.MODEL_PATH = "models/epoch90.pt"
+        self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
+
 
 # Define the save directory relative to this script's location
 SAVE_DIR = os.path.abspath(
@@ -41,28 +100,8 @@ app = FastAPI(
     version="6.0.0",
 )
 
-
-# Tải model từ Hugging Face nếu chưa có file cục bộ
-if not os.path.exists(MODEL_PATH):
-    import requests
-    print(f"Downloading model from Hugging Face: {HUGGINGFACE_MODEL_URL}")
-    try:
-        response = requests.get(HUGGINGFACE_MODEL_URL, stream=True)
-        response.raise_for_status()
-        with open(MODEL_PATH, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        print("Model downloaded successfully.")
-    except Exception as e:
-        print(f"Error downloading model: {e}")
-
-try:
-    model = YOLO(MODEL_PATH)
-    model.to(DEVICE)
-    print("YOLO model loaded successfully.")
-except Exception as e:
-    print(f"Error loading YOLO model: {e}")
-    model = None
+model = None # Initialize model as None
+config = Config() # This will load config and model
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 print(f"Annotated frames will be saved to: {SAVE_DIR}")
@@ -141,6 +180,14 @@ def health_check():
         content={"status": "ok", "message": "YOLOv8 Inference Service is running."}
     )
 
+@app.post("/config/reload", summary="Reload configuration from DB")
+def reload_config():
+    """Forces the service to reload its configuration from the database."""
+    try:
+        config.load()
+        return JSONResponse(content={"status": "ok", "message": "Configuration reloaded successfully."})
+    except Exception as e:
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
 @app.post("/predict/image", summary="Predict from a single image")
 async def predict_from_image_file(file: UploadFile = File(...)):
@@ -164,7 +211,7 @@ async def predict_from_image_file(file: UploadFile = File(...)):
 
         # Use model.track() to get track_id even for a single image
         results = model.track(
-            source=img, conf=IMAGE_CONF_THRESHOLD, persist=False, verbose=False
+            source=img, conf=config.IMAGE_CONF_THRESHOLD, persist=False, verbose=False
         )
         detections = process_results(results)
 
@@ -227,7 +274,7 @@ async def predict_from_image_batch(files: List[UploadFile] = File(...)):
     try:
         # Process the entire batch of images in one go
         results_list = model.track(
-            source=images, conf=IMAGE_CONF_THRESHOLD, persist=False, verbose=False
+            source=images, conf=config.IMAGE_CONF_THRESHOLD, persist=False, verbose=False
         )
 
         response_data = []
@@ -313,8 +360,8 @@ async def predict_from_video_file(file: UploadFile = File(...)):
         tracked_objects = {}
 
         results_generator = model.track(
-            source=tmp_in_path,
-            conf=VIDEO_CONF_THRESHOLD,
+            source=tmp_in_path, 
+            conf=config.VIDEO_CONF_THRESHOLD,
             persist=True,
             verbose=False,
             tracker=TRACKER_CONFIG,
@@ -416,14 +463,14 @@ async def predict_stream(websocket: WebSocket):
 
             if img is not None:
                 results = model.track(
-                    source=img, conf=STREAM_CONF_THRESHOLD, persist=True, verbose=False
+                    source=img, conf=config.STREAM_CONF_THRESHOLD, persist=True, verbose=False
                 )
                 detections = process_results(results)
 
                 high_conf_detections = [
                     d
                     for d in detections
-                    if d["confidence"] > STREAM_HIGH_CONF_THRESHOLD
+                    if d["confidence"] > config.STREAM_HIGH_CONF_THRESHOLD
                 ]
 
                 if high_conf_detections:
