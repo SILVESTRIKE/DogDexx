@@ -9,4 +9,7 @@ pillow
 python-multipart
 torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
 pydantic_settings
+imageio
+imageio[ffmpeg]
+
 #python -m uvicorn main:app --host localhost --port 8000 //command to run the server
