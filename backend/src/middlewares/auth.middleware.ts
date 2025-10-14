@@ -1,6 +1,8 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { userService } from "../services/user.service";
+import { PlainUser } from "../services/user.service";
+import { NotAuthorizedError } from "../errors";
 
 interface JwtPayload {
   userId: string;
@@ -13,9 +15,7 @@ export const authMiddleware = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res
-      .status(401)
-      .json({ message: "Unauthorized: Vui lòng cung cấp token." });
+    return NotAuthorizedError;
   }
 
   const token = authHeader.split(" ")[1];
@@ -25,17 +25,13 @@ export const authMiddleware = async (
     const user = await userService.getById(decoded.userId);
 
     if (!user) {
-      return res
-        .status(401)
-        .json({ message: "Unauthorized: Người dùng không tồn tại." });
+      return NotAuthorizedError;
     }
 
-    req.user = user;
+    req.user = user as PlainUser;
 
     next();
   } catch (error) {
-    return res
-      .status(401)
-      .json({ message: "Unauthorized: Token không hợp lệ hoặc đã hết hạn." });
+    return NotAuthorizedError;
   }
 };
