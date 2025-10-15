@@ -833,7 +833,7 @@ router.get(
  *         schema:
  *           type: string
  *         required: true
-*         description: "Loại file (ví dụ: image, video)"
+ *         description: "Loại file (ví dụ: image, video)"
  *     responses:
  *       200:
  *         description: Danh sách các thư mục năm
@@ -882,7 +882,7 @@ router.get(
  *         schema:
  *           type: string
  *         required: true
- *         description: Loại file (ví dụ: image, video)
+ *         description: "Loại file (ví dụ: image, video)"
  *       - in: path
  *         name: year
  *         schema:
@@ -937,7 +937,7 @@ router.get(
  *         schema:
  *           type: string
  *         required: true
- *         description: Loại file (ví dụ: image, video)
+ *         description: "Loại file (ví dụ: image, video)"
  *       - in: path
  *         name: year
  *         schema:

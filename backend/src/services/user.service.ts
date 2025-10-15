@@ -26,8 +26,37 @@ export type PlainUser = {
 };
 
 export const userService = {
-  async getAll(): Promise<PlainUser[]> {
-    return UserModel.find({ isDeleted: false }).select("-password");
+  async getAll(options: { page?: number, limit?: number, search?: string } = {}): Promise<{ data: PlainUser[], total: number, page: number, limit: number, totalPages: number }> {
+    const { page = 1, limit = 10, search } = options;
+    const skip = (page - 1) * limit;
+    const query: mongoose.FilterQuery<UserDoc> = { isDeleted: false };
+
+    if (search) {
+      const searchRegex = new RegExp(search, 'i');
+      query.$or = [
+        { username: searchRegex },
+        { email: searchRegex },
+        { firstName: searchRegex },
+        { lastName: searchRegex },
+      ];
+    }
+
+    const [users, total] = await Promise.all([
+      UserModel.find(query)
+        .select("-password")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      UserModel.countDocuments(query)
+    ]);
+
+    return {
+      data: users as PlainUser[],
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   },
 
   async getById(id: string): Promise<PlainUser | null> {
