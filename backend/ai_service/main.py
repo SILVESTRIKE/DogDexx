@@ -18,7 +18,7 @@ from ultralytics.utils.plotting import Annotator, colors
 # ==============================================================================
 # 1. CONFIGURATION
 # ==============================================================================
-MONGO_URI = os.getenv("MONGO_URI", "REMOVEDvtduong04_db_user:doantotnghiep@cluster0.zqtdmdc.mongodb.net/")
+MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "dog_breed_db")
 TRACKER_CONFIG = "bytetrack.yaml"
 
