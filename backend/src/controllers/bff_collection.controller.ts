@@ -1,20 +1,4 @@
-// BFF Collection Controller
 import { Request, Response } from 'express';
-<<<<<<< Updated upstream
-
-export const getPokedex = async (req: Request, res: Response) => {
-  // TODO: Combine collections and wiki info
-  res.status(501).json({ message: 'Not implemented' });
-};
-
-export const addBreed = async (req: Request, res: Response) => {
-  // TODO: Add breed to collection, check achievements
-  res.status(501).json({ message: 'Not implemented' });
-};
-
-import { getUserAchievements } from '../services/achievement.service';
-import { UserCollectionModel } from '../models/user_collection.model';
-=======
 import { wikiService } from '../services/dogs_wiki.service';
 import { collectionService } from '../services/user_collections.service';
 import { Types } from 'mongoose';
@@ -84,18 +68,13 @@ export const addBreed = async (req: Request, res: Response) => {
     data: { achievements }
   });
 };
->>>>>>> Stashed changes
 
 export const getAchievements = async (req: Request, res: Response) => {
   try {
     const userId = req.user?._id || req.body.userId || req.query.userId;
     if (!userId) return res.status(400).json({ message: 'Missing userId' });
     const userCollections = await UserCollectionModel.find({ user_id: userId });
-<<<<<<< Updated upstream
-    const achievements = await getUserAchievements(userId, userCollections);
-=======
     const achievements = await achievementService.getUserAchievements(userId, userCollections);
->>>>>>> Stashed changes
     res.json({ achievements });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching achievements', error: err });
@@ -103,10 +82,6 @@ export const getAchievements = async (req: Request, res: Response) => {
 };
 
 export const getStats = async (req: Request, res: Response) => {
-<<<<<<< Updated upstream
-  // TODO: Get collection stats
-  res.status(501).json({ message: 'Not implemented' });
-=======
   const userId = req.user!._id;
 
   const [totalCollected, totalCount, topBreeds] = await Promise.all([
@@ -125,5 +100,4 @@ export const getStats = async (req: Request, res: Response) => {
       top_5_collected_breeds: topBreeds,
     }
   });
->>>>>>> Stashed changes
 };

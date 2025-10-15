@@ -7,7 +7,7 @@ const router = Router();
 router.use('/', createProxyMiddleware({
     target: process.env.AI_SERVICE_URL || 'http://localhost:8000', // Assuming the live detection is on another path in the AI service
     ws: true,
-    pathRewrite: { '^/bff/live': '/live-detection-stream' }, // Example rewrite path
+    pathRewrite: { '^/bff/live': '/predict-stream' }, // Thống nhất với endpoint của AI service
 }));
 
 export default router;

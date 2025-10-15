@@ -82,9 +82,7 @@ router.post('/add/:slug', authMiddleware, addBreed);
  * /bff/collection/achievements:
  *   get:
  *     summary: Lấy danh sách achievements của user
-<<<<<<< Updated upstream
- *     tags:
- *       - Achievements
+ *     tags: [BFF-Collection]
  *     parameters:
  *       - in: query
  *         name: userId

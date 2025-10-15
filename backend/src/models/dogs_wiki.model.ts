@@ -30,7 +30,7 @@ export interface DogBreedWikiDoc extends Document {
 }
 
 const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
-  slug: { type: String, required: true, unique: true, index: true },
+  slug: { type: String, required: true, unique: true},
   display_name: { type: String, required: true, text: true, index: true }, // Thêm text index để tìm kiếm hiệu quả hơn
   group: { type: String },
   coat_type: { type: String },

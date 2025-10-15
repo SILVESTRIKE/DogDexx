@@ -1,21 +1,4 @@
-// BFF Content Controller
 import { Request, Response } from 'express';
-<<<<<<< Updated upstream
-
-export const getBreedDetail = async (req: Request, res: Response) => {
-  // TODO: Combine wiki, media, prediction history, collection status
-  res.status(501).json({ message: 'Not implemented' });
-};
-
-export const getBreeds = async (req: Request, res: Response) => {
-  // TODO: Get breeds with filter/sort and collection status
-  res.status(501).json({ message: 'Not implemented' });
-};
-
-export const uploadMedia = async (req: Request, res: Response) => {
-  // TODO: Upload media, create directory if needed, return URL and metadata
-  res.status(501).json({ message: 'Not implemented' });
-=======
 import { wikiService } from '../services/dogs_wiki.service';
 import { UserCollectionModel } from '../models/user_collection.model';
 import { MediaModel } from '../models/medias.model';
@@ -64,5 +47,4 @@ export const uploadMedia = async (req: Request, res: Response) => {
   // This is a core function, better handled by the existing medias.controller
   const { uploadSingle } = require('./medias.controller');
   return uploadSingle(req, res);
->>>>>>> Stashed changes
 };
