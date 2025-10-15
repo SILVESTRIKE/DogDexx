@@ -1,4 +1,3 @@
-// Achievement Service
 import Achievement, { IAchievement } from '../models/achievement.model';
 import { UserCollectionDoc } from '../models/user_collection.model';
 import { DogBreedWikiModel } from '../models/dogs_wiki.model';

@@ -75,7 +75,7 @@ router.post(
  * /api/predictions/stream-result:
  *   post:
  *     summary: Lưu kết quả dự đoán từ stream
- *     description: Lưu kết quả dự đoán giống chó từ một stream hình ảnh (ví dụ: từ WebSocket hoặc camera), đăng nhập tùy chọn.
+ *     description: "Lưu kết quả dự đoán giống chó từ một stream hình ảnh (ví dụ: từ WebSocket hoặc camera), đăng nhập tùy chọn."
  *     tags: [Predictions]
  *     security:
  *       - bearerAuth: []
@@ -130,7 +130,7 @@ router.get(
  * /api/predictions/status/{predictionId}:
  *   get:
  *     summary: Kiểm tra trạng thái dự đoán
- *     description: Kiểm tra tiến trình xử lý của một dự đoán (ví dụ: batch hoặc video lớn). Trả về phần trăm hoàn thành hoặc trạng thái hiện tại.
+ *     description: "Kiểm tra tiến trình xử lý của một dự đoán (ví dụ: batch hoặc video lớn). Trả về phần trăm hoàn thành hoặc trạng thái hiện tại."
  *     tags: [Predictions]
  *     security:
  *       - bearerAuth: []

@@ -9,8 +9,33 @@ export interface CreateProductInput {
 }
 
 export class ProductService {
-  static async getAll(): Promise<ProductDoc[]> {
-    return ProductModel.find();
+  static async getAll(options: { page?: number, limit?: number, search?: string } = {}): Promise<{ data: ProductDoc[], total: number, page: number, limit: number, totalPages: number }> {
+    const { page = 1, limit = 10, search } = options;
+    const skip = (page - 1) * limit;
+    const query: any = { isDeleted: false };
+
+    if (search) {
+      query.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { slug: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const [products, total] = await Promise.all([
+      ProductModel.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
+      ProductModel.countDocuments(query)
+    ]);
+
+    return {
+      data: products,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   static async getById(id: string): Promise<ProductDoc> {

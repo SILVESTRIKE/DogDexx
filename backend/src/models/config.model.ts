@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export interface IConfig extends Document {
+export interface IConfiguration extends Document {
   key: string;
   image_conf: number;
   video_conf: number;
@@ -12,7 +12,7 @@ export interface IConfig extends Document {
 }
 
 const ConfigurationSchema: Schema = new Schema({
-  key: { type: String, required: true, unique: true, index: true },
+  key: { type: String, required: true, unique: true},
   image_conf: { type: Number, default: 0.25 },
   video_conf: { type: Number, default: 0.5 },
   stream_conf: { type: Number, default: 0.4 },
@@ -22,4 +22,5 @@ const ConfigurationSchema: Schema = new Schema({
   huggingface_repo: { type: String, default: 'HakuDevon/Dog_Breed_ID' },
 }, { timestamps: true });
 
-export const ConfigModel = mongoose.model<IConfig>('Configuration', ConfigurationSchema);
+
+export const ConfigurationModel = mongoose.model<IConfiguration>('configuration', ConfigurationSchema);

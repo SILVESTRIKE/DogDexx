@@ -105,8 +105,13 @@ export const userController = {
 
   // --- ADMIN CONTROLLERS ---
   getAllUsers: async (req: Request, res: Response) => {
-    const users = await userService.getAll();
-    res.status(200).json(users);
+    const options = {
+      page: parseInt(req.query.page as string, 10) || 1,
+      limit: parseInt(req.query.limit as string, 10) || 10,
+      search: req.query.search as string | undefined,
+    };
+    const result = await userService.getAll(options);
+    res.status(200).json(result);
   },
 
   adminDeleteUser: async (req: Request, res: Response) => {
