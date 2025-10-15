@@ -9,30 +9,56 @@ import { userService } from '../services/user.service';
 import { UserCollectionModel, UserCollectionDoc } from '../models/user_collection.model';
 
 export const getDashboard = async (req: Request, res: Response) => {
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
   const [
     totalUsers,
     totalPredictions,
-    pendingFeedbacks,
-    recentUsers,
-    recentPredictions,
+    totalFeedback,
+    correctFeedbackCount,
+    weeklyActivity,
+    topBreeds,
   ] = await Promise.all([
     UserModel.countDocuments({ isDeleted: false }),
     PredictionHistoryModel.countDocuments({ isDeleted: false }),
-    FeedbackModel.countDocuments({ status: 'pending_review', isDeleted: false }),
-    UserModel.find({ isDeleted: false }).sort({ createdAt: -1 }).limit(5).select('username email createdAt'),
-    PredictionHistoryModel.find({ isDeleted: false }).sort({ createdAt: -1 }).limit(5).populate('user', 'username'),
+    FeedbackModel.countDocuments({ isDeleted: false }),
+    FeedbackModel.countDocuments({ isCorrect: true, isDeleted: false }),
+    PredictionHistoryModel.aggregate([
+      { $match: { createdAt: { $gte: sevenDaysAgo } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          predictions: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]),
+    PredictionHistoryModel.aggregate([
+      { $unwind: "$predictions" },
+      { $group: { _id: "$predictions.class", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 5 },
+      { $project: { breed: "$_id", count: 1, _id: 0 } }
+    ])
   ]);
 
+  const accuracy = totalFeedback > 0 ? (correctFeedbackCount / totalFeedback) * 100 : 0;
+
   res.status(200).json({
-    message: "Lấy dữ liệu dashboard thành công.",
-    data: {
-      stats: {
-        totalUsers,
-        totalPredictions,
-        pendingFeedbacks,
-      },
-      recentUsers,
-      recentPredictions,
+    stats: {
+      totalUsers,
+      totalPredictions,
+      totalFeedback,
+      accuracy: parseFloat(accuracy.toFixed(2)),
+      // todayVisits and todayPredictions would require a more complex analytics service
+      todayVisits: 0,
+      todayPredictions: 0,
+    },
+    charts: {
+      weeklyActivity: weeklyActivity.map((item: any) => ({ day: item._id, predictions: item.predictions, visits: 0 })),
+      topBreeds,
+      accuracyTrend: [], // Requires historical accuracy data
     }
   });
 };
@@ -65,17 +91,24 @@ export const getUsers = async (req: Request, res: Response) => {
   const predictionMap = new Map(predictionCounts.map(item => [item._id.toString(), item.count]));
 
   const enrichedUsers = usersResult.data.map(user => ({
-    ...user, // user is already a plain object from the service
-    collectionCount: collectionMap.get(user._id.toString()) || 0,
-    predictionCount: predictionMap.get(user._id.toString()) || 0,
+    id: user._id,
+    name: user.username,
+    email: user.email,
+    isAdmin: user.role === 'admin',
+    createdAt: user.createdAt,
+    stats: {
+      predictions: predictionMap.get(user._id.toString()) || 0,
+      collected: collectionMap.get(user._id.toString()) || 0,
+      accuracy: 0, // Calculating per-user accuracy is expensive, can be a separate call
+    },
+    status: (user as any).isVerified ? 'active' : 'pending_verification',
   }));
 
   res.status(200).json({
-    message: "Lấy danh sách người dùng thành công.",
-    data: {
-      ...usersResult,
-      data: enrichedUsers,
-    }
+    pagination: {
+      total: usersResult.total, page: usersResult.page, limit: usersResult.limit, totalPages: usersResult.totalPages
+    },
+    users: enrichedUsers,
   });
 };
 
@@ -97,11 +130,24 @@ export const getAlerts = async (req: Request, res: Response) => {
   const NEW_BREED_THRESHOLD = 3;
 
   const potentialNewBreeds = await FeedbackModel.aggregate([
-    { $match: { status: 'pending_review', isDeleted: false } },
-    { $group: { _id: "$user_submitted_label", count: { $sum: 1 } } },
+    { $match: { isCorrect: false, user_submitted_label: { $nin: [null, ""] } } },
+    { $group: { _id: "$user_submitted_label", count: { $sum: 1 }, lastReported: { $max: "$createdAt" } } },
     { $match: { count: { $gte: NEW_BREED_THRESHOLD } } },
     { $sort: { count: -1 } }
   ]);
 
-  res.status(200).json({ message: "Lấy cảnh báo thành công.", data: potentialNewBreeds });
+  const alerts = potentialNewBreeds.map((item: any) => ({
+    id: item._id, // Using breed name as ID for simplicity
+    type: 'new_breed',
+    severity: 'high',
+    message: `Breed '${item._id}' has ${item.count} incorrect reports`,
+    data: {
+      breedName: item._id,
+      incorrectCount: item.count,
+      threshold: NEW_BREED_THRESHOLD,
+    },
+    createdAt: item.lastReported,
+  }));
+
+  res.status(200).json({ alerts });
 };

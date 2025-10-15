@@ -24,12 +24,6 @@ const swaggerDefinition = {
     { name: 'DogsWiki', description: 'API quản lý thông tin các giống chó (wiki)' },
     { name: 'Directories', description: 'API quản lý thư mục logic' },
     { name: 'Predictions', description: 'API dự đoán, lưu lịch sử, stream, kiểm tra trạng thái' },
-    // BFF Tags
-    { name: 'BFF-User', description: 'BFF - Quản lý người dùng (tối ưu cho FE)' },
-    { name: 'BFF-Prediction', description: 'BFF - Luồng dự đoán (tối ưu cho FE)' },
-    { name: 'BFF-Collection', description: 'BFF - Quản lý bộ sưu tập (tối ưu cho FE)' },
-    { name: 'BFF-Content', description: 'BFF - Quản lý nội dung (tối ưu cho FE)' },
-    { name: 'BFF-Admin', description: 'BFF - Quản trị (tối ưu cho FE)' },
     { name: 'AI Proxy', description: 'API chuyển tiếp trực tiếp đến AI Service (không lưu DB)' },
     { name: 'BFF-Prediction', description: 'API tổng hợp cho chức năng dự đoán phía client' },
     { name: 'BFF-Collection', description: 'API tổng hợp cho chức năng bộ sưu tập (Pokedex) phía client' },
@@ -96,7 +90,6 @@ const swaggerDefinition = {
             description: 'Mô tả lỗi',
             example: 'Yêu cầu không hợp lệ'
           },
-
           processedMediaPath: { type: 'string', example: '/processed-images/xyz.jpg' },
           modelUsed: { type: 'string', example: 'YOLOv8_image_batch' },
           isCorrect: { type: 'boolean' },

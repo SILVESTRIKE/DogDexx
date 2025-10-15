@@ -4,7 +4,7 @@ import { collectionService } from '../services/user_collections.service';
 import { Types } from 'mongoose';
 import { achievementService } from '../services/achievement.service';
 import { UserCollectionModel } from '../models/user_collection.model';
-import { DogBreedWikiModel } from '../models/dogs_wiki.model';
+import { DogBreedWikiModel, DogBreedWikiDoc } from '../models/dogs_wiki.model';
 
 export const getPokedex = async (req: Request, res: Response) => {
   const userId = req.user?._id;
@@ -16,39 +16,63 @@ export const getPokedex = async (req: Request, res: Response) => {
   // 2. Lấy danh sách breeds đã được lọc từ wikiService
   const filteredBreedsResult = await wikiService.getAllBreeds(options);
 
-  let userCollectionMap = new Map();
+  const totalBreedsInSystem = filteredBreedsResult.total;
+  let collectedBreeds = 0;
+  let breedsResponse = [];
+
   if (userId) {
-    // 2. If user is logged in, get their collection
+    let userCollectionMap = new Map();
     const userCollection = await collectionService.getUserCollection(userId);
+    collectedBreeds = userCollection.length;
     userCollection.forEach(item => {
-      userCollectionMap.set(item.breed_id._id.toString(), {
-        collected: true,
-        count: item.collection_count,
-        first_collected_at: item.first_collected_at,
-      });
+      userCollectionMap.set(item.breed_id._id.toString(), item.first_collected_at);
+    });
+
+    breedsResponse = filteredBreedsResult.data.map(breed => {
+      const breedObj = breed.toObject() as DogBreedWikiDoc;
+      const collectedAt = userCollectionMap.get((breedObj._id as Types.ObjectId).toString());
+      return {
+        id: breedObj._id,
+        name: breedObj.display_name,
+        slug: breedObj.slug,
+        group: breedObj.group,
+        origin: (breedObj as any).origin, // Cần thêm trường origin
+        imageUrl: (breedObj as any).image_url, // Cần thêm trường image_url
+        isCollected: !!collectedAt,
+        collectedAt: collectedAt || null,
+      };
+    });
+  } else {
+    // User is not logged in
+    breedsResponse = filteredBreedsResult.data.map(breed => {
+      const breedObj = breed.toObject() as DogBreedWikiDoc;
+      return {
+        id: breedObj._id,
+        name: breedObj.display_name,
+        slug: breedObj.slug,
+        group: breedObj.group,
+        origin: (breedObj as any).origin,
+        imageUrl: (breedObj as any).image_url,
+        isCollected: false,
+        collectedAt: null,
+      };
     });
   }
 
-  // 3. Combine the two lists
-  const pokedex = filteredBreedsResult.data.map(breed => ({
-    collection_status: userCollectionMap.get((breed as any)._id.toString()) || { collected: false, count: 0 },
-    ...breed.toObject(),
-  }));
-
-  const collectedCount = userCollectionMap.size;
-  const totalBreedsInSystem = await DogBreedWikiModel.countDocuments({ isDeleted: { $ne: true } });
-
   res.status(200).json({
-    message: "Lấy Pokedex thành công.",
-    data: {
-      ...filteredBreedsResult, // Trả về cả thông tin phân trang
-      data: pokedex, // Ghi đè data bằng pokedex đã được làm giàu
-      progress: {
-        collected: collectedCount,
-        total: totalBreedsInSystem,
-        percentage: totalBreedsInSystem > 0 ? (collectedCount / totalBreedsInSystem) * 100 : 0,
-      }
-    }
+    stats: {
+      totalBreeds: totalBreedsInSystem,
+      collectedBreeds: collectedBreeds,
+      progress: totalBreedsInSystem > 0 ? (collectedBreeds / totalBreedsInSystem) * 100 : 0,
+    },
+    breeds: breedsResponse,
+    // Include pagination info
+    pagination: {
+      total: filteredBreedsResult.total,
+      page: filteredBreedsResult.page,
+      limit: filteredBreedsResult.limit,
+      totalPages: filteredBreedsResult.totalPages,
+    },
   });
 };
 
@@ -57,25 +81,64 @@ export const addBreed = async (req: Request, res: Response) => {
   const { slug } = req.params;
 
   // 1. Add breed to collection
-  await collectionService.addOrUpdateCollection(userId, slug);
+  const { collection, isNew } = await collectionService.addOrUpdateCollection(userId, slug) as unknown as { collection: any, isNew: boolean };
 
   // 2. Check for new achievements
   const userCollections = await UserCollectionModel.find({ user_id: userId });
   const achievements = await achievementService.getUserAchievements(userId.toString(), userCollections);
+  const unlockedAchievements = achievements.filter(a => a.unlocked);
+
+  // 3. Find next achievement
+  const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
 
   res.status(200).json({
-    message: `Đã thêm giống chó '${slug}' vào bộ sưu tập.`,
-    data: { achievements }
+    success: true,
+    totalCollected: userCollections.length,
+    achievementsUnlocked: unlockedAchievements.map(a => a.key),
+    nextAchievement: nextAchievement ? {
+      name: nextAchievement.name,
+      requirement: nextAchievement.condition.value,
+      progress: userCollections.length,
+    } : null
   });
 };
 
 export const getAchievements = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?._id || req.body.userId || req.query.userId;
+    const userId = req.user!._id;
     if (!userId) return res.status(400).json({ message: 'Missing userId' });
+
     const userCollections = await UserCollectionModel.find({ user_id: userId });
-    const achievements = await achievementService.getUserAchievements(userId, userCollections);
-    res.json({ achievements });
+    const achievementsResult = await achievementService.getUserAchievements(userId.toString(), userCollections);
+
+    const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
+    const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
+
+    res.json({
+      stats: {
+        totalAchievements: achievementsResult.length,
+        unlockedAchievements: unlockedCount,
+        totalCollected: userCollections.length,
+      },
+      nextAchievement: nextAchievement ? {
+        name: nextAchievement.name,
+        requirement: nextAchievement.condition.value,
+        progress: userCollections.length,
+      } : null,
+      achievements: achievementsResult.map(ach => ({
+        id: ach.key,
+        name: ach.name,
+        description: ach.description,
+        icon: ach.icon || '🐕', // Cần thêm trường icon vào model
+        requirement: ach.condition.value,
+        isUnlocked: ach.unlocked,
+        unlockedAt: ach.unlocked ? (
+          ach.condition.type === 'collection_count' 
+            ? userCollections[ach.condition.value - 1]?.first_collected_at // Lấy ngày của breed thứ N
+            : userCollections.find(uc => (uc.breed_id as any).slug === ach.condition.breedSlug)?.first_collected_at
+        ) || null : null,
+      }))
+    });
   } catch (err) {
     res.status(500).json({ message: 'Error fetching achievements', error: err });
   }

@@ -28,16 +28,18 @@ export const achievementService = {
 
     // --- Tự động tạo các thành tích "Sưu tầm X giống chó" ---
     const dynamicCollectionAchievements: IAchievement[] = [];
-    const maxMilestone = Math.floor(collectionCount / 10) * 10 + 10; // Tính mốc cao nhất cần hiển thị
+    // Chỉ tạo ra 2 cột mốc tiếp theo để người dùng hướng tới, tránh vòng lặp lớn
+    const nextMilestone = Math.floor(collectionCount / 10) * 10 + 10;
+    const milestonesToGenerate = [nextMilestone, nextMilestone + 10];
 
-    for (let i = 10; i <= maxMilestone; i += 10) {
+    for (const milestone of milestonesToGenerate) {
       // Chỉ tạo nếu chưa có trong DB
-      if (!cachedAchievements.some(ach => ach.condition.type === 'collection_count' && ach.condition.value === i)) {
+      if (totalBreedsInDB && milestone <= totalBreedsInDB && !cachedAchievements.some(ach => ach.condition.type === 'collection_count' && ach.condition.value === milestone)) {
         dynamicCollectionAchievements.push({
-          key: `collect-${i}`,
-          name: `Nhà Sưu Tầm ${i / 10}`,
-          description: `Sưu tầm ${i} giống chó khác nhau.`,
-          condition: { type: 'collection_count', value: i },
+          key: `collect-${milestone}`,
+          name: `Nhà Sưu Tầm ${milestone / 10}`,
+          description: `Sưu tầm ${milestone} giống chó khác nhau.`,
+          condition: { type: 'collection_count', value: milestone },
           // Bạn có thể thêm icon mặc định ở đây
         } as IAchievement);
       }

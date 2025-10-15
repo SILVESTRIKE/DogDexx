@@ -42,8 +42,7 @@ const userSchema = new Schema<UserDoc>(
       required: true,
       unique: true,
       trim: true,
-      lowercase: true,
-      index: true,
+      lowercase: true
     },
     password: {
       type: String,
