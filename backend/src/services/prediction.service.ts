@@ -55,7 +55,7 @@ export const predictionService = {
     // Gọi API batch prediction
     const response = await axios.post(`${AI_SERVICE_URL}/predict/images`, formData, {
       headers: { ...formData.getHeaders() },
-      timeout: 10000, // 10s timeout cho batch ảnh
+      timeout: 180000, // Tăng lên 3 phút (180s) cho batch ảnh
     }).catch(error => {
       // Xóa tất cả file tạm nếu gọi AI lỗi
       files.forEach(file => fs.unlinkSync(file.path));
@@ -93,20 +93,6 @@ export const predictionService = {
 
       fs.mkdirSync(publicDir, { recursive: true });
       fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);
-
-      // Cập nhật collection cho user nếu có
-      if (userId && result.predictions?.length > 0) {
-        try {
-          const breedSlugs = result.predictions.map((pred: IYoloPrediction) => 
-            pred.class.toLowerCase().replace(/\s+/g, '-')
-          );
-          
-          // Cập nhật tất cả breeds vào collection
-          await collectionService.addOrUpdateManyCollections(userId, breedSlugs);
-        } catch (error) {
-          console.error('Lỗi khi cập nhật collection:', error);
-        }
-      }
 
       const newPrediction = await PredictionHistoryModel.create({
         user: userId,
@@ -173,7 +159,7 @@ export const predictionService = {
     const endpoint = type === "image" ? "/predict/image" : "/predict/video";
     const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
       headers: { ...formData.getHeaders() },
-      timeout: type === 'video' ? 300000 : 60000,
+      timeout: type === 'video' ? 300000 : 180000, // Tăng timeout ảnh lên 3 phút (180s)
     }).catch(error => {
         fs.unlinkSync(mediaPath); // Xóa file tạm nếu gọi AI lỗi
         console.error("Lỗi khi gọi AI Service:", error.response?.data || error.message);
