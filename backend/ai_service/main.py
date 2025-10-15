@@ -20,6 +20,7 @@ from ultralytics.utils.plotting import Annotator, colors
 # ==============================================================================
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME", "dog_breed_db")
+
 TRACKER_CONFIG = "bytetrack.yaml"
 
 # --- Dynamic Configuration Holder ---
@@ -96,7 +97,7 @@ SAVE_DIR = os.path.abspath(
 # ==============================================================================
 app = FastAPI(
     title="Dog Breed Inference API",
-    description="An API to predict dog breeds from images and videos using a YOLOv8 model.",
+    description="An API to predict dog breeds from images, videos and streams using a YOLOv8 model.",
     version="6.0.0",
 )
 
@@ -182,12 +183,14 @@ def health_check():
 
 @app.post("/config/reload", summary="Reload configuration from DB")
 def reload_config():
-    """Forces the service to reload its configuration from the database."""
+
+    """Forces the service to reload its configuration and model from the database."""
     try:
         config.load()
-        return JSONResponse(content={"status": "ok", "message": "Configuration reloaded successfully."})
+        return JSONResponse(content={"status": "ok", "message": "Configuration and model reloaded successfully."})
     except Exception as e:
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
 
 @app.post("/predict/image", summary="Predict from a single image")
 async def predict_from_image_file(file: UploadFile = File(...)):
@@ -360,7 +363,8 @@ async def predict_from_video_file(file: UploadFile = File(...)):
         tracked_objects = {}
 
         results_generator = model.track(
-            source=tmp_in_path, 
+            source=tmp_in_path,
+
             conf=config.VIDEO_CONF_THRESHOLD,
             persist=True,
             verbose=False,

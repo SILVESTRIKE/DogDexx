@@ -12,7 +12,7 @@ const startServer = async () => {
 
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("Đã kết nối thành công tới MongoDB");
+    console.log("Đã kết nối thành công tới MongoDB tai:", process.env.MONGO_URI);
   } catch (error) {
     console.error("Lỗi kết nối MongoDB:", error);
     process.exit(1);
@@ -20,6 +20,7 @@ const startServer = async () => {
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
+    console.log(`AI Service đang chạy tại: ${process.env.AI_SERVICE_URL || 'http://localhost:8000'}`);
     console.log(`HTTP Server đang chạy trên cổng: http://localhost:${PORT}`);
   });
 };
