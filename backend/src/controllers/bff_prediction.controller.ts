@@ -4,6 +4,7 @@ import { wikiService } from "../services/dogs_wiki.service";
 import { BadRequestError } from "../errors";
 import { transformMediaURLs } from "../utils/media.util";
 import { feedbackService } from "../services/feedback.service";
+import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 
 export const bffPredictionController = {
   predictImage: async (req: Request, res: Response) => {
@@ -18,7 +19,11 @@ export const bffPredictionController = {
 
     // 2. Enrich data
     const breedSlugs = [...new Set(predictionResult.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-')))];
-    const enrichedBreeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    let enrichedBreeds: DogBreedWikiDoc[] = [];
+    // Chỉ gọi service nếu có slug để làm giàu dữ liệu
+    if (breedSlugs.length > 0) {
+      enrichedBreeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    }
 
     // 3. Transform URLs
     const responseData = transformMediaURLs(req, predictionResult.toObject());
@@ -45,7 +50,11 @@ export const bffPredictionController = {
 
     // 2. Enrich data
     const breedSlugs = [...new Set(predictionResult.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-')))];
-    const enrichedBreeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    let enrichedBreeds: DogBreedWikiDoc[] = [];
+    // Chỉ gọi service nếu có slug để làm giàu dữ liệu
+    if (breedSlugs.length > 0) {
+      enrichedBreeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    }
 
     // 3. Transform URLs
     const responseData = transformMediaURLs(req, predictionResult.toObject());
@@ -77,7 +86,11 @@ export const bffPredictionController = {
     const uniqueSlugs = [...new Set(allSlugs)];
 
     // 3. Enrich data once for all unique slugs
-    const enrichedBreeds = await wikiService.getBreedsBySlugs(uniqueSlugs);
+    let enrichedBreeds: DogBreedWikiDoc[] = [];
+    // Chỉ gọi service nếu có slug để làm giàu dữ liệu
+    if (uniqueSlugs.length > 0) {
+      enrichedBreeds = await wikiService.getBreedsBySlugs(uniqueSlugs);
+    }
 
     // 4. Transform URLs for each result
     const responseData = batchResults.map(result => transformMediaURLs(req, result.toObject()));
