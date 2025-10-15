@@ -21,6 +21,7 @@ const swaggerDefinition = {
   tags: [
     { name: 'Auth', description: 'API xác thực và quản lý tài khoản' },
     { name: 'Medias', description: 'API quản lý media (ảnh, video)' },
+    { name: 'DogsWiki', description: 'API quản lý thông tin các giống chó (wiki)' },
     { name: 'Directories', description: 'API quản lý thư mục logic' },
     { name: 'Predictions', description: 'API dự đoán, lưu lịch sử, stream, kiểm tra trạng thái' },
     // BFF Tags
@@ -30,6 +31,11 @@ const swaggerDefinition = {
     { name: 'BFF-Content', description: 'BFF - Quản lý nội dung (tối ưu cho FE)' },
     { name: 'BFF-Admin', description: 'BFF - Quản trị (tối ưu cho FE)' },
     { name: 'AI Proxy', description: 'API chuyển tiếp trực tiếp đến AI Service (không lưu DB)' },
+    { name: 'BFF-Prediction', description: 'API tổng hợp cho chức năng dự đoán phía client' },
+    { name: 'BFF-Collection', description: 'API tổng hợp cho chức năng bộ sưu tập (Pokedex) phía client' },
+    { name: 'BFF-Content', description: 'API tổng hợp cho các chức năng hiển thị nội dung phía client' },
+    { name: 'BFF-Admin', description: 'API tổng hợp cho các chức năng quản trị phía client' },
+    { name: 'BFF-User', description: 'API tổng hợp cho chức năng quản lý tài khoản người dùng phía client' },
   ],
 
   // 3. (QUAN TRỌNG) Toàn bộ "Từ điển dữ liệu" (Schemas)
@@ -82,17 +88,15 @@ const swaggerDefinition = {
 
       // === Core Schemas ===
       PredictionHistoryResponse: { // Combined and cleaned up
+
         type: 'object',
-        required: ['user', 'media', 'mediaPath', 'predictions', 'processedMediaPath', 'modelUsed'],
         properties: {
-          id: { type: 'string', example: '60d21b4667d0d8992e610c85' },
-          user: { $ref: '#/components/schemas/UserResponse' },
-          media: { $ref: '#/components/schemas/MediaResponse' },
-          mediaPath: { type: 'string', example: '/uploads/images/abc.jpg' },
-          predictions: {
-            type: 'array',
-            items: { $ref: '#/components/schemas/YoloPrediction' }
+          message: {
+            type: 'string',
+            description: 'Mô tả lỗi',
+            example: 'Yêu cầu không hợp lệ'
           },
+
           processedMediaPath: { type: 'string', example: '/processed-images/xyz.jpg' },
           modelUsed: { type: 'string', example: 'YOLOv8_image_batch' },
           isCorrect: { type: 'boolean' },
@@ -163,6 +167,7 @@ const swaggerDefinition = {
           createdAt: { type: 'string', format: 'date-time' },
         }
       }
+
     },
   },
 

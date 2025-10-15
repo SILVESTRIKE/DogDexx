@@ -9,6 +9,9 @@ interface QueryOptions {
   group?: string;
   energy_level?: number;
   trainability?: number;
+  shedding_level?: number;
+  suitable_for?: string;
+  sort?: string;
 }
 
 export const wikiService = {
@@ -43,10 +46,25 @@ export const wikiService = {
   },
 
   /**
+   * READ (Multiple by Slugs): Lấy thông tin của nhiều giống chó bằng mảng các slug.
+   * Được sử dụng bởi BFF để làm giàu dữ liệu dự đoán.
+   */
+  async getBreedsBySlugs(slugs: string[]): Promise<DogBreedWikiDoc[]> {
+    if (!slugs || slugs.length === 0) {
+      return [];
+    }
+    const breeds = await DogBreedWikiModel.find({
+      slug: { $in: slugs },
+      isDeleted: false,
+    });
+    return breeds;
+  },
+
+  /**
    * READ (Multiple): Lấy danh sách tất cả các giống chó (có phân trang và tìm kiếm)
    */
   async getAllBreeds(options: QueryOptions) {
-    const { page, limit, search, group, energy_level, trainability } = options;
+    const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for, sort = 'display_name' } = options;
     const skip = (page - 1) * limit;
 
     // Lấy tất cả breed nếu isDeleted không phải là true
@@ -59,9 +77,12 @@ export const wikiService = {
     if (group) query.group = group;
     if (energy_level) query.energy_level = energy_level;
     if (trainability) query.trainability = trainability;
+    if (shedding_level) query.shedding_level = shedding_level;
+    if (suitable_for) query.suitable_for = suitable_for;
 
     const breeds = await DogBreedWikiModel.find(query)
-      .sort({ display_name: 1 })
+      // Sắp xếp theo trường được chỉ định hoặc mặc định là display_name
+      .sort({ [sort]: 1 })
       .skip(skip)
       .limit(limit);
 

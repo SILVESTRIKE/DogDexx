@@ -139,6 +139,12 @@ router.delete("/api/users/me", authMiddleware, userController.deleteCurrentUser)
  *           type: number
  *           default: 10
  *         description: Số lượng bản ghi mỗi trang
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Tìm kiếm theo username, email, hoặc tên.
  *     responses:
  *       200:
  *         description: Danh sách người dùng
@@ -194,6 +200,12 @@ router.get(
  *           type: number
  *           default: 10
  *         description: Số lượng bản ghi mỗi trang
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         required: false
+ *         description: Tìm kiếm theo username, email, hoặc tên.
  *     responses:
  *       200:
  *         description: Danh sách người dùng
