@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Stream Debugger</title>
+    <style>
+        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; gap: 1rem; padding: 1rem; background: #f0f2f5; }
+        .container { display: flex; gap: 1rem; width: 100%; max-width: 1200px; }
+        .video-container { position: relative; width: 50%; }
+        video { width: 100%; height: auto; border-radius: 8px; background: #000; }
+        .controls, .status { background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .output { width: 50%; background: #fff; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); height: 400px; overflow-y: auto; font-family: monospace; white-space: pre-wrap; word-break: break-all; }
+        button { padding: 0.5rem 1rem; border: none; border-radius: 4px; cursor: pointer; background: #007bff; color: #fff; }
+        button:disabled { background: #ccc; }
+        .status-light { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+        .status-light.connected { background: #28a745; }
+        .status-light.disconnected { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket Stream Debugger</h1>
+
+    <div class="container">
+        <div class="video-container">
+            <video id="video" autoplay playsinline muted></video>
+            <div class="controls">
+                <button id="startButton">Start Camera & Connect</button>
+                <button id="stopButton" disabled>Stop</button>
+            </div>
+            <div class="status">
+                <strong>Status:</strong> <span id="status-light" class="status-light disconnected"></span><span id="status-text">Disconnected</span>
+            </div>
+        </div>
+        <div class="output" id="output">
+            <p>Payloads from server will appear here...</p>
+        </div>
+    </div>
+
+    <script>
+        const video = document.getElementById('video');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const statusText = document.getElementById('status-text');
+        const statusLight = document.getElementById('status-light');
+        const outputDiv = document.getElementById('output');
+
+        let ws = null;
+        let stream = null;
+        let frameInterval = null;
+        const WS_URL = 'ws://localhost:3000/bff/predict/stream';
+
+        function log(message) {
+            console.log(message);
+            const p = document.createElement('p');
+            p.textContent = `[${new Date().toLocaleTimeString()}] ${typeof message === 'object' ? JSON.stringify(message, null, 2) : message}`;
+            outputDiv.appendChild(p);
+            outputDiv.scrollTop = outputDiv.scrollHeight;
+        }
+
+        async function start() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                video.srcObject = stream;
+                startButton.disabled = true;
+                stopButton.disabled = false;
+
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    statusText.textContent = 'Connected';
+                    statusLight.className = 'status-light connected';
+                    log('WebSocket Connected.');
+                    frameInterval = setInterval(() => {
+                        if (ws && ws.readyState === WebSocket.OPEN) {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            canvas.getContext('2d').drawImage(video, 0, 0);
+                            ws.send(canvas.toDataURL('image/jpeg', 0.8));
+                        }
+                    }, 500); // Gửi frame mỗi 500ms
+                };
+
+                ws.onmessage = (event) => {
+                    log(JSON.parse(event.data));
+                };
+
+                ws.onclose = () => {
+                    statusText.textContent = 'Disconnected';
+                    statusLight.className = 'status-light disconnected';
+                    log('WebSocket Disconnected.');
+                    stop();
+                };
+
+                ws.onerror = (error) => {
+                    log('WebSocket Error: ' + error);
+                };
+
+            } catch (err) {
+                log('Camera Error: ' + err);
+            }
+        }
+
+        function stop() {
+            if (stream) stream.getTracks().forEach(track => track.stop());
+            if (ws) ws.close();
+            if (frameInterval) clearInterval(frameInterval);
+            startButton.disabled = false;
+            stopButton.disabled = true;
+        }
+
+        startButton.addEventListener('click', start);
+        stopButton.addEventListener('click', stop);
+    </script>
+</body>
+</html>

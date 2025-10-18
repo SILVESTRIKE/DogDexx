@@ -9,11 +9,142 @@ import os
 import uuid
 import base64
 import traceback
-import datetime
-from fastapi import WebSocket, WebSocketDisconnect
+import asyncio
+import imageio
+from typing import List, Dict, Any
+from dotenv import load_dotenv
+from ultralytics.utils.plotting import Annotator, colors
 
 # ==============================================================================
-# 1. KHỞI TẠO APP VÀ LOAD MODEL
+# 1. CONFIGURATION
+# ==============================================================================
+# --- FIX: Load environment variables from .env file ---
+dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+DB_NAME = os.getenv("DB_NAME", "dog_breed_db")
+
+TRACKER_CONFIG = "bytetrack.yaml"
+
+# --- Dynamic Configuration Holder ---
+class Config:
+    def __init__(self):
+        try:
+            self.mongo_client = MongoClient(MONGO_URI)
+            # The ismaster command is cheap and does not require auth.
+            self.mongo_client.admin.command('ismaster')
+            print(f"✅ MongoDB connection successful to URI ending with: ...{MONGO_URI[-20:]}")
+            self.db = self.mongo_client[DB_NAME]
+            self.model = None  # Model instance
+            self.set_defaults() # Set defaults first
+            self.load() # Then try to load from DB
+        except Exception as e:
+            print(f"❌ FATAL: Could not connect to MongoDB at {MONGO_URI}. Error: {e}")
+            print("   - Please ensure MongoDB is running and MONGO_URI in your .env file is correct.")
+            self.db = None
+            self.model = None
+            self.set_defaults()
+
+    def load(self):
+        # FIX: Pymongo DB objects don't support truthiness checks. Compare with None instead.
+        if self.db is None:
+            print("⚠️ Skipping config load because DB connection failed.")
+            self.load_model_from_defaults()
+            return
+            
+        print("Loading configuration from MongoDB...")
+        config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
+        if config_doc:
+            self.IMAGE_CONF_THRESHOLD = config_doc.get("image_conf", 0.25)
+            self.VIDEO_CONF_THRESHOLD = config_doc.get("video_conf", 0.5)
+            self.STREAM_CONF_THRESHOLD = config_doc.get("stream_conf", 0.4)
+            self.STREAM_HIGH_CONF_THRESHOLD = config_doc.get("stream_high_conf", 0.8)
+            self.DEVICE = config_doc.get("device", "cpu")
+            self.MODEL_PATH = config_doc.get("model_path", "models/epoch90.pt")
+            self.HUGGINGFACE_REPO = config_doc.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
+            # --- FIX: Thêm log chi tiết ---
+            print("✅ Configuration loaded successfully from DB:")
+            print(f"   - Model Path: {self.MODEL_PATH}")
+            print(f"   - Device: {self.DEVICE}")
+            print(f"   - HuggingFace Repo: {self.HUGGINGFACE_REPO}")
+            print(f"   - Image Confidence: {self.IMAGE_CONF_THRESHOLD}")
+            print(f"   - Video Confidence: {self.VIDEO_CONF_THRESHOLD}")
+            print(f"   - Stream Confidence: {self.STREAM_CONF_THRESHOLD}")
+            print(f"   - Stream High Confidence: {self.STREAM_HIGH_CONF_THRESHOLD}")
+        else:
+            print("⚠️ No configuration found in DB. Creating one with default values...")
+            self.set_defaults()
+            self.create_default_config_in_db()
+        
+        # --- Ensure model directory exists ---
+        # FIX: Call the model loading logic after configuration is determined.
+        self.load_model_from_defaults()
+    def load_model_from_defaults(self):
+        model_dir = os.path.dirname(self.MODEL_PATH)
+        if model_dir and not os.path.exists(model_dir):
+            os.makedirs(model_dir)
+
+        # --- Download model if it doesn't exist ---
+        if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
+            self.download_model()
+
+        # --- Reload the model with the new path and device ---
+        try:
+            print(f"Loading model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
+            self.model = YOLO(self.MODEL_PATH) 
+            self.model.to(self.DEVICE)
+            print("YOLO model loaded/reloaded successfully.")
+        except Exception as e:
+            print(f"FATAL: Error loading YOLO model: {e}")
+            self.model = None
+
+    def download_model(self):
+        from huggingface_hub import hf_hub_download
+        print(f"Model not found at {self.MODEL_PATH}. Downloading from Hugging Face...")
+        try:
+            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.MODEL_PATH), local_dir=os.path.dirname(self.MODEL_PATH))
+            print("Model downloaded successfully.")
+        except Exception as e:
+            print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
+
+    def set_defaults(self):
+        self.IMAGE_CONF_THRESHOLD = 0.25
+        self.VIDEO_CONF_THRESHOLD = 0.5
+        self.STREAM_CONF_THRESHOLD = 0.4
+        self.STREAM_HIGH_CONF_THRESHOLD = 0.8
+        self.DEVICE = "cpu"
+        self.MODEL_PATH = "models/epoch90.pt"
+        self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
+    
+    def create_default_config_in_db(self):
+        if self.db is None:
+            return
+        try:
+            default_config = {
+                "key": "model_thresholds",
+                "image_conf": self.IMAGE_CONF_THRESHOLD,
+                "video_conf": self.VIDEO_CONF_THRESHOLD,
+                "stream_conf": self.STREAM_CONF_THRESHOLD,
+                "stream_high_conf": self.STREAM_HIGH_CONF_THRESHOLD,
+                "device": self.DEVICE,
+                "model_path": self.MODEL_PATH,
+                "huggingface_repo": self.HUGGINGFACE_REPO,
+            }
+            self.db.configurations.update_one({"key": "model_thresholds"}, {"$setOnInsert": default_config}, upsert=True)
+            print("✅ Default configuration document created/ensured in the database.")
+        except Exception as e:
+            print(f"❌ Error creating default config in DB: {e}")
+
+
+# Define the save directory relative to this script's location
+SAVE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "public", "processed-images")
+)
+
+
+# ==============================================================================
+# 2. INITIALIZATION
 # ==============================================================================
 app = FastAPI(
     title="Dog Breed Inference API",
@@ -21,12 +152,7 @@ app = FastAPI(
     version="5.0.0"
 )
 
-try:
-    model = YOLO("best_model.pt")
-    print("YOLO model loaded successfully.")
-except Exception as e:
-    print(f"Error loading YOLO model: {e}")
-    model = None
+config = Config() 
 
 # Define the save directory relative to this script's location
 SAVE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'public', 'processed-images'))
@@ -38,16 +164,63 @@ print(f"Annotated frames will be saved to: {SAVE_DIR}")
 # ==============================================================================
 def process_results_to_json(results, model_names):
     detections = []
+    
+    if not config.model:
+        print("Error: Model not loaded in process_results")
+        return detections
+        
     if not results or not results[0].boxes:
         return detections
-    
-    for box in results[0].boxes:
-        detections.append({
-            "class": model_names[int(box.cls)],
-            "confidence": float(box.conf),
-            "box": [round(coord) for coord in box.xyxy.tolist()[0]],
-        })
+    boxes = results[0].boxes
+    track_ids = (
+        boxes.id.int().cpu().tolist() if boxes.id is not None else [None] * len(boxes)
+    )
+    class_ids = boxes.cls.int().cpu().tolist()
+    confs = boxes.conf.float().cpu().tolist()
+    xyxy_coords = boxes.xyxy.cpu().tolist()
+
+    for track_id, class_id, conf, xyxy in zip(track_ids, class_ids, confs, xyxy_coords):
+        detections.append(
+            {
+                "track_id": track_id,
+                "class_id": class_id,
+                "class": config.model.names[class_id], 
+                "confidence": conf,
+                "box": [round(coord) for coord in xyxy],
+            }
+        )
     return detections
+
+
+def draw_custom_annotations(frame, detections: List[Dict[str, Any]]):
+    """
+    Draws bounding boxes and labels on a frame using Ultralytics' Annotator
+    to achieve the default look and feel, but with the track_id included.
+    """
+    annotated_frame = frame.copy()
+    
+    if not config.model:
+        return annotated_frame
+        
+    annotator = Annotator(annotated_frame, line_width=2, example=str(config.model.names))
+
+    for det in detections:
+        box = det["box"]
+        confidence = det["confidence"]
+        class_name = det["class"]
+        class_id = det["class_id"]
+        track_id = det.get("track_id")
+
+        # Xây dựng nhãn bao gồm cả track_id
+        label = f"{class_name} {confidence:.2f}"
+        if track_id is not None:
+            label = f"ID:{track_id} {label}"
+
+        # Sử dụng annotator của ultralytics để vẽ
+        annotator.box_label(box, label, color=colors(class_id, True))
+
+    return annotator.result()
+
 
 # ==============================================================================
 # 3. API ENDPOINT
@@ -56,10 +229,32 @@ def process_results_to_json(results, model_names):
 def health_check():
     return JSONResponse(content={"status": "ok", "message": "YOLOv8 Inference Service is running."})
 
-@app.post("/predict", summary="Predict multiple objects and return a base64 visualized image")
+
+@app.post("/config/reload", summary="Reload configuration from DB")
+def reload_config():
+
+    """Forces the service to reload its configuration and model from the database."""
+    try:
+        config.load()
+        if not config.model:
+            return JSONResponse(content={"status": "error", "message": "Configuration reloaded but model failed to load. Check logs."}, status_code=500)
+            
+        return JSONResponse(content={"status": "ok", "message": "Configuration and model reloaded successfully.", "model": config.model.names, "device": config.DEVICE, "image_conf_threshold": config.IMAGE_CONF_THRESHOLD, "video_conf_threshold": config.VIDEO_CONF_THRESHOLD, "stream_conf_threshold": config.STREAM_CONF_THRESHOLD, "stream_high_conf_threshold": config.STREAM_HIGH_CONF_THRESHOLD})
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
+
+
+@app.post("/predict/image", summary="Predict from a single image")
 async def predict_from_image_file(file: UploadFile = File(...)):
-    if not model:
-        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
+    """
+    Accepts an image file, returns predictions (with track_id) and a base64 annotated image.
+    """
+    if not config.model: 
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded"},
+            status_code=503,
+        )
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
@@ -79,19 +274,104 @@ async def predict_from_image_file(file: UploadFile = File(...)):
         _, buffer = cv2.imencode('.jpg', image_to_draw)
         processed_image_base64 = base64.b64encode(buffer).decode('utf-8')
 
-        return JSONResponse(content={
-            "predictions": output_detections,
-            "processed_media_base64": processed_image_base64,
-            "media_type": "image/jpeg"
-        })
+        # Use model.track() to get track_id even for a single image
+        results = config.model.track( 
+            source=img, conf=config.IMAGE_CONF_THRESHOLD, persist=False, verbose=False
+        )
+        detections = process_results(results)
+
+        annotated_image = draw_custom_annotations(img, detections)
+        _, buffer = cv2.imencode(".jpg", annotated_image)
+        processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
+
+        return JSONResponse(
+            content={
+                "predictions": sorted(
+                    detections, key=lambda x: x["confidence"], reverse=True
+                ),
+                "processed_media_base64": processed_image_base64,
+                "media_type": "image/jpeg",
+            }
+        )
     except Exception as e:
         traceback.print_exc()
         return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
 
-@app.post("/predict-video", summary="Process Video and return a base64 processed video")
+
+@app.post("/predict/images", summary="Predict from a batch of images")
+async def predict_from_image_batch(files: List[UploadFile] = File(...)):
+    """
+    Accepts a batch of image files, returns a list of predictions and annotated images.
+    This is more efficient for processing multiple images at once.
+    """
+    if not config.model: 
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded"},
+            status_code=503,
+        )
+
+    images = []
+    original_files = []
+    
+    # Files are automatically cleaned up by FastAPI's UploadFile mechanism
+    for file in files:
+        try:
+            contents = await file.read()
+            nparr = np.frombuffer(contents, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None:
+                images.append(img)
+                original_files.append(file.filename)
+            else:
+                print(f"Warning: Could not decode image {file.filename}")
+        except Exception as e:
+            print(f"Warning: Error processing file {file.filename}: {e}")
+
+    if not images:
+        return JSONResponse(
+            content={"status": "error", "message": "No valid images were provided."},
+            status_code=400,
+        )
+
+    try:
+        # Process the entire batch of images in one go
+        results_list = config.model.track( 
+            source=images, conf=config.IMAGE_CONF_THRESHOLD, persist=False, verbose=False
+        )
+
+        response_data = []
+        for i, results in enumerate(results_list):
+            # process_results expects a list containing one result object
+            detections = process_results([results])
+            annotated_image = draw_custom_annotations(images[i], detections)
+            _, buffer = cv2.imencode(".jpg", annotated_image)
+            processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
+
+            response_data.append({
+                "original_filename": original_files[i],
+                "predictions": sorted(detections, key=lambda x: x["confidence"], reverse=True),
+                "processed_media_base64": processed_image_base64,
+                "media_type": "image/jpeg",
+            })
+
+        return JSONResponse(content={"results": response_data})
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            content={"status": "error", "message": f"An internal error occurred during batch processing: {str(e)}"},
+            status_code=500,
+        )
+@app.post(
+    "/predict/video",
+    summary="Process a video, return annotated video and best shot JSON",
+)
 async def predict_from_video_file(file: UploadFile = File(...)):
-    if not model:
-        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
+    if not config.model: 
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded"},
+            status_code=503,
+        )
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
         contents = await file.read()
@@ -99,65 +379,105 @@ async def predict_from_video_file(file: UploadFile = File(...)):
         tmp_path = tmp.name
 
     try:
-        cap = cv2.VideoCapture(tmp_path)
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4"
+        ) as tmp_in, tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4"
+        ) as tmp_out:
+            # FIX: Video files must be saved to disk for OpenCV/YOLO to stream from them reliably
+            contents = await file.read()
+            tmp_in.write(contents)
+            tmp_in_path = tmp_in.name
+            tmp_out_path = tmp_out.name
+
+        cap = cv2.VideoCapture(tmp_in_path)
         if not cap.isOpened():
             return JSONResponse(content={"status": "error", "message": "Could not open video file."}, status_code=400)
 
-        original_fps = int(cap.get(cv2.CAP_PROP_FPS))
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        
+        # 1. Lấy kích thước gốc
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+
+        # 2. Đảm bảo kích thước là số chẵn (rất quan trọng cho codec H.264)
+        processed_width = width - (width % 2)
+        processed_height = height - (height % 2)
+
+        print(f"Original dims: {width}x{height}. Processing at: {processed_width}x{processed_height}")
+
+        video_writer = imageio.get_writer(
+            tmp_out_path,
+            fps=fps,
+            codec="libx264",
+            pixelformat="yuv420p",
+            macro_block_size=1  # FIX: Chấp nhận mọi kích thước video, không yêu cầu chia hết cho 16.
+        )
+
         tracked_objects = {}
+
+        results_generator = config.model.track( 
+            source=tmp_in_path,
+
+            conf=config.VIDEO_CONF_THRESHOLD,
+            persist=True,
+            verbose=False,
+            tracker=TRACKER_CONFIG,
+            stream=True,
+        )
+
         frame_count = 0
-        frame_skip = max(1, round(original_fps / 10))
-
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
-            
-            if frame_count % frame_skip == 0:
-                results = model.track(source=frame, conf=0.5, persist=True, verbose=False, tracker="bytetrack.yaml")
-                
-                if results[0].boxes.id is not None:
-                    boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
-                    track_ids = results[0].boxes.id.cpu().numpy().astype(int)
-                    confs = results[0].boxes.conf.cpu().numpy()
-                    clss = results[0].boxes.cls.cpu().numpy().astype(int)
-
-                    for box, track_id, conf, cls_id in zip(boxes, track_ids, confs, clss):
-                        class_name = model.names[cls_id]
-                        confidence_float = float(conf)
-                        
-                        if track_id not in tracked_objects or confidence_float > tracked_objects[track_id]['confidence']:
-                            tracked_objects[track_id] = {
-                                "class": class_name, "confidence": confidence_float, "box": box.tolist()
-                            }
+        for results in results_generator:
+            frame = results.orig_img # Sử dụng trực tiếp frame gốc từ YOLO
+                for box, track_id, conf, cls_id in zip(boxes, track_ids, confs, clss):
+                    class_name = model.names[cls_id]
+                    confidence_float = float(conf)
+                    
+                    if track_id not in tracked_objects or confidence_float > tracked_objects[track_id]['confidence']:
+                        tracked_objects[track_id] = {
+                            "class": class_name, "confidence": confidence_float, "box": box.tolist()
+                        }
             frame_count += 1
-
-        final_predictions = sorted(list(tracked_objects.values()), key=lambda x: x['confidence'], reverse=True)
-
-        output_filename = f"{uuid.uuid4()}.mp4"
-        output_path = os.path.join(tempfile.gettempdir(), output_filename)
-        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_path, fourcc, original_fps, (frame_width, frame_height))
-        
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret: break
-            
-            for track_id, data in tracked_objects.items():
-                box = data['box']; label = f"ID {track_id}: {data['class']} ({data['confidence']:.2f})"
-                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-                cv2.putText(frame, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-            out.write(frame)
-
+        # Đóng video writer để đảm bảo tất cả dữ liệu được ghi xuống file
+        video_writer.close()
+        video_writer = None 
         cap.release()
-        out.release()
+        cap = None 
+
+        final_predictions = list(tracked_objects.values())
+
+        with open(tmp_out_path, "rb") as video_file:
+            processed_video_base64 = base64.b64encode(video_file.read()).decode("utf-8")
+
+        return JSONResponse(
+            content={
+                "predictions": sorted(
+                    final_predictions, key=lambda x: x.get("track_id", 0)
+                ),
+                "processed_media_base64": processed_video_base64,
+                "media_type": "video/mp4",
+            }
+        )
+
+    except Exception as e:
+        traceback.print_exc()
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": f"An internal error occurred: {str(e)}",
+            },
+            status_code=500,
+        )
+    finally:
+        if cap is not None:
+            cap.release()
+        if video_writer is not None:
+            video_writer.close()
         
-        with open(output_path, "rb") as video_file:
-            processed_video_base64 = base64.b64encode(video_file.read()).decode('utf-8')
-        os.remove(output_path)
+        # Đảm bảo xóa file tạm
+        if tmp_in_path and os.path.exists(tmp_in_path):
+            os.unlink(tmp_in_path)
+        if tmp_out_path and os.path.exists(tmp_out_path):
+            os.unlink(tmp_out_path)
 
         return JSONResponse(content={
             "predictions": final_predictions,
@@ -174,66 +494,88 @@ async def predict_from_video_file(file: UploadFile = File(...)):
 @app.websocket("/predict-stream")
 async def predict_stream(websocket: WebSocket):
     await websocket.accept()
-    if not model:
+    if not config.model: 
         await websocket.send_json({"status": "error", "message": "Model is not loaded"})
         await websocket.close()
         return
     try:
         while True:
-            data = await websocket.receive_text()
+            # --- THAY ĐỔI: Sử dụng receive() để xử lý message an toàn hơn ---
+            message = await websocket.receive()
+            
+            if message["type"] == "websocket.disconnect":
+                raise WebSocketDisconnect(message.get("code", 1000))
 
-            try:
-                img_data = base64.b64decode(data.split(',')[1])
-                nparr = np.frombuffer(img_data, np.uint8)
-                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            data = message.get("text", "")
 
-                if img is not None:
-                    results = model.predict(source=img, conf=0.4, save=False, verbose=False)
-                    detections = process_results_to_json(results, model.names)
-                    
-                    high_conf_detections = [d for d in detections if d['confidence'] > 0.8]
-
-                    if high_conf_detections:
-                        # Get the annotated image from the results
-                        annotated_frame = results[0].plot()
-
-                        # Create a unique filename
-                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                        highest_conf_det = max(high_conf_detections, key=lambda x: x['confidence'])
-                        breed_name = highest_conf_det['class'].replace(' ', '_')
-                        filename = f"{timestamp}_{breed_name}.jpg"
-                        save_path = os.path.join(SAVE_DIR, filename)
-                        
-                        # Save the annotated image
-                        cv2.imwrite(save_path, annotated_frame)
-                        print(f"[WS] Saved annotated prediction frame to: {save_path}")
-
-                        # The saved file is in `backend/public/processed-images`
-                        # The URL path will be `/processed-images/filename.jpg`
-                        image_url = f"/processed-images/{filename}"
-
-                        # Send a special message to the client and close connection
-                        await websocket.send_json({
-                            "status": "captured",
-                            "imageUrl": image_url,
-                            "detections": high_conf_detections
-                        })
-                        print(f"[WS] Sent capture notification for {image_url}, closing connection.")
-                        await websocket.close()
-                        break  # Exit the while loop
-                    else:
-                        # If no high-confidence detection, send normal results
-                        await websocket.send_json({"status": "ok", "detections": detections})
-                else:
-                    print("[WS] ERROR: Received data could not be decoded into an image.")
-            except Exception as e:
-                print(f"[WS] ERROR processing received data frame: {e}")
+            if not data.startswith('data:image'):
+                if data: print(f"[WS] Received non-image data, skipping: {data[:50]}...")
                 continue
+
+            img_data = base64.b64decode(data.split(",")[1])            
+            nparr = np.frombuffer(img_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+            if img is not None:
+                results = config.model.track( 
+                    source=img, 
+                    conf=config.STREAM_CONF_THRESHOLD, 
+                    persist=True, 
+                    verbose=False,
+                    tracker=TRACKER_CONFIG
+                )
+                detections = process_results(results)
+
+                high_conf_detections = [
+                    d
+                    for d in detections
+                    if d["confidence"] > config.STREAM_HIGH_CONF_THRESHOLD
+                ]
+
+                if high_conf_detections:
+
+                    best_det = max(high_conf_detections, key=lambda x: x["confidence"])
+                    
+                    annotated_frame = draw_custom_annotations(img, high_conf_detections)
+
+                    _, buffer = cv2.imencode(".jpg", annotated_frame)
+                    processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
+                    
+                    prediction_id = str(uuid.uuid4())
+
+                    # track_id = best_det.get("track_id", "N/A")
+                    # breed_name = best_det["class"].replace(" ", "_")
+                    # filename = f"capture_ws_{track_id}_{breed_name}_{uuid.uuid4().hex[:6]}.jpg"
+                    # save_path = os.path.join(SAVE_DIR, filename)
+                    # cv2.imwrite(save_path, annotated_frame) # <--- BỎ DÒNG NÀY
+                    print(f"[WS] Captured high-confidence dog detection: {best_det}")
+
+                    response_payload = {
+                        "status": "captured", 
+                        "predictionId": prediction_id, 
+                        "processed_media_base64": processed_image_base64,
+                        "media_type": "image/jpeg", 
+                        "detections": high_conf_detections,
+                    }
+                    
+                    await websocket.send_json(response_payload)
+                    break 
+                else:
+                    await websocket.send_json({"detections": detections})
+            else:
+                print("[WS] ERROR: Received data could not be decoded into an image.")
+                await websocket.send_json({"status": "waiting"})
     except WebSocketDisconnect:
         print("[WS] Client disconnected.")
     except Exception as e:
         print(f"WebSocket Error: {e}")
-        await websocket.close()
+
+        traceback.print_exc()
+        try:
+            await websocket.send_json({"status": "error", "message": f"Server error: {str(e)}"})
+            await websocket.close(1001)
+        except RuntimeError:
+            pass
 
 # ==============================================================================
 # 4. CHẠY SERVER
