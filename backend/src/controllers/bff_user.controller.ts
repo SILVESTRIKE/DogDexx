@@ -16,8 +16,8 @@ export const register = async (req: Request, res: Response) => {
   // No need to create an empty collection here.
 
   res.status(201).json({
-    message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để lấy mã OTP xác thực.",
-    user: newUser, // Trả về user để frontend biết email cần xác thực
+    message: "Tài khoản đã được tạo. OTP đã được gửi đến email của bạn để xác thực.",
+    data: newUser,
   });
 };
 
@@ -31,12 +31,12 @@ export const login = async (req: Request, res: Response) => {
   // 3. Send aggregated response
   res.status(200).json({
     message: "Đăng nhập thành công!",
-    user,
-    tokens: {
+    data: {
+      user,
       accessToken,
       refreshToken,
-    },
-    collection,
+      collection,
+    }
   });
 };
 
@@ -75,19 +75,4 @@ export const logout = async (req: Request, res: Response) => {
   await authService.logout(refreshToken);
   // Frontend is responsible for clearing its local cache/storage
   res.status(200).json({ message: "Đăng xuất thành công." });
-};
-
-export const verifyOtp = async (req: Request, res: Response) => {
-  const { email, otp } = req.body;
-  // Gọi đến core service để xác thực
-  await authService.verifyEmail(email, otp);
-  res.status(200).json({ message: "Xác thực tài khoản thành công! Bạn có thể đăng nhập ngay bây giờ." });
-};
-
-export const refreshToken = async (req: Request, res: Response) => {
-  const { refreshToken: oldRefreshToken } = req.body;
-  const { accessToken, refreshToken } = await authService.refreshToken(
-    oldRefreshToken
-  );
-  res.status(200).json({ accessToken, refreshToken });
 };

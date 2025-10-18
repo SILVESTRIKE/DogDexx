@@ -1,10 +1,10 @@
 import { Router } from "express";
 import { bffPredictionController } from "../controllers/bff_prediction.controller";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 
 const router = Router();
-router.use(optionalAuthMiddleware);
 
 /**
  * @swagger
@@ -29,7 +29,7 @@ router.use(optionalAuthMiddleware);
  *       200:
  *         description: Dự đoán thành công, trả về kết quả tổng hợp.
  */
-router.post("/image", uploadSingle, bffPredictionController.predictImage);
+router.post("/image", optionalAuthMiddleware, uploadSingle, bffPredictionController.predictImage);
 
 /**
  * @swagger
@@ -54,7 +54,7 @@ router.post("/image", uploadSingle, bffPredictionController.predictImage);
  *       200:
  *         description: Dự đoán thành công, trả về kết quả tổng hợp.
  */
-router.post("/video", uploadSingle, bffPredictionController.predictVideo);
+router.post("/video", optionalAuthMiddleware, uploadSingle, bffPredictionController.predictVideo);
 
 /**
  * @swagger
@@ -81,7 +81,7 @@ router.post("/video", uploadSingle, bffPredictionController.predictVideo);
  *       200:
  *         description: Dự đoán thành công.
  */
-router.post("/batch", uploadMultiple, bffPredictionController.predictBatch);
+router.post("/batch", optionalAuthMiddleware, uploadMultiple, bffPredictionController.predictBatch);
 
 /**
  * @swagger
@@ -89,28 +89,17 @@ router.post("/batch", uploadMultiple, bffPredictionController.predictBatch);
  *   get:
  *     summary: (BFF) Kết nối WebSocket cho dự đoán streaming
  *     tags: [BFF-Prediction]
- *     description: "Kết nối WebSocket để dự đoán giống chó theo thời gian thực. Route này sẽ proxy trực tiếp đến AI service. Đăng nhập là tùy chọn, nếu đăng nhập sẽ áp dụng giới hạn sử dụng."
- *     security:
- *       - bearerAuth: []
+ *     description: Endpoint này là một proxy cho kết nối WebSocket đến AI service. Sử dụng client WebSocket để kết nối.
  *     responses:
  *       101:
  *         description: Chuyển đổi giao thức sang WebSocket thành công.
- *       401:
- *         description: Không được phép (vượt quá giới hạn sử dụng).
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       502:
- *         description: Lỗi proxy khi kết nối với dịch vụ AI.
- *         content:
- *           application/json: {}
  */
-router.get('/stream', (req, res) => {
-  // Đây là một placeholder. Logic thực sự nằm ở server 'upgrade' event.
-  // Nếu một client HTTP GET thông thường gọi đến đây, báo lỗi.
-  res.status(426).send('Upgrade Required: This endpoint requires a WebSocket connection.');
-});
+router.use('/stream', createProxyMiddleware({
+    target: process.env.AI_SERVICE_URL || 'http://localhost:8000',
+    ws: true,
+    pathRewrite: { '^/bff/predict/stream': '/predict-stream' },
+}));
+
 
 export default router;
 
@@ -147,7 +136,7 @@ export default router;
  *       201:
  *         description: Gửi phản hồi thành công.
  */
-router.post("/:id/feedback", bffPredictionController.submitFeedback);
+router.post("/:id/feedback", optionalAuthMiddleware, bffPredictionController.submitFeedback);
 
 /**
  * @swagger
@@ -162,4 +151,4 @@ router.post("/:id/feedback", bffPredictionController.submitFeedback);
  *       200:
  *         description: Lấy lịch sử thành công.
  */
-router.get("/history", bffPredictionController.getPredictionHistory);
+router.get("/history", optionalAuthMiddleware, bffPredictionController.getPredictionHistory);

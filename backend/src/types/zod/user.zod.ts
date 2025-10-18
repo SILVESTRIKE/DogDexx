@@ -69,7 +69,12 @@ export type ResetPasswordType = z.infer<typeof ResetPasswordSchema.shape.body>;
 
 // --- USER SCHEMAS ---
 export const UpdateProfileSchema = z.object({
-  body: z.object({ username: username.optional() }).strict(),
+  body: z
+    .object({
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+    })
+    .strict(),
 });
 export type UpdateProfileType = z.infer<typeof UpdateProfileSchema.shape.body>;
 

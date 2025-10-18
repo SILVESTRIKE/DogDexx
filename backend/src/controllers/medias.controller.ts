@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction} from "express";
 import { MediaService, FindMediasOptions } from "../services/media.service";
-import { BadRequestError, NotFoundError } from "../errors";
+import { BadRequestError, ConflictError } from "../errors";
 import { DirectoryService } from "../services/directory.service";
 import { MediaDoc } from "../models/medias.model";
 import { transformMediaURLs } from "../utils/media.util";
@@ -111,7 +111,7 @@ export class MediaController {
 
     const media = await MediaService.findById(media_id);
     if (!media) {
-      throw new NotFoundError(`Can't find media with ID: ${media_id}`);
+      throw new ConflictError(`Can't find media with ID: ${media_id}`);
     }
 
     res.status(200).json(transformMediaURLs(req, media));
@@ -122,7 +122,7 @@ export class MediaController {
 
     const updatedMedia = await MediaService.updateInfoMedia(id, req.body);
     if (!updatedMedia) {
-      throw new NotFoundError(`Can't find media with ID: ${id}`);
+      throw new ConflictError(`Can't find media with ID: ${id}`);
     }
 
     res.status(200).json(transformMediaURLs(req, updatedMedia));
@@ -133,7 +133,7 @@ export class MediaController {
 
     const isDeleted = await MediaService.softDeleteMedia(media_id);
     if (!isDeleted) {
-      throw new NotFoundError(`Can't find media with ID: ${media_id}.`);
+      throw new ConflictError(`Can't find media with ID: ${media_id}.`);
     }
 
     res.status(204).send();
@@ -174,41 +174,7 @@ export class MediaController {
       .json({ data: transformedData, pagination: result.pagination });
   }
   
-  static async streamMedia (req: Request, res: Response, next: NextFunction) {
-    // Lấy đường dẫn file từ URL, ví dụ: /processed-videos/abc.mp4
-    const relativePath = req.path;
-    const filePath = path.join(__dirname, "../../public", relativePath);
-
-    if (!fs.existsSync(filePath)) {
-      return next(new NotFoundError("Không tìm thấy file."));
-    }
-
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-
-      const file = fs.createReadStream(filePath, { start, end });
-      const head = {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunksize,
-        "Content-Type": "video/mp4", // Hoặc một loại media khác
-      };
-
-      res.writeHead(206, head); // 206 Partial Content
-      file.pipe(res);
-    } else {
-      const head = { "Content-Length": fileSize, "Content-Type": "video/mp4" };
-      res.writeHead(200, head); // 200 OK
-      fs.createReadStream(filePath).pipe(res);
-    }
-  }
+  
 }
 export class DirectoryController {
   static async create(req: Request, res: Response) {
@@ -225,7 +191,7 @@ export class DirectoryController {
     if (directory_id) {
       const dirExists = await DirectoryService.findById(directory_id);
       if (!dirExists)
-        throw new NotFoundError(`Directory with ID ${directory_id} not exist.`);
+        throw new ConflictError(`Directory with ID ${directory_id} not exist.`);
     }
 
     const [subDirectories, mediaResult] = await Promise.all([
@@ -246,7 +212,7 @@ export class DirectoryController {
 
     const directory = await DirectoryService.findById(directoryId.toString());
     if (!directory) {
-      throw new NotFoundError(`Directory with ID ${directoryId} not exist.`);
+      throw new ConflictError(`Directory with ID ${directoryId} not exist.`);
     }
 
     await DirectoryService.softDeleteRecursive(directoryId.toString());
@@ -259,5 +225,44 @@ export class DirectoryController {
       directoryId.toString()
     );
     res.status(200).json(breadcrumb);
+  }
+  static async rename(req: Request, res: Response) {
+    const directoryId = parseInt(req.params.id);
+    const { name } = req.body;
+
+    const updatedDirectory = await DirectoryService.rename(
+      directoryId.toString(),
+      name
+    );
+    if (!updatedDirectory) {
+      throw new ConflictError(`Directory with ID ${directoryId} not exist.`);
+    }
+
+    res.status(200).json(updatedDirectory);
+  }
+  static async move(req: Request, res: Response) {
+    const directoryId = parseInt(req.params.id);
+    const { parent_id } = req.body;
+
+    if (parent_id) {
+      const parentDir = await DirectoryService.findById(parent_id);
+      if (!parentDir) {
+        throw new ConflictError(`Parent directory with ID ${parent_id} not exist.`);
+      }
+    }
+
+    const movedDirectory = await DirectoryService.move(
+      directoryId.toString(),
+      parent_id
+    );
+    if (!movedDirectory) {
+      throw new ConflictError(`Directory with ID ${directoryId} not exist.`);
+    }
+
+    res.status(200).json(movedDirectory);
+  }
+  static async getAll(req: Request, res: Response) {
+    const directories = await DirectoryService.getAll();
+    res.status(200).json(directories);
   }
 }

@@ -1,9 +1,8 @@
 import { Request, Response } from 'express';
-import { wikiService } from '../services/wiki.service';
+import { wikiService } from '../services/dogs_wiki.service';
 import { UserCollectionModel } from '../models/user_collection.model';
 import { transformMediaURLs } from '../utils/media.util';
 import { PredictionHistoryModel } from '../models/prediction_history.model';
-import { wikiController } from './dogs_wiki.controller';
 
 export const getBreedDetail = async (req: Request, res: Response) => {
   const { slug } = req.params;
@@ -41,7 +40,8 @@ export const getBreeds = async (req: Request, res: Response) => {
   // This endpoint is very similar to `getPokedex`. We can reuse the logic or point to it.
   // For simplicity, we'll just call the existing wiki service.
   // The frontend should call `/bff/collection/pokedex` for the enriched version.
-  return wikiController.getAll(req, res);
+  const { getAll } = require('./dogs_wiki.controller');
+  return getAll(req, res);
 };
 
 export const uploadMedia = async (req: Request, res: Response) => {

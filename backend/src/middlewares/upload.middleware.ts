@@ -4,11 +4,10 @@ import fs from "fs";
 import crypto from "crypto";
 import { Request } from "express";
 
-const PUBLIC_DIR = "public";
-const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+const UPLOADS_DIR = "uploads";
 
-if (!fs.existsSync(PUBLIC_DIR)) {
-  fs.mkdirSync(PUBLIC_DIR);
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR);
 }
 const getFileTypeDir = (mimetype: string): string => {
   if (mimetype.startsWith("image/")) return "images";
@@ -37,7 +36,7 @@ const storage = multer.diskStorage({
 
     let fullPath: string;
 
-    if (req.user) {
+    if (req.user && req.user.isGuest !== true) {
       // Logged-in user
       const fileTypeDir = getFileTypeDir(file.mimetype);
       fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
@@ -48,9 +47,6 @@ const storage = multer.diskStorage({
     }
 
     fs.mkdirSync(fullPath, { recursive: true });
-
-    // Lưu đường dẫn thư mục đích vào request để có thể sử dụng lại trong hàm `filename`
-    (req as any).uploadDestinationPath = fullPath;
 
     cb(null, fullPath);
   },
@@ -64,23 +60,20 @@ const storage = multer.diskStorage({
     const extension = path.extname(file.originalname);
     const newFilename = `${dateString}_${randomChars}${extension}`;
     cb(null, newFilename);
-
-    // Lấy đường dẫn thư mục đích đã được lưu từ hàm `destination`
-    const destination = (req as any).uploadDestinationPath;
-    if (destination) {
-      const relativePath = path.relative(PUBLIC_DIR, destination);
-      (file as any).path = path.join('/', relativePath, newFilename).replace(/\\/g, '/');
-    }
   },
 });
 
 const allowedMimeTypes = [
   "image/jpeg",
+  "image/jpg",
   "image/png",
   "image/gif",
   "image/webp",
   "video/mp4",
+  "video/avi",
   "video/webm",
+  "video/mov",
+  "video/mkv",
   "application/pdf",
 ];
 
@@ -90,16 +83,35 @@ const fileFilter = (
   cb: multer.FileFilterCallback
 ) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
+    // Tự động phát hiện và gán loại media
+    if (file.mimetype.startsWith("image/")) {
+      (req as any).mediaType = "image";
+    } else if (file.mimetype.startsWith("video/")) {
+      (req as any).mediaType = "video";
+    }
     cb(null, true);
   } else {
     cb(new Error("Định dạng file không được hỗ trợ!"));
   }
 };
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+const MAX_FILES = 10; // Maximum number of files in a single upload
+
 const multerOptions = {
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 20 },
+  limits: { 
+    fileSize: MAX_FILE_SIZE,
+  },
+};
+
+const multerMultipleOptions = {
+  ...multerOptions,
+  limits: {
+    ...multerOptions.limits,
+    files: MAX_FILES,
+  },
 };
 
 export const uploadSingle = multer(multerOptions).single("file");
-export const uploadMultiple = multer(multerOptions).array("files", 10);
+export const uploadMultiple = multer(multerMultipleOptions).array("files", MAX_FILES);

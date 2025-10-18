@@ -1,21 +1,33 @@
-import mongoose, { Document, Schema } from "mongoose";
-import { DirectoryDoc } from "./directory.model.js";
+import mongoose, { Document, Schema, Types } from "mongoose";
+import { DirectoryDoc } from "./directory.model";
 export type UserRole = "user" | "premium" | "admin";
 
 export type UserDoc = Document & {
+  // TK
   username: string;
   email: string;
   password: string;
   role: UserRole;
+
+  // Thông tin cá nhân
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+
+  //bao Mat
   verify: boolean;
   isDeleted: boolean;
-  directory_id: string;
+
+  directory_id: Types.ObjectId;
+
+  //gioi han
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
+
+  //timestamp
   createdAt: Date;
   updatedAt: Date;
-  directoryId: DirectoryDoc["_id"];
 };
 
 const userSchema = new Schema<UserDoc>(
@@ -30,8 +42,7 @@ const userSchema = new Schema<UserDoc>(
       required: true,
       unique: true,
       trim: true,
-      lowercase: true,
-      index: true,
+      lowercase: true
     },
     password: {
       type: String,
@@ -44,10 +55,14 @@ const userSchema = new Schema<UserDoc>(
       default: "user",
       required: true,
     },
-    directoryId: {
+
+    firstName: { type: String, trim: true },
+    lastName: { type: String, trim: true },
+    avatarUrl: { type: String, trim: true },
+    
+    directory_id: {
       type: Schema.Types.ObjectId,
       ref: "Directory",
-      // required: true, // Tạm thời bỏ required để giải quyết vấn đề con gà quả trứng
     },
     verify: {
       type: Boolean,
@@ -77,7 +92,20 @@ const userSchema = new Schema<UserDoc>(
     collection: "users",
     toJSON: {
       transform: (doc: any, ret: any) => {
-        ret.id = ret._id;
+        ret.id = ret._id.toString();
+        delete ret._id;
+        delete ret.__v;
+        delete ret.password;
+        delete ret.isDeleted;
+      },
+    },
+    toObject: {
+      virtuals: true,
+      transform(doc: any, ret: any) {
+        ret.id = ret._id.toString();
+        if (ret.directory_id instanceof Types.ObjectId) {
+          ret.directory_id = ret.directory_id.toString();
+        }
         delete ret._id;
         delete ret.__v;
         delete ret.password;

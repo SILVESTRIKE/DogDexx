@@ -23,4 +23,4 @@ const ConfigurationSchema: Schema = new Schema({
 }, { timestamps: true });
 
 
-export const ConfigurationModel = mongoose.model<IConfiguration>('configurations', ConfigurationSchema);
+export const ConfigurationModel = mongoose.model<IConfiguration>('configuration', ConfigurationSchema);

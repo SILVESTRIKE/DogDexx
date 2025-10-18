@@ -1,7 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import { userService } from "../services/user.service";
-import { NotAuthorizedError } from "../errors/NotAuthorizedError";
+import { PlainUser } from "../services/user.service";
+import { NotAuthorizedError } from "../errors";
+
 interface JwtPayload {
   userId: string;
 }
@@ -13,8 +15,7 @@ export const authMiddleware = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-
-    return next(new NotAuthorizedError("Token is not provided"));
+    return NotAuthorizedError;
   }
 
   const token = authHeader.split(" ")[1];
@@ -24,15 +25,13 @@ export const authMiddleware = async (
     const user = await userService.getById(decoded.userId);
 
     if (!user) {
-
-      return next(new NotAuthorizedError("User not found"));
+      return NotAuthorizedError;
     }
 
-    req.user = user;
+    req.user = user as PlainUser;
 
     next();
   } catch (error) {
-
-    return next(new NotAuthorizedError("Token is invalid or expired"));
+    return NotAuthorizedError;
   }
 };

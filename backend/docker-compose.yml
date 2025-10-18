@@ -4,25 +4,26 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: dog_breed_backend
     ports:
       - "3000:3000"
     volumes:
       - .:/server
-      - ./public:/app/public
-      - ./uploads:/app/uploads
     restart: unless-stopped # Thay đổi cho development
     depends_on:
-      - mongo
+      - ai-service # Thêm phụ thuộc vào ai-service nếu cần
     env_file:
       - .env
-  mongo:
-    image: mongo:latest
+  ai-service:
+    build: ./ai_service
     ports:
-      - "27017:27017"
-    restart: unless-stopped # Thay đổi cho development
-    volumes:
-      - mongodata:/data/db
-volumes:
-  mongodata:
-  
+      - "8000:8000"
+    env_file:
+      - .env
+    # Nếu bạn có GPU và muốn dùng, hãy thêm cấu hình runtime
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]

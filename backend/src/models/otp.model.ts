@@ -45,7 +45,7 @@ const otpSchema = new Schema<OtpDoc>(
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     toJSON: {
       transform: (doc: any, ret: any) => {
-        ret.id = ret._id;
+        ret.id = ret._id.toString();
         delete ret._id;
         delete ret.__v;
         delete ret.otp;

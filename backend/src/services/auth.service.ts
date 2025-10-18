@@ -3,7 +3,7 @@ import { userService } from "./user.service";
 import { UserModel } from "../models/user.model";
 import { tokenService } from "./token.service";
 import { RefreshTokenModel } from "../models/refreshToken.model";
-import { NotAuthorizedError, BadRequestError, NotFoundError } from "../errors";
+import { NotAuthorizedError, BadRequestError, ConflictError } from "../errors";
 import { OtpModel, OtpType } from "../models/otp.model";
 import { sendEmail } from "./email.service";
 import crypto from "crypto";
@@ -73,7 +73,7 @@ export const authService = {
   async resendVerificationOtp(email: string) {
     const user = await userService.getByEmail(email);
     if (!user) {
-      throw new NotFoundError("Không tìm thấy người dùng với email này.");
+      throw new ConflictError("Không tìm thấy người dùng với email này.");
     }
     if (user.verify) {
       throw new BadRequestError("Tài khoản này đã được xác thực.");
@@ -105,7 +105,7 @@ export const authService = {
     // Fetch the actual Mongoose document so we can call .save()
     const userDoc = await UserModel.findOne({ email, isDeleted: false });
     if (!userDoc) {
-      throw new NotFoundError("Không tìm thấy người dùng.");
+      throw new ConflictError("Không tìm thấy người dùng.");
     }
 
     userDoc.verify = true;
@@ -156,7 +156,7 @@ export const authService = {
       "+password"
     );
     if (!userDoc) {
-      throw new NotFoundError("Không tìm thấy người dùng.");
+      throw new ConflictError("Không tìm thấy người dùng.");
     }
 
     userDoc.password = newPassword;

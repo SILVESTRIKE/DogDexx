@@ -19,5 +19,4 @@ imageio
 imageio[ffmpeg]
 pymongo
 huggingface_hub
-python-dotenv
 #python -m uvicorn main:app --host localhost --port 8000 //command to run the server

@@ -9,6 +9,7 @@ import {
   VerifyEmailType,
   ForgotPasswordType,
   ResetPasswordType,
+  UpdateProfileType,
 } from "../types/zod/user.zod";
 
 export const userController = {
@@ -85,7 +86,10 @@ export const userController = {
     res.status(200).json(req.user);
   },
 
-  updateProfile: async (req: Request, res: Response) => {
+  updateProfile: async (
+    req: Request<{}, {}, UpdateProfileType>,
+    res: Response
+  ) => {
     const userId = req.user!._id.toString();
     const updatedUser = await userService.updateUser(userId, req.body);
     res.status(200).json(updatedUser);
@@ -101,8 +105,13 @@ export const userController = {
 
   // --- ADMIN CONTROLLERS ---
   getAllUsers: async (req: Request, res: Response) => {
-    const users = await userService.getAll();
-    res.status(200).json(users);
+    const options = {
+      page: parseInt(req.query.page as string, 10) || 1,
+      limit: parseInt(req.query.limit as string, 10) || 10,
+      search: req.query.search as string | undefined,
+    };
+    const result = await userService.getAll(options);
+    res.status(200).json(result);
   },
 
   adminDeleteUser: async (req: Request, res: Response) => {

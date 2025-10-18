@@ -1,37 +1,189 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auth & Prediction API Test</title>
-  <style>
-    body { font-family: sans-serif; background-color: #f9f9f9; color: #333; }
-    .container { max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-    .form-group { margin-bottom: 15px; }
-    label { display: block; margin-bottom: 5px; font-weight: bold; }
-    input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
-    button { padding: 10px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
-    button:disabled { background-color: #ccc; cursor: not-allowed; }
-    pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; min-height: 50px; border-radius: 4px; }
-    h1, h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
-    #realtimeContainer { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4 / 3; background-color: #333; margin-top: 10px; }
-    #realtimeVideo, #realtimeCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-    #realtimeCanvas { z-index: 10; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dog Breed Detection Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            white-space: pre-wrap;
+        }
+        .progress {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+        img.preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+        }
+        video.preview {
+            max-width: 100%;
+            max-height: 300px;
+            margin-top: 10px;
+        }
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+      
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #fff;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    input[type="text"],
+    input[type="email"],
+    input[type="password"],
+    input[type="number"],
+    select {
+      width: 100%;
+      padding: 8px;
+      box-sizing: border-box;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    button {
+      padding: 10px 15px;
+      cursor: pointer;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 4px;
+    }
+
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+
+    pre {
+      background-color: #f4f4f4;
+      padding: 10px;
+      border: 1px solid #ddd;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 50px;
+      border-radius: 4px;
+    }
+
+    h1,
+    h2 {
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 10px;
+    }
+
+    #realtimeContainer {
+      position: relative;
+      width: 100%;
+      max-width: 640px;
+      aspect-ratio: 4 / 3;
+      background-color: #333;
+      margin-top: 10px;
+    }
+
+    #realtimeVideo,
+    #realtimeCanvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #realtimeCanvas {
+      z-index: 10;
+    }
+
+    .section-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+
+    .section-grid .full-width {
+      grid-column: 1 / -1;
+    }
+
+    @media (max-width: 600px) {
+      .section-grid {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
+
 <body>
   <div class="container">
     <h1>Auth & Prediction API Test</h1>
 
     <!-- ==================== AUTH SECTIONS ==================== -->
     <h2>Authentication</h2>
-    <div style="display: flex; gap: 20px;">
+    <div class="section-grid">
       <div style="flex: 1;">
         <h3>Register</h3>
         <form id="registerForm">
-          <div class="form-group"><label for="registerName">Username</label><input type="text" id="registerName" name="username" required /></div>
-          <div class="form-group"><label for="registerEmail">Email</label><input type="email" id="registerEmail" name="email" required /></div>
-          <div class="form-group"><label for="registerPassword">Password</label><input type="password" id="registerPassword" name="password" required /></div>
+          <div class="form-group"><label for="registerName">Username</label><input type="text" id="registerName"
+              name="username" required /></div>
+          <div class="form-group"><label for="registerEmail">Email</label><input type="email" id="registerEmail"
+              name="email" required /></div>
+          <div class="form-group"><label for="registerPassword">Password</label><input type="password"
+              id="registerPassword" name="password" required /></div>
           <button type="submit">Register</button>
         </form>
         <pre id="registerResult"></pre>
@@ -39,38 +191,52 @@
       <div style="flex: 1;">
         <h3>Login</h3>
         <form id="loginForm">
-          <div class="form-group"><label for="loginEmail">Email</label><input type="email" id="loginEmail" name="email" required /></div>
-          <div class="form-group"><label for="loginPassword">Password</label><input type="password" id="loginPassword" name="password" required /></div>
+          <div class="form-group"><label for="loginEmail">Email</label><input type="email" id="loginEmail" name="email"
+              required /></div>
+          <div class="form-group"><label for="loginPassword">Password</label><input type="password" id="loginPassword"
+              name="password" required /></div>
           <button type="submit">Login</button>
         </form>
         <pre id="loginResult"></pre>
       </div>
     </div>
 
-    <!-- ==================== FILE UPLOAD SECTIONS ==================== -->
-    <h2>File Prediction</h2>
-    <div style="display: flex; gap: 20px;">
-        <div style="flex: 1;">
-            <h3>Image Upload</h3>
-            <form id="predictionForm">
-              <div class="form-group"><label for="predictionFile">Image File</label><input type="file" id="predictionFile" name="file" accept="image/*" required /></div>
-              <div class="form-group"><label for="predictionToken">Auth Token (auto-filled on login)</label><input type="text" id="predictionToken" name="token" readonly /></div>
-              <button type="submit">Upload and Predict Image</button>
-            </form>
-            <div id="imageResultContainer" style="margin-top: 15px;"></div>
-            <pre id="predictionResult"></pre>
-        </div>
-        <div style="flex: 1;">
-            <h3>Video Upload</h3>
-            <form id="videoForm">
-              <div class="form-group"><label for="videoFile">Video File</label><input type="file" id="videoFile" name="file" accept="video/*" required /></div>
-              <div class="form-group"><label for="videoToken">Auth Token (auto-filled on login)</label><input type="text" id="videoToken" name="token" readonly /></div>
-              <button type="submit">Upload and Predict Video</button>
-            </form>
-            <div id="videoResultContainer" style="margin-top: 15px;"></div>
-            <pre id="videoResult"></pre>
-        </div>
+    <!-- ==================== USER PROFILE MANAGEMENT ==================== -->
+    <h2>User Profile Management (Requires Login)</h2>
+    <div class="section-grid">
+      <div>
+        <h4>Get/Update My Profile</h4>
+        <form id="updateProfileForm">
+          <div class="form-group"><label for="updateUsername">New Username (optional)</label><input type="text"
+              id="updateUsername" name="username" /></div>
+          <button type="button" id="getProfileBtn">Get My Profile</button>
+          <button type="submit" style="background-color: #28a745;">Update Profile</button>
+        </form>
+        <pre id="profileResult"></pre>
+      </div>
+      <div>
+        <h4>Delete My Account</h4>
+        <button id="deleteAccountBtn" style="background-color: #dc3545;">Delete My Account</button>
+        <pre id="deleteAccountResult"></pre>
+      </div>
     </div>
+
+    <!-- ==================== USER FUNCTIONS ==================== -->
+    <h2>User Functions (Requires Login or Guest Session)</h2>
+    <h3>1. File Prediction</h3>
+    <form id="predictionForm">
+      <div class="form-group"><label for="predictionFile">Media File (Image/Video)</label><input type="file"
+          id="predictionFile" name="file" accept="image/*,video/*" required /></div>
+      <div class="form-group"><label for="predictionModelUsed">Model Used</label><input type="text"
+          id="predictionModelUsed" name="modelUsed" value="default" required /></div>
+      <div class="form-group"><label for="predictionToken">Auth Token (from localStorage)</label><input type="text"
+          id="predictionToken" name="token" readonly /></div>
+      <button type="submit">Upload and Predict</button>
+    </form>
+    <div id="mediaResultContainer" style="margin-top: 15px;"></div>
+    <pre id="predictionResult"></pre>
+    <p>After a prediction, you can use its ID to test feedback below.</p>
+
 
     <!-- ==================== REAL-TIME PREDICTION ==================== -->
     <h2>Real-time Prediction</h2>
@@ -84,10 +250,121 @@
     </div>
     <pre id="realtimeResult">Status: Idle</pre>
 
-    <!-- ==================== AUTOMATED TEST SECTION ==================== -->
-    <h2>Automated End-to-End Test</h2>
-    <button id="startFullTestBtn">Start Full Test</button>
-    <pre id="fullTestResult">Test status: Idle</pre>
+    <hr style="margin: 30px 0;">
+
+    <h3>2. Prediction History (User)</h3>
+    <div class="section-grid">
+      <div>
+        <h4>Get My History</h4>
+        <form id="getMyHistoryForm">
+          <div class="form-group">
+            <label for="historyPage">Page</label>
+            <input type="number" id="historyPage" name="page" value="1" min="1" />
+          </div>
+          <div class="form-group">
+            <label for="historyLimit">Items per page</label>
+            <input type="number" id="historyLimit" name="limit" value="10" min="1" />
+          </div>
+          <button type="submit">Get My Prediction History</button>
+        </form>
+        <pre id="getMyHistoryResult"></pre>
+      </div>
+      <div>
+        <h4>Get/Delete History by ID</h4>
+        <form id="getDeleteHistoryForm">
+          <div class="form-group"><label for="historyId">History ID</label><input type="text" id="historyId" required />
+          </div>
+          <button type="button" id="getHistoryByIdBtn">Get Details</button>
+          <button type="button" id="deleteHistoryByIdBtn" style="background-color: #dc3545;">Delete</button>
+        </form>
+        <pre id="getDeleteHistoryResult"></pre>
+      </div>
+    </div>
+
+    <h3>3. Submit Feedback</h3>
+    <form id="submitFeedbackForm">
+      <div class="form-group"><label for="feedbackPredictionId">Prediction History ID</label><input type="text"
+          id="feedbackPredictionId" name="predictionId" required /></div>
+      <div class="form-group"><label>Was prediction correct?</label>
+        <select name="isCorrect" id="isCorrectSelect" required>
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+      <div id="correctionFields" style="display: none;">
+        <div class="form-group"><label for="submittedLabel">Correct Breed Label</label><input type="text"
+            id="submittedLabel" name="submittedLabel" /></div>
+        <div class="form-group"><label for="feedbackNotes">Notes (optional)</label><input type="text" id="feedbackNotes"
+            name="notes" /></div>
+      </div>
+      <button type="submit">Submit Feedback</button>
+    </form>
+    <pre id="submitFeedbackResult"></pre>
+
+    <!-- ==================== PUBLIC WIKI API ==================== -->
+    <h2>Public Wiki API</h2>
+    <div class="section-grid">
+      <div>
+        <h4>Get All Breeds (Wiki)</h4>
+        <form id="getWikiListForm">
+          <div class="form-group"><label for="wikiSearch">Search (optional)</label><input type="text" id="wikiSearch"
+              name="search" /></div>
+          <button type="submit">Get Breeds</button>
+        </form>
+        <pre id="getWikiListResult"></pre>
+      </div>
+      <div>
+        <h4>Get Breed by Slug</h4>
+        <form id="getWikiSlugForm">
+          <div class="form-group"><label for="wikiSlug">Breed Slug</label><input type="text" id="wikiSlug" name="slug"
+              required /></div>
+          <button type="submit">Get Breed Details</button>
+        </form>
+        <pre id="getWikiSlugResult"></pre>
+      </div>
+    </div>
+
+    <!-- ==================== ADMIN FUNCTIONS ==================== -->
+    <h2>Admin Functions (Requires Admin Login)</h2>
+    <div class="section-grid full-width">
+      <div>
+        <h4>Admin: Get All Histories</h4>
+        <form id="adminGetHistoriesForm">
+          <button type="submit">Get All Histories</button>
+        </form>
+        <pre id="adminGetHistoriesResult"></pre>
+      </div>
+      <div>
+        <h4>Admin: Get/Delete History by ID</h4>
+        <form id="adminDeleteHistoryForm">
+          <div class="form-group"><label for="adminHistoryId">History ID</label><input type="text" id="adminHistoryId"
+              required /></div>
+          <button type="button" id="adminGetHistoryBtn">Get Details</button>
+          <button type="button" id="adminDeleteHistoryBtn" style="background-color: #dc3545;">Delete (Hard)</button>
+        </form>
+        <pre id="adminDeleteHistoryResult"></pre>
+      </div>
+      <div>
+        <h4>Admin: Get All Feedbacks</h4>
+        <form id="adminGetFeedbacksForm">
+          <button type="submit">Get All Feedbacks</button>
+        </form>
+        <pre id="adminGetFeedbacksResult"></pre>
+      </div>
+      <div>
+        <h4>Admin: Get/Update/Delete Feedback</h4>
+        <form id="adminManageFeedbackForm">
+          <div class="form-group"><label for="adminFeedbackId">Feedback ID</label><input type="text"
+              id="adminFeedbackId" required /></div>
+          <button type="button" id="adminGetFeedbackBtn">Get Details</button>
+          <button type="button" id="adminUpdateFeedbackBtn" style="background-color: #ffc107; color: black;">Update
+            Status to 'reviewed'</button>
+          <button type="button" id="adminDeleteFeedbackBtn" style="background-color: #dc3545;">Delete (Hard)</button>
+        </form>
+        <pre id="adminManageFeedbackResult"></pre>
+      </div>
+    </div>
+
   </div>
 
   <script>
@@ -95,32 +372,59 @@
     // API CLIENT WITH AUTOMATIC TOKEN REFRESH
     // =======================================================================
     const api = (() => {
-      let accessToken = null;
-      let refreshToken = null;
+      const getAccessToken = () => localStorage.getItem('accessToken');
+      const getRefreshToken = () => localStorage.getItem('refreshToken');
+      const getTrialToken = () => localStorage.getItem('trialToken');
 
       const setTokens = (newTokens) => {
-        accessToken = newTokens.accessToken;
-        refreshToken = newTokens.refreshToken;
-        document.getElementById("predictionToken").value = accessToken;
-        document.getElementById("videoToken").value = accessToken;
+        localStorage.setItem('accessToken', newTokens.accessToken);
+        localStorage.setItem('refreshToken', newTokens.refreshToken);
+        // Xóa trial token nếu có khi người dùng đăng nhập
+        localStorage.removeItem('trialToken');
+        updateTokenDisplay();
+      };
+
+      const ensureTrialToken = async () => {
+        let trialToken = getTrialToken();
+        if (!trialToken) {
+          try {
+            console.log("Pinging server to ensure trial session cookie exists...");
+            await fetch(window.location.href); // This re-triggers middleware on the server
+            console.log("Trial session check complete. Cookie should be set if it was needed.");
+            localStorage.setItem('trialToken', 'exists'); // Use a placeholder
+          } catch (err) {
+            console.error("Error during trial session check:", err);
+          }
+        }
+        return trialToken;
       };
 
       const clearTokens = () => {
-        accessToken = null;
-        refreshToken = null;
-        document.getElementById("predictionToken").value = "";
-        document.getElementById("videoToken").value = "";
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        updateTokenDisplay();
+      };
+
+      const updateTokenDisplay = () => {
+        const tokenInput = document.getElementById("predictionToken");
+        tokenInput.value = getAccessToken() || getTrialToken() || 'N/A (Guest)';
       };
 
       const fetchWithAuth = async (url, options = {}) => {
         if (!options.headers) options.headers = {};
-        if (accessToken && !options.headers["Authorization"]) {
+
+        let accessToken = getAccessToken();
+        let trialToken = getTrialToken();
+
+        // Ưu tiên Access Token nếu có
+        if (accessToken) {
           options.headers["Authorization"] = `Bearer ${accessToken}`;
         }
-        
-        let response = await fetch(url, options);
 
-        if (response.status === 401 && refreshToken) {
+        let response = await fetch(url, options);
+        const refreshToken = getRefreshToken();
+
+        if (response.status === 401 && refreshToken && !url.includes('/api/auth/refresh-token')) {
           try {
             console.log("Access token expired. Refreshing...");
             const refreshResponse = await fetch("/api/auth/refresh-token", {
@@ -130,12 +434,12 @@
             });
 
             if (!refreshResponse.ok) throw new Error("Refresh token failed.");
-            
+
             const newTokens = await refreshResponse.json();
             setTokens(newTokens);
             console.log("Token refreshed successfully.");
-            
-            options.headers["Authorization"] = `Bearer ${accessToken}`;
+
+            options.headers["Authorization"] = `Bearer ${getAccessToken()}`;
             response = await fetch(url, options); // Retry the original request
           } catch (err) {
             console.error("Could not refresh token:", err);
@@ -146,7 +450,7 @@
         return response;
       };
 
-      return { setTokens, fetch: fetchWithAuth };
+      return { setTokens, fetch: fetchWithAuth, updateTokenDisplay, ensureTrialToken, getAccessToken };
     })();
 
     // =======================================================================
@@ -186,6 +490,26 @@
       });
     }
 
+    /** Handles simple GET requests with results */
+    function setupGetForm(formId, resultId, endpointBuilder) {
+      const form = document.getElementById(formId);
+      const resultEl = document.getElementById(resultId);
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        resultEl.textContent = 'Loading...';
+        const endpoint = endpointBuilder(form);
+        try {
+          const response = await api.fetch(endpoint);
+          const result = await response.json();
+          if (!response.ok) throw result;
+          resultEl.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          resultEl.textContent = `Error: ${JSON.stringify(error, null, 2)}`;
+        }
+      });
+    }
+
     /** Handles multipart/form-data forms for file uploads */
     function setupMultipartForm(formId, resultId, containerId, endpoint) {
       const form = document.getElementById(formId);
@@ -195,42 +519,258 @@
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         resultEl.textContent = 'Uploading and processing, please wait...';
-        if (containerEl) containerEl.innerHTML = '';
+        containerEl.innerHTML = ''; // Clear previous results
 
+        // Nếu chưa đăng nhập, đảm bảo có trial token
+        if (!api.getAccessToken()) {
+          const trialToken = await api.ensureTrialToken();
+          if (!trialToken) {
+            resultEl.textContent = 'Error: Could not obtain a trial token for guest access.';
+            return;
+          }
+        }
         try {
-          const response = await api.fetch(endpoint, {
+          const response = await api.fetch(endpoint, { // This fetch includes the auth token
             method: 'POST',
             body: new FormData(form),
           });
-          
+
           const result = await response.json();
           if (!response.ok) throw result;
 
-          resultEl.textContent = JSON.stringify(result, null, 2);
-
-          const mediaPath = result.data?.processedMediaPath;
-          if (mediaPath && containerEl) {
-            const isVideo = mediaPath.endsWith('.mp4');
+          // Display original media
+          const originalURL = result.data?.media?.mediaURL;
+          if (originalURL) {
+            containerEl.innerHTML = '<h3>Original Media:</h3>';
+            const isVideo = result.data.media.type === 'video';
             const mediaElement = document.createElement(isVideo ? 'video' : 'img');
-            mediaElement.src = mediaPath;
+            mediaElement.src = originalURL;
             mediaElement.style.maxWidth = '100%';
-            mediaElement.style.marginTop = '15px';
-            if (isVideo) {
-              mediaElement.controls = true;
-            }
+            mediaElement.style.marginTop = '10px';
+            if (isVideo) mediaElement.controls = true;
             containerEl.appendChild(mediaElement);
           }
+
+          // Display processed media
+          const processedURL = result.data?.processedMediaURL;
+          if (processedURL) {
+            containerEl.innerHTML += '<h3>Processed Media (with predictions):</h3>';
+            const isVideo = processedURL.includes('.mp4');
+            const mediaElement = document.createElement(isVideo ? 'video' : 'img');
+            mediaElement.src = processedURL;
+            mediaElement.style.maxWidth = '100%';
+            mediaElement.style.marginTop = '10px';
+            if (isVideo) mediaElement.controls = true;
+            containerEl.appendChild(mediaElement);
+          }
+
+          // Display the full JSON response at the end
+          resultEl.textContent = JSON.stringify(result, null, 2);
         } catch (error) {
           resultEl.textContent = `Error: ${JSON.stringify(error, null, 2)}`;
         }
       });
     }
 
-    // Initialize all forms
+
+    // Initial token display update on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Cập nhật hiển thị token ban đầu (nếu có sẵn trong localStorage)
+      api.updateTokenDisplay();
+
+      // Nếu người dùng là khách (chưa đăng nhập), chủ động lấy trial token
+      if (!api.getAccessToken()) {
+        console.log("Phát hiện người dùng Guest, tiến hành lấy trial token...");
+        await api.ensureTrialToken();
+        api.updateTokenDisplay(); // Cập nhật lại hiển thị để hiển thị trial token mới
+      }
+    });
+
+    // =======================================================================
+    // INITIALIZE ALL FORMS
+    // =======================================================================
+    // Auth
     setupAuthForm("registerForm", "registerResult", "/api/auth/register");
     setupAuthForm("loginForm", "loginResult", "/api/auth/login");
-    setupMultipartForm("predictionForm", "predictionResult", "imageResultContainer", "/api/predictions/image");
-    setupMultipartForm("videoForm", "videoResult", "videoResultContainer", "/api/predictions/video");
+
+    // User: Profile Management
+    document.getElementById('getProfileBtn').addEventListener('click', async () => {
+      const resultEl = document.getElementById('profileResult');
+      resultEl.textContent = 'Loading...';
+      try {
+        const res = await api.fetch('/api/users/me');
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    document.getElementById('updateProfileForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const resultEl = document.getElementById('profileResult');
+      const username = document.getElementById('updateUsername').value;
+      if (!username) {
+        resultEl.textContent = 'Please enter a new username to update.';
+        return;
+      }
+      resultEl.textContent = 'Updating...';
+      try {
+        const res = await api.fetch('/api/users/me', {
+          method: 'POST', // or PATCH, depending on your route definition
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username })
+        });
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = `Update successful:\n${JSON.stringify(data, null, 2)}`;
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    document.getElementById('deleteAccountBtn').addEventListener('click', async () => {
+      const resultEl = document.getElementById('deleteAccountResult');
+      if (!confirm('Are you sure you want to permanently delete your account? This action cannot be undone.')) return;
+      resultEl.textContent = 'Deleting...';
+      try {
+        const res = await api.fetch('/api/users/me', { method: 'DELETE' });
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = JSON.stringify(data, null, 2);
+        // Optional: Clear tokens after successful deletion
+        // api.clearTokens(); 
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    // User: Predictions
+    setupMultipartForm("predictionForm", "predictionResult", "mediaResultContainer", "/api/predictions");
+
+    // User: History
+    setupGetForm("getMyHistoryForm", "getMyHistoryResult", () => `/api/histories`);
+
+    document.getElementById('getHistoryByIdBtn').addEventListener('click', async () => {
+      const id = document.getElementById('historyId').value;
+      const resultEl = document.getElementById('getDeleteHistoryResult');
+      if (!id) { resultEl.textContent = 'Please enter a History ID.'; return; }
+      resultEl.textContent = 'Loading...';
+      try {
+        const res = await api.fetch(`/api/histories/${id}`);
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    document.getElementById('deleteHistoryByIdBtn').addEventListener('click', async () => {
+      const id = document.getElementById('historyId').value;
+      const resultEl = document.getElementById('getDeleteHistoryResult');
+      if (!id) { resultEl.textContent = 'Please enter a History ID.'; return; }
+      if (!confirm(`Are you sure you want to delete history item ${id}?`)) return;
+      resultEl.textContent = 'Deleting...';
+      try {
+        // NOTE: The backend route for this has a check for 'admin' role which seems incorrect for a user-specific delete.
+        // This test assumes the 'admin' role check is a bug and will be removed for this user route.
+        const res = await api.fetch(`/api/histories/${id}`, { method: 'DELETE' });
+        if (res.status === 204 || res.ok) {
+          resultEl.textContent = `History item ${id} deleted successfully.`;
+        } else {
+          const data = await res.json();
+          throw data;
+        }
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    // User: Feedback
+    document.getElementById('isCorrectSelect').addEventListener('change', (e) => {
+      document.getElementById('correctionFields').style.display = e.target.value === 'false' ? 'block' : 'none';
+    });
+
+    document.getElementById('submitFeedbackForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const resultEl = document.getElementById('submitFeedbackResult');
+      resultEl.textContent = 'Submitting...';
+      const form = e.target;
+      const formData = new FormData(form);
+      const data = Object.fromEntries(formData.entries());
+
+      // Convert 'isCorrect' from string to boolean
+      data.isCorrect = data.isCorrect === 'true';
+
+      try {
+        const res = await api.fetch('/api/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (!res.ok) throw result;
+        resultEl.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`;
+      }
+    });
+
+    // Public: Wiki
+    setupGetForm("getWikiListForm", "getWikiListResult", (form) => {
+      const search = new FormData(form).get('search');
+      return `/api/wiki${search ? `?search=${encodeURIComponent(search)}` : ''}`;
+    });
+    setupGetForm("getWikiSlugForm", "getWikiSlugResult", (form) => {
+      const slug = new FormData(form).get('slug');
+      return `/api/wiki/${slug}`;
+    });
+
+    // Admin: History
+    setupGetForm("adminGetHistoriesForm", "adminGetHistoriesResult", () => `/api/admin/histories`);
+
+    document.getElementById('adminGetHistoryBtn').addEventListener('click', async () => {
+      const id = document.getElementById('adminHistoryId').value;
+      const resultEl = document.getElementById('adminDeleteHistoryResult');
+      if (!id) { resultEl.textContent = 'Please enter a History ID.'; return; }
+      resultEl.textContent = 'Loading...';
+      try {
+        const res = await api.fetch(`/api/admin/histories/${id}`);
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) { resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`; }
+    });
+    document.getElementById('adminDeleteHistoryBtn').addEventListener('click', async () => {
+      const id = document.getElementById('adminHistoryId').value;
+      const resultEl = document.getElementById('adminDeleteHistoryResult');
+      if (!id) { resultEl.textContent = 'Please enter a History ID.'; return; }
+      if (!confirm(`Are you sure you want to HARD DELETE history item ${id}?`)) return;
+      resultEl.textContent = 'Deleting...';
+      try {
+        const res = await api.fetch(`/api/admin/histories/${id}?hardDelete=true`, { method: 'DELETE' });
+        if (res.ok) { resultEl.textContent = `History item ${id} hard-deleted.`; } else { throw await res.json(); }
+      } catch (err) { resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`; }
+    });
+
+    // Admin: Feedback
+    setupGetForm("adminGetFeedbacksForm", "adminGetFeedbacksResult", () => `/api/feedback`);
+
+    document.getElementById('adminGetFeedbackBtn').addEventListener('click', async () => {
+      const id = document.getElementById('adminFeedbackId').value;
+      const resultEl = document.getElementById('adminManageFeedbackResult');
+      if (!id) { resultEl.textContent = 'Please enter a Feedback ID.'; return; }
+      resultEl.textContent = 'Loading...';
+      try {
+        const res = await api.fetch(`/api/feedback/${id}`);
+        const data = await res.json();
+        if (!res.ok) throw data;
+        resultEl.textContent = JSON.stringify(data, null, 2);
+      } catch (err) { resultEl.textContent = `Error: ${JSON.stringify(err, null, 2)}`; }
+    });
+    // Add listeners for admin update/delete feedback buttons similarly...
 
     // =======================================================================
     // REAL-TIME PREDICTION (WEBSOCKET)
@@ -242,9 +782,10 @@
     const realtimeResultEl = document.getElementById("realtimeResult");
     const realtimeContainer = document.getElementById("realtimeContainer");
     const ctx = canvasEl.getContext("2d");
-    let realtimeSocket, frameInterval, videoStream;
+    let realtimeSocket, frameInterval, videoStream, captureOccurred;
 
     const startRealtimePrediction = async () => {
+      captureOccurred = false; // Reset the capture flag
       // Clear any previous captured image
       const capturedImg = document.getElementById('capturedImage');
       if (capturedImg) capturedImg.remove();
@@ -261,93 +802,83 @@
         realtimeResultEl.textContent = "Error: Could not access camera.";
         return;
       }
-<<<<<<< Updated upstream
-      
+
       const WS_URL = `ws://${window.location.host}/api/predict/stream`;
       realtimeSocket = new WebSocket(WS_URL);
-      
-=======
 
-      // 1. Xây dựng URL WebSocket chính xác, bao gồm cả token nếu có
-      const token = api.getAccessToken();
-      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      // THAY ĐỔI: Kết nối đến proxy trực tiếp thay vì BFF để test
-      let wsUrl = `${wsProtocol}//${window.location.host}/api/predict/stream`;
-      if (token) {
-        wsUrl += `?token=${token}`;
-      }
-      
-      realtimeSocket = new WebSocket(wsUrl);
-
->>>>>>> Stashed changes
       realtimeSocket.onopen = () => {
-        realtimeResultEl.textContent = "Status: Connected. Sending frames...";
-        const FPS = 2; // Gửi 2 frame mỗi giây để test
+        realtimeResultEl.textContent = "Status: Connected. Searching for a high-confidence prediction...";
+        const FPS = 10;
         frameInterval = setInterval(() => sendFrame(), 1000 / FPS);
       };
-      
+
       realtimeSocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          
-          // 2. Hiển thị toàn bộ payload nhận được
-          realtimeResultEl.textContent = `[${new Date().toLocaleTimeString()}] Received:\n${JSON.stringify(data, null, 2)}`;
+        const data = JSON.parse(event.data);
 
-<<<<<<< Updated upstream
         if (data.status === "captured") {
-          console.log("Capture successful!", data);
-          realtimeResultEl.textContent = `Capture successful! Details: ${JSON.stringify(data.detections, null, 2)}`;
+          captureOccurred = true;
+          console.log("Capture successful! Forwarding to backend for saving.", data);
 
-          // Create and display the captured image
+          // 1. Thay thế kết quả trung gian bằng một thông báo tạm thời
+          realtimeResultEl.textContent = "Capture successful! Saving to history...";
+
+          // Vẫn hiển thị ảnh đã chụp
           const img = document.createElement('img');
           img.id = 'capturedImage';
-          img.src = data.imageUrl;
+          img.src = `data:${data.media_type};base64,${data.processed_media_base64}`;
           img.style.maxWidth = '100%';
           img.style.marginTop = '10px';
           realtimeContainer.after(img);
 
-          // The server will close the connection, which will trigger the onclose event for cleanup.
+          // 2. Gửi kết quả đến backend Node.js để lưu
+          (async () => {
+            try {
+              const saveResponse = await api.fetch('/api/predictions/stream-result', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  detections: data.detections,
+                  processed_media_base64: data.processed_media_base64,
+                  media_type: data.media_type
+                })
+              });
+              const savedResult = await saveResponse.json();
+              if (!saveResponse.ok) throw savedResult;
 
+              console.log("History saved successfully:", savedResult);
+
+              // 3. Chỉ hiển thị KẾT QUẢ CUỐI CÙNG, ghi đè lên thông báo tạm thời
+              realtimeResultEl.textContent = JSON.stringify(savedResult, null, 2);
+
+            } catch (err) {
+              console.error("Failed to save stream result:", err);
+              realtimeResultEl.textContent = `Error saving history: ${JSON.stringify(err, null, 2)}`;
+            }
+          })();
         } else if (data.status === "ok") {
           drawBoxes(data.detections);
-=======
-          // 3. Vẽ bounding box nếu có
-          if (data.detections && Array.isArray(data.detections)) {
-            drawBoxes(data.detections);
-          }
-
-          // Nếu nhận được kết quả cuối cùng từ AI service, đánh dấu và dừng
-          if (data.status === 'redirect') {
-            captureOccurred = true;
-            stopRealtimePrediction(); // Tự động dừng khi có kết quả
-          }
-        } catch (e) {
-            realtimeResultEl.textContent = `Error parsing message: ${event.data}`;
->>>>>>> Stashed changes
         }
       };
 
       realtimeSocket.onclose = () => {
         console.log("WebSocket connection closed.");
+        // This event handles all cleanup, whether initiated by client or server.
         if (frameInterval) clearInterval(frameInterval);
         if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
         ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-<<<<<<< Updated upstream
-        realtimeResultEl.textContent = "Status: Idle / Captured";
-=======
 
+        // Only change text if a capture did NOT occur (e.g., user clicked "Stop")
         if (!captureOccurred) {
-          realtimeResultEl.textContent = "Status: Connection closed.";
+          realtimeResultEl.textContent = "Status: Idle / Connection closed.";
         }
 
->>>>>>> Stashed changes
         startBtn.disabled = false;
         stopBtn.disabled = true;
       };
 
-      realtimeSocket.onerror = (event) => {
-        realtimeResultEl.textContent = "Status: WebSocket Error. Check console for details.";
-        console.error("WebSocket Error:", event);
+      realtimeSocket.onerror = (err) => {
+        realtimeResultEl.textContent = "Status: WebSocket Error.";
+        console.error("WebSocket Error:", err);
       };
 
       startBtn.disabled = true;
@@ -355,109 +886,38 @@
     };
 
     const stopRealtimePrediction = () => {
+      // This function is now only for *initiating* the closure from the client side (e.g., stop button).
       if (realtimeSocket && realtimeSocket.readyState < 2) { // If OPEN or CONNECTING
         realtimeSocket.close();
       }
     };
 
     const sendFrame = () => {
-      if (realtimeSocket?.readyState === WebSocket.OPEN && videoEl.readyState >= 2) { // readyState 2 (HAVE_CURRENT_DATA) là đủ
-        const tempCanvas = document.createElement('canvas');
-        tempCanvas.width = videoEl.videoWidth;
-        tempCanvas.height = videoEl.videoHeight;
-        const tempCtx = tempCanvas.getContext('2d');
-        if (tempCtx) {
-            tempCtx.drawImage(videoEl, 0, 0, tempCanvas.width, tempCanvas.height);
-            realtimeSocket.send(tempCanvas.toDataURL("image/jpeg", 0.7)); // Giảm chất lượng một chút để gửi nhanh hơn
-        }
+      if (realtimeSocket?.readyState === WebSocket.OPEN) {
+        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+        realtimeSocket.send(canvasEl.toDataURL("image/jpeg", 0.7));
       }
     };
 
     const drawBoxes = (detections) => {
       ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      ctx.strokeStyle = "#3b82f6"; // Blue color
+      ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+      ctx.strokeStyle = "#00FF00";
       ctx.lineWidth = 3;
-      
+      ctx.font = "18px sans-serif";
+      ctx.fillStyle = "#00FF00";
       detections.forEach((det) => {
-        // THAY ĐỔI: AI service trả về 'box' chứ không phải 'boundingBox'
-        if (!det.box) return;
-        
-        // 4. Sử dụng đúng định dạng tọa độ từ AI service (pixel tuyệt đối)
         const [x1, y1, x2, y2] = det.box;
-        const boxX = x1;
-        const boxY = y1;
-        const boxWidth = x2 - x1;
-        const boxHeight = y2 - y1;
-
-        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
-
-        // THAY ĐỔI: AI service trả về 'class' và 'confidence'
-        const label = `${det.class.replace(/-/g, ' ')} (${(det.confidence * 100).toFixed(0)}%)`;
-        ctx.font = "bold 16px sans-serif";
-        const textMetrics = ctx.measureText(label);
-        const labelPadding = 8;
-        const labelHeight = 24;
-
-        ctx.fillStyle = "#3b82f6";
-        ctx.fillRect(boxX, boxY - labelHeight, textMetrics.width + labelPadding * 2, labelHeight);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(label, boxX + labelPadding, boxY - 6);
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        const label = `${det.class} (${(det.confidence * 100).toFixed(1)}%)`;
+        ctx.fillText(label, x1, y1 > 20 ? y1 - 10 : y1 + 20);
       });
     };
 
     startBtn.addEventListener("click", startRealtimePrediction);
     stopBtn.addEventListener("click", stopRealtimePrediction);
 
-    // =======================================================================
-    // AUTOMATED E2E TEST SCRIPT
-    // =======================================================================
-    const startFullTestBtn = document.getElementById("startFullTestBtn");
-    const fullTestResultEl = document.getElementById("fullTestResult");
-
-    const runFullTest = async () => {
-      startFullTestBtn.disabled = true;
-      fullTestResultEl.textContent = "";
-      const log = (message) => { fullTestResultEl.textContent += message + "\n"; };
-      const logStep = (message) => log(`\n[BƯỚC] ${message}`);
-      const logSuccess = (message) => log(`  ✓ ${message}`);
-      const logError = (message) => log(`  ✗ ${message}`);
-
-      try {
-        const BASE_URL = "/api";
-        const ADMIN_CREDENTIALS = { email: "admin@example.com", password: "adminpassword" };
-        const NEW_USER_CREDENTIALS = { username: `testuser_${Date.now()}`, email: `testuser_${Date.now()}@example.com`, password: "password123" };
-        
-        const apiCall = async (endpoint, method = "GET", body = null, token = null) => {
-          const headers = { "Content-Type": "application/json" };
-          if (token) headers["Authorization"] = `Bearer ${token}`;
-          const response = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
-          const result = await response.json();
-          if (!response.ok) throw result;
-          return result;
-        };
-
-        logStep("Đăng nhập Admin...");
-        const adminLoginRes = await apiCall(`${BASE_URL}/auth/login`, "POST", ADMIN_CREDENTIALS);
-        logSuccess("Đăng nhập Admin thành công.");
-
-        logStep("Đăng ký người dùng mới...");
-        await apiCall(`${BASE_URL}/auth/register`, "POST", NEW_USER_CREDENTIALS);
-        logSuccess(`Đăng ký ${NEW_USER_CREDENTIALS.email} thành công.`);
-
-        // Note: Cần có endpoint để dọn dẹp (xóa user) để test này hoàn chỉnh
-        logStep("Dọn dẹp (bỏ qua)...");
-
-        log("\n====================================");
-        log("    TẤT CẢ CÁC BƯỚC ĐÃ THÀNH CÔNG!    ");
-        log("====================================");
-      } catch (error) {
-        logError(`Test thất bại: ${JSON.stringify(error)}`);
-      } finally {
-        startFullTestBtn.disabled = false;
-      }
-    };
-    startFullTestBtn.addEventListener("click", runFullTest);
   </script>
 </body>
+
 </html>

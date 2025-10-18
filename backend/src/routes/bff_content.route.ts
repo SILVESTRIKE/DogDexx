@@ -6,8 +6,6 @@ import { uploadSingle } from '../middlewares/upload.middleware';
 
 const router = Router();
 
-router.use(optionalAuthMiddleware);
-
 /**
  * @swagger
  * /bff/content/breed/{slug}:

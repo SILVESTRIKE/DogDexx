@@ -13,5 +13,7 @@ export const startSchedulers = () => {
       timezone: "Asia/Ho_Chi_Minh", 
     }
   );
-  
+  console.log(
+    "✅ Scheduler đã được khởi tạo để reset giới hạn sử dụng hàng tuần."
+  );
 };

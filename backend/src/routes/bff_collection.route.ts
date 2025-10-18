@@ -5,8 +5,6 @@ import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 
 const router = Router();
 
-router.use(optionalAuthMiddleware);
-
 /**
  * @swagger
  * /bff/collection/pokedex:
