@@ -11,6 +11,7 @@ import { useCollection } from "@/lib/collection-context";
 import { apiClient } from "@/lib/api-client";
 import { useI18n } from "@/lib/i18n-context";
 import { Detection } from "@/lib/types";
+import { toast } from "sonner";
 
 export default function LiveDetectionPage() {
   const router = useRouter();
@@ -18,10 +19,10 @@ export default function LiveDetectionPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  const streamRef = useRef<MediaStream | null>(null); // SỬ DỤNG REF THAY CHO STATE
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
-  const [stream, setStream] = useState<MediaStream | null>(null);
   const { refreshCollection, isCollected } = useCollection();
   const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -73,9 +74,9 @@ export default function LiveDetectionPage() {
           } else if (data.error) {
             const errorMessage = data.error || "An unknown error occurred.";
             console.error("[BFF-WS] Error from server:", errorMessage);
-            alert(
-              `${t("live.serverError") || "Server error"}: ${errorMessage}`
-            );
+            toast.error(t("live.serverError") || "Server error", {
+              description: errorMessage,
+            });
             stopCamera("Error");
           }
         } catch (error) {
@@ -101,9 +102,9 @@ export default function LiveDetectionPage() {
           !event.reason.includes("Redirecting") &&
           !event.reason.includes("Error")
         ) {
-          alert(
-            t("live.disconnectedError") || "Connection lost. Please try again."
-          );
+          toast.error(t("live.disconnectedError") || "Connection lost", {
+            description: "Please check your internet connection and try again.",
+          });
           stopCamera("Unexpected Close");
         }
       };
@@ -111,9 +112,9 @@ export default function LiveDetectionPage() {
       wsRef.current = ws;
     } catch (error) {
       console.error("[v0] Error connecting WebSocket:", error);
-      alert(
-        t("live.connectError") || "Failed to connect to the detection service."
-      );
+      toast.error(t("live.connectError") || "Failed to connect", {
+        description: "Could not connect to the detection service. Please try again later.",
+      });
     }
   };
 
@@ -160,7 +161,7 @@ export default function LiveDetectionPage() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
-        setStream(mediaStream);
+        streamRef.current = mediaStream; // Cập nhật ref
         setIsStreaming(true);
         setDetections([]);
 
@@ -173,18 +174,18 @@ export default function LiveDetectionPage() {
       }
     } catch (err) {
       console.error("[v0] Error accessing camera:", err);
-      alert(
-        t("live.cameraError") ||
-          "Cannot access camera. Please check permissions."
-      );
+      toast.error(t("live.cameraError") || "Cannot access camera", {
+        description: "Please check your browser permissions and try again.",
+      });
     }
   };
 
   // FIX: Đảm bảo stopCamera dừng tất cả các track
   const stopCamera = (reason: string = "Client initiated close") => {
-    if (stream) {
-      stream.getTracks().forEach((track) => track.stop()); // ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT
-      setStream(null);
+    // Luôn truy cập phiên bản mới nhất của stream qua ref
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop()); // ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT
+      streamRef.current = null;
       setIsStreaming(false);
       setDetections([]);
 

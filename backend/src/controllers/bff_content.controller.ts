@@ -1,22 +1,21 @@
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
+import { Types } from 'mongoose';
 import { wikiService } from '../services/dogs_wiki.service';
-import { UserCollectionModel } from '../models/user_collection.model';
 import { transformMediaURLs } from '../utils/media.util';
-import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { wikiController } from './dogs_wiki.controller';
+import { collectionService } from '../services/user_collections.service';
+import { predictionHistoryService } from '../services/prediction_history.service';
+import { MediaController } from './medias.controller';
 
-export const getBreedDetail = async (req: Request, res: Response) => {
+export const getBreedDetail = async (req: Request, res: Response, next: NextFunction) => {
   const { slug } = req.params;
   const userId = req.user?._id;
 
   // 1. Get breed info, collection status, and related media in parallel
   const [breed, userCollection, relatedMedia] = await Promise.all([
     wikiService.getBreedBySlug(slug),
-    userId ? UserCollectionModel.findOne({ user_id: userId, 'breed_id.slug': slug }) : Promise.resolve(null),
-    PredictionHistoryModel.find({ 'predictions.class': { $regex: new RegExp(slug.replace(/-/g, ' '), 'i') } })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .select('processedMediaPath')
+    userId ? collectionService.getCollectionItemBySlug(userId, slug) : Promise.resolve(null),
+    predictionHistoryService.findHistoriesByBreedName(slug, 10)
   ]);
 
   // 2. Format the response
@@ -26,8 +25,9 @@ export const getBreedDetail = async (req: Request, res: Response) => {
   };
 
   const transformedMedia = relatedMedia.map(m => ({
-    url: transformMediaURLs(req, m).processedMediaPath,
-    type: 'image' // Assuming all are images for now
+    // transformMediaURLs cần một object đầy đủ, nên ta tạo một object tạm
+    url: transformMediaURLs(req, { processedMediaPath: m.processedMediaPath } as any).processedMediaPath,
+    type: 'image' // Giả định tất cả đều là ảnh
   }));
 
   res.status(200).json({
@@ -37,15 +37,14 @@ export const getBreedDetail = async (req: Request, res: Response) => {
   });
 };
 
-export const getBreeds = async (req: Request, res: Response) => {
+export const getBreeds = (req: Request, res: Response, next: NextFunction) => {
   // This endpoint is very similar to `getPokedex`. We can reuse the logic or point to it.
   // For simplicity, we'll just call the existing wiki service.
   // The frontend should call `/bff/collection/pokedex` for the enriched version.
   return wikiController.getAll(req, res);
 };
 
-export const uploadMedia = async (req: Request, res: Response) => {
+export const uploadMedia = (req: Request, res: Response, next: NextFunction) => {
   // This is a core function, better handled by the existing medias.controller.
-  const { uploadSingle } = require('./medias.controller');
-  return uploadSingle(req, res);
+  return MediaController.uploadSingle(req, res);
 };

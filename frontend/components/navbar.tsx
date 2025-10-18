@@ -3,7 +3,7 @@
 "use client"
 
 import Link from "next/link"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
@@ -26,18 +26,24 @@ export function Navbar() {
   const mounted = useMounted()
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState<"login" | "register">("login")
+  const [scrolled, setScrolled] = useState(false)
 
   const handleAuthClick = (mode: "login" | "register") => {
     setAuthMode(mode)
     setShowAuthModal(true)
   }
 
-  const navLinks = [
-    { href: "/", label: t("nav.detect"), auth: false },
-    { href: "/live", label: t("nav.live"), auth: false },
-    { href: "/pokedex", label: t("nav.pokedex"), auth: true },
-    { href: "/achievements", label: t("nav.achievements"), auth: true },
-  ]
+  useEffect(() => {
+    const handleScroll = () => {
+      // Set trạng thái 'scrolled' thành true nếu người dùng cuộn xuống hơn 10px
+      setScrolled(window.scrollY > 10)
+    }
+
+    window.addEventListener("scroll", handleScroll)
+    return () => {
+      window.removeEventListener("scroll", handleScroll)
+    }
+  }, [])
 
   const renderNavLinks = () => {
     if (!mounted) {
@@ -48,6 +54,14 @@ export function Navbar() {
         </>
       );
     }
+
+    // Định nghĩa navLinks bên trong hàm render để đảm bảo `t()` được gọi lại mỗi khi re-render
+    const navLinks = [
+      { href: "/", label: t("nav.detect"), auth: false },
+      { href: "/live", label: t("nav.live"), auth: false },
+      { href: "/pokedex", label: t("nav.pokedex"), auth: true },
+      { href: "/achievements", label: t("nav.achievements"), auth: true },
+    ]
 
     return navLinks
       .filter((link) => !link.auth || (link.auth && isAuthenticated))
@@ -124,7 +138,11 @@ export function Navbar() {
 
   return (
     <>
-      <nav className="border-b bg-background">
+      <nav
+        className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
+          scrolled ? "bg-background/90 backdrop-blur-sm border-border" : "bg-background border-transparent"
+        }`}
+      >
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/" className="text-2xl font-bold">

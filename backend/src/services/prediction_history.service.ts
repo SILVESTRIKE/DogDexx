@@ -127,4 +127,16 @@ export const predictionHistoryService = {
       await history.save();
     }
   },
+
+  /**
+   * [BFF] Tìm các media liên quan đến một giống chó.
+   */
+  async findHistoriesByBreedName(breedName: string, limit: number = 10): Promise<Pick<PredictionHistoryDoc, 'processedMediaPath'>[]> {
+    const breedRegex = new RegExp(breedName.replace(/-/g, ' '), 'i');
+    return PredictionHistoryModel.find({ 'predictions.class': { $regex: breedRegex } })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .select('processedMediaPath')
+      .lean(); // .lean() để trả về plain JS objects, nhanh hơn
+  },
 };

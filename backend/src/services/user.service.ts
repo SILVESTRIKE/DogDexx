@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { UserModel, UserDoc, UserRole } from "../models/user.model";
+import { UserModel, UserDoc, UserRole, UnlockedAchievement } from "../models/user.model";
 import { OtpModel, OtpType } from "../models/otp.model";
 import { sendEmail } from "./email.service";
 import { RegisterType } from "../types/zod/user.zod";
@@ -16,11 +16,13 @@ export type PlainUser = {
   lastName?: string;
   avatarUrl?: string;
   verify: boolean;
+  directory_id: Types.ObjectId;
   isGuest?: boolean;
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
   isDeleted: boolean;
+  achievements: UnlockedAchievement[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -171,5 +173,51 @@ export const userService = {
     await UserModel.findByIdAndUpdate(user._id, { verify: true });
     await OtpModel.deleteOne({ _id: otpRecord._id });
     return true;
+  },
+
+  /**
+   * [Admin] Cập nhật thông tin người dùng bằng ID.
+   */
+  async updateUserById(userId: string, updateData: Partial<Pick<UserDoc, 'username' | 'email' | 'role' | 'verify'>>): Promise<UserDoc | null> {
+    const user = await UserModel.findById(userId);
+    if (!user || user.isDeleted) {
+      throw new ConflictError('Không tìm thấy người dùng.');
+    }
+    return this.updateUser(userId, updateData);
+  },
+
+  /**
+   * [Admin] Tạo người dùng mới.
+   * Không gửi OTP, mặc định tài khoản đã được xác thực.
+   */
+  async createUserByAdmin(data: { username: string; email: string; password: string; role: UserRole; verify?: boolean }): Promise<PlainUser> {
+    const { username, email, password, role, verify = true } = data;
+
+    const existingUser = await UserModel.findOne({ email });
+    if (existingUser) {
+      throw new ConflictError('Email đã được sử dụng.');
+    }
+
+    // Tạo thư mục gốc cho người dùng mới
+    const newDirectory = await DirectoryModel.create({ name: `${username}'s Directory`, creator_id: new mongoose.Types.ObjectId() }); // Placeholder ID, sẽ được cập nhật
+
+    const user = new UserModel({
+      username,
+      email,
+      password, // Mongoose pre-save hook sẽ tự động hash mật khẩu
+      role,
+      directory_id: newDirectory._id,
+      verify: verify, // Sử dụng giá trị được truyền vào, mặc định là true
+    });
+
+    await user.save();
+
+    // Cập nhật lại creator_id cho thư mục
+    newDirectory.creator_id = user._id as mongoose.Types.ObjectId;
+    await newDirectory.save();
+
+    // @ts-ignore
+    const { password: _, ...plainUserResult } = user.toObject();
+    return plainUserResult as PlainUser;
   },
 };

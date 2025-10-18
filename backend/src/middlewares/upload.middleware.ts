@@ -64,13 +64,6 @@ const storage = multer.diskStorage({
     const extension = path.extname(file.originalname);
     const newFilename = `${dateString}_${randomChars}${extension}`;
     cb(null, newFilename);
-
-    // Lấy đường dẫn thư mục đích đã được lưu từ hàm `destination`
-    const destination = (req as any).uploadDestinationPath;
-    if (destination) {
-      const relativePath = path.relative(PUBLIC_DIR, destination);
-      (file as any).path = path.join('/', relativePath, newFilename).replace(/\\/g, '/');
-    }
   },
 });
 
@@ -126,3 +119,11 @@ const multerMultipleOptions = {
 
 export const uploadSingle = multer(multerOptions).single("file");
 export const uploadMultiple = multer(multerMultipleOptions).array("files", MAX_FILES);
+
+// Middleware mới cho việc upload model
+export const uploadModelFiles = multer({
+  storage: multer.memoryStorage(), // Lưu file vào bộ nhớ đệm thay vì ghi ra đĩa
+  limits: {
+    fileSize: 500 * 1024 * 1024, // Tăng giới hạn lên 500MB cho file model
+  }
+}).fields([{ name: 'modelFile', maxCount: 1 }]);

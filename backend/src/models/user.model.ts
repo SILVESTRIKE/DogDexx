@@ -2,6 +2,12 @@ import mongoose, { Document, Schema, Types } from "mongoose";
 import { DirectoryDoc } from "./directory.model";
 export type UserRole = "user" | "premium" | "admin";
 
+// Cấu trúc cho một thành tích đã mở khóa được nhúng vào User
+export interface UnlockedAchievement {
+  key: string; 
+  unlockedAt: Date;
+}
+
 export type UserDoc = Document & {
   // TK
   username: string;
@@ -24,6 +30,9 @@ export type UserDoc = Document & {
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
+
+  // Thành tích đã mở khóa
+  achievements: UnlockedAchievement[];
 
   //timestamp
   createdAt: Date;
@@ -86,6 +95,12 @@ const userSchema = new Schema<UserDoc>(
       type: Date,
       default: () => new Date(),
     },
+
+    achievements: [{
+      _id: false, // Không cần _id cho sub-document
+      key: { type: String, required: true },
+      unlockedAt: { type: Date, required: true, default: Date.now }
+    }]
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },

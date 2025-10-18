@@ -155,3 +155,8 @@
     @apply bg-background text-foreground;
   }
 }
+/* Ẩn nút "N" ở góc trái trong dev mode */
+#__next-build-watcher,
+.nextjs-dev-overlay-root {
+  display: none !important;
+}

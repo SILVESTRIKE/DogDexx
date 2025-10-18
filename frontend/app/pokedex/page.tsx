@@ -15,9 +15,9 @@ import { useI18n } from "@/lib/i18n-context"
 
 function PokedexContent() {
   const { t } = useI18n()
-  const { collectionCount } = useCollection()
+  const { collectionCount, setInitialCollection } = useCollection()
   const [searchQuery, setSearchQuery] = useState("")
-  const [sortBy, setSortBy] = useState("number")
+  const [sortBy, setSortBy] = useState("name-asc")
   const [filterBy, setFilterBy] = useState("all")
   const [dogBreeds, setDogBreeds] = useState<DogBreed[]>([])
   const [loading, setLoading] = useState(true)
@@ -27,48 +27,61 @@ function PokedexContent() {
     const fetchBreeds = async () => {
       try {
         setLoading(true)
-        const response = await apiClient.getPokedex()
-        setDogBreeds(response.data || [])
-        setTotalCount(response.total || response.data?.length || 0)
+        const response = await apiClient.getPokedex({ limit: 2000 }); 
+        
+        // Dữ liệu từ API đã khá chuẩn, chỉ cần đảm bảo các trường cần thiết tồn tại
+        const mappedBreeds = response.breeds.map((b: any) => ({
+          ...b,
+          breed: b.name, // Đảm bảo trường 'breed' tồn tại, vì DogCard có thể dùng nó
+          imageUrl: b.imageUrl || `https://via.placeholder.com/300?text=${encodeURIComponent(b.name)}`, // Ảnh dự phòng
+        }));
+        
+        setDogBreeds(mappedBreeds);
+        setTotalCount(response.stats?.totalBreeds ?? 0);
+        setInitialCollection(response.breeds, response.stats); // TRUYỀN DỮ LIỆU VÀO CONTEXT
       } catch (error) {
         console.error("[v0] Failed to fetch breeds:", error)
       } finally {
         setLoading(false)
       }
     }
-
+    
     fetchBreeds()
-  }, [])
+  }, [setInitialCollection])
 
   const filteredAndSortedDogs = useMemo(() => {
     const filtered = dogBreeds.filter((dog) => {
-      const matchesSearch = (dog as any).display_name.toLowerCase().includes(searchQuery.toLowerCase())
-      if (filterBy === "all") return matchesSearch
-      if (filterBy === "collected") {
-        return matchesSearch && dog.isCollected
+      const matchesSearch = typeof dog.breed === 'string' && dog.breed.toLowerCase().includes(searchQuery.toLowerCase())
+      if (!matchesSearch) return false;
+      
+      switch (filterBy) {
+        case "all":
+          return true;
+        case "collected":
+          return dog.isCollected;
+        case "uncollected":
+          return !dog.isCollected;
+        default: // Lọc theo group
+          return dog.group === filterBy;
       }
-      if (filterBy === "uncollected") {
-        return matchesSearch && !dog.isCollected
-      }
-      return matchesSearch && dog.group === filterBy
-    })
+    });
 
     return filtered.sort((a, b) => {
-      if (sortBy === "number") {
-        return (a.number || 0) - (b.number || 0)
-      }
+      const breedA = a.breed || '';
+      const breedB = b.breed || '';
+
       if (sortBy === "name-asc") {
-        return (a as any).display_name.localeCompare((b as any).display_name)
+        return breedA.localeCompare(breedB);
       }
       if (sortBy === "name-desc") {
-        return (b as any).display_name.localeCompare((a as any).display_name)
+        return breedB.localeCompare(breedA);
       }
       return 0
     })
   }, [dogBreeds, searchQuery, sortBy, filterBy])
 
   const groups = useMemo(() => {
-    const uniqueGroups = new Set(dogBreeds.map((dog) => dog.group))
+    const uniqueGroups = new Set(dogBreeds.map((dog) => dog.group).filter(Boolean))
     return Array.from(uniqueGroups).sort()
   }, [dogBreeds])
 
@@ -124,7 +137,6 @@ function PokedexContent() {
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="number">Number</SelectItem>
                   <SelectItem value="name-asc">Name (A-Z)</SelectItem>
                   <SelectItem value="name-desc">Name (Z-A)</SelectItem>
                 </SelectContent>
@@ -158,12 +170,12 @@ function PokedexContent() {
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-          {filteredAndSortedDogs.map((dog) => (
-            <DogCard key={dog._id.$oid} dog={dog} index={dog.number || 0} />
+          {filteredAndSortedDogs.map((dog, index) => (
+            <DogCard key={dog._id?.$oid || index} dog={dog} index={index} />
           ))}
         </div>
 
-        {filteredAndSortedDogs.length === 0 && (
+        {filteredAndSortedDogs.length === 0 && !loading && (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-lg">No dogs found matching your criteria</p>
           </div>

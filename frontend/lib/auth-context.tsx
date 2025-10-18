@@ -59,31 +59,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(null);
           }
         } catch (error) {
-          // Thất bại: Lỗi có thể là do xác thực (token hỏng, refresh thất bại)
-          // hoặc các lỗi khác (mất mạng, server down).
-          
-          // QUAN TRỌNG: API client đã tự gọi TokenManager.clearTokens() nếu 
-          // token bị coi là HẾT HẠN và REFRESH THẤT BẠI.
-          
-          // Chúng ta chỉ cần đảm bảo rằng trạng thái client bị xóa.
-          // Nếu lỗi không phải do xác thực, token vẫn còn trong localStorage.
-          
           console.log("Failed to restore user session:", error);
-          
-          // Chỉ set trạng thái đăng nhập về false, nếu token vẫn tồn tại, 
-          // lần tải lại tiếp theo sẽ thử lại.
-          // Nếu API client đã xóa token, isAuthenticated sẽ là false.
-          
-          if (TokenManager.getAccessToken()) {
-              // Trường hợp getProfile lỗi vì mất mạng/server down, token còn nguyên
-              // Chúng ta KHÔNG clearTokens() ở đây.
-              console.log("User session failed but tokens still exist (e.g., network error). Keeping tokens.");
-          } else {
-              // Trường hợp token đã bị xóa bởi API Client (refresh thất bại)
-              console.log("User session failed and tokens were cleared by API client.");
-              setIsAuthenticated(false);
-              setUser(null);
-          }
+          // Bất kể lỗi là gì (token hết hạn, mạng, server), cách xử lý an toàn nhất
+          // là đăng xuất người dùng để buộc họ đăng nhập lại.
+          // API client có thể đã xóa token nếu refresh thất bại.
+          console.log("Clearing user session due to an error.");
+          TokenManager.clearTokens();
+          setIsAuthenticated(false);
+          setUser(null);
         }
       } else {
         // 2. Nếu không có token, đảm bảo có Guest Session.

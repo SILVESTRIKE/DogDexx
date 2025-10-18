@@ -34,21 +34,29 @@ const startServer = async () => {
 
   // 3. Lắng nghe sự kiện 'upgrade' trên HTTP server để xử lý các yêu cầu WebSocket
   server.on('upgrade', (request, socket, head) => {
-    // Dùng hàm xác thực WebSocket đã tạo
-    authenticateSocket(request, () => {
-      // Kiểm tra xem client muốn kết nối đến đúng đường dẫn WebSocket không
-      if (request.url?.startsWith('/bff/predict/stream')) {
-        wss.handleUpgrade(request, socket, head, (ws) => {
-          // Nếu thành công, giao kết nối cho controller xử lý
-          logger.info(`[WebSocket] Connection established for: ${request.url}`);
-          bffPredictionController.handleStreamPrediction(ws, request as Request);
-        });
-      } else {
-        // Nếu đường dẫn không đúng, từ chối kết nối
-        logger.warn(`[WebSocket] Connection rejected for unknown path: ${request.url}`);
-        socket.destroy();
-      }
-    });
+    const pathname = request.url || '';
+
+    // Phân luồng xử lý dựa trên đường dẫn của WebSocket
+    if (pathname.startsWith('/bff/predict/stream')) {
+      // Endpoint này cho phép cả guest và user, dùng optionalAuth
+      authenticateSocket(request, () => {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+              logger.info(`[WebSocket] Connection established for stream prediction: ${pathname}`);
+              bffPredictionController.handleStreamPrediction(ws, request as Request);
+          });
+      });
+    } else if (pathname.startsWith('/bff/live')) {
+      // Endpoint này YÊU CẦU xác thực (ví dụ)
+      authenticateSocket(request, () => { // Giả sử authenticateSocket sẽ throw lỗi nếu không có token
+          wss.handleUpgrade(request, socket, head, (ws) => {
+              logger.info(`[WebSocket] Authenticated connection for live feed: ${pathname}`);
+              // bffRealtimeController.handleLive(ws, request as Request); // Giao cho controller tương ứng
+          });
+      });
+    } else {
+      logger.warn(`[WebSocket] Connection rejected for unknown path: ${pathname}`);
+      socket.destroy();
+    }
   });
 
   // 4. Khởi động server

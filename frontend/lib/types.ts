@@ -39,7 +39,7 @@ export interface RegisterResponse {
 export interface DogBreedWiki {
   id: string
   slug: string
-  display_name: string
+  breed: string
   group?: string
   coat_type?: string
   coat_colors?: string[]
@@ -107,18 +107,17 @@ export interface FeedbackPayload {
 
 export interface Achievement {
   id: string
-  name: string
+  title: string // Đổi từ name
   description: string
   icon: string
   unlocked: boolean
-  progress?: number
-  total?: number
+  requiredCount: number // Thêm trường này
 }
 
 export interface CollectionStats {
-  totalCollected: number
-  totalBreeds: number
-  percentage: number
+  totalBreeds: number;
+  collectedBreeds: number;
+  progress: number;
   recentlyAdded?: DogBreedWiki[]
 }
 
@@ -162,7 +161,7 @@ export interface BffPredictionResponse {
 // Nó chứa các trường được chọn lọc từ DogBreedWiki
 export interface EnrichedDogBreed {
   slug: string;
-  display_name: string; // Thêm trường này
+  breed: string; // Thêm trường này
   group?: string;
   description: string;
   life_expectancy?: string;

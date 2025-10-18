@@ -1,5 +1,5 @@
 // bff prediction_controller.ts
-import { Request, Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import WebSocket from "ws";
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
@@ -9,9 +9,11 @@ import { transformMediaURLs } from "../utils/media.util";
 import { feedbackService } from "../services/feedback.service";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PredictionHistoryDoc } from "../models/prediction_history.model";
+import { UserModel, UnlockedAchievement } from "../models/user.model"; // THÊM IMPORT
 import { collectionService } from "../services/user_collections.service";
 import { achievementService } from "../services/achievement.service";
-import { UserCollectionModel } from "../models/user_collection.model";
+import { userService } from "../services/user.service"; // THÊM IMPORT
+import { predictionHistoryController } from "./prediction_history.controller";
 import { logger } from "../utils/logger";
 
 /**
@@ -22,21 +24,23 @@ import { logger } from "../utils/logger";
 function createEnrichedBreedInfo(breedInfoDoc: DogBreedWikiDoc | null | undefined) {
   if (!breedInfoDoc) return null;
   return {
-    // --- Cấp 1: Cốt lõi ---
+    // Core Info
+    breed: breedInfoDoc.breed, // Sửa từ display_name
     slug: breedInfoDoc.slug,
     group: breedInfoDoc.group,
     description: breedInfoDoc.description,
     life_expectancy: breedInfoDoc.life_expectancy,
     temperament: breedInfoDoc.temperament,
+    // Ratings
     energy_level: breedInfoDoc.energy_level,
     trainability: breedInfoDoc.trainability,
     shedding_level: breedInfoDoc.shedding_level,
     maintenance_difficulty: breedInfoDoc.maintenance_difficulty,
-    // --- Cấp 2: Ngữ cảnh ---
-    height: (breedInfoDoc as any).height,
-    weight: (breedInfoDoc as any).weight,
-    good_with_children: (breedInfoDoc as any).good_with_children,
-    suitable_for: (breedInfoDoc as any).suitable_for,
+    // Lifestyle Context
+    height: breedInfoDoc.height,
+    weight: breedInfoDoc.weight,
+    good_with_children: breedInfoDoc.good_with_children,
+    suitable_for: breedInfoDoc.suitable_for,
   };
 }
 /**
@@ -44,7 +48,7 @@ function createEnrichedBreedInfo(breedInfoDoc: DogBreedWikiDoc | null | undefine
  * PHIÊN BẢN NÂNG CẤP: Xử lý TẤT CẢ các dự đoán, không chỉ cái chính.
  */
 async function handlePredictionAndEnrichment(req: Request, predictionPromise: Promise<PredictionHistoryDoc>, userId?: string) {
-  // 1. Chờ kết quả dự đoán thô từ service lõi
+  // 1. Await the raw prediction result from the core service
   const predictionResult = await predictionPromise;
 
   // 2. Trích xuất các slug giống chó duy nhất từ TẤT CẢ các kết quả để chuẩn bị làm giàu
@@ -57,25 +61,34 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
     breeds.forEach(breed => wikiInfoMap.set(breed.slug, breed));
   }
 
-  // 3. Nếu user đăng nhập, cập nhật bộ sưu tập và kiểm tra thành tích
+  // 3. If user is logged in, update collection and check for achievements
   let collectionStatus: any = null;
   if (userId && breedSlugs.length > 0) {
     const userObjectId = new Types.ObjectId(userId);
-    
-    const oldCollectionSize = await UserCollectionModel.countDocuments({ user_id: userObjectId });
+    // Lấy thông tin user và số lượng collection cũ CÙNG LÚC
+    const [userBeforeUpdate, oldCollections] = await Promise.all([
+      userService.getById(userId),
+      collectionService.getUserCollection(userObjectId)
+    ]);
+    if (!userBeforeUpdate) throw new BadRequestError("User not found before update.");
+    const oldCollectionCount = oldCollections.length;
 
     // Thêm tất cả giống chó mới phát hiện vào bộ sưu tập
     await collectionService.addOrUpdateManyCollections(userObjectId, breedSlugs);
 
-    const newCollections = await UserCollectionModel.find({ user_id: userObjectId });
-    const newCollectionSize = newCollections.length;
+    // Lấy lại thông tin user và collection mới sau khi cập nhật
+    const [userAfterUpdate, newCollections] = await Promise.all([
+      userService.getById(userId),
+      collectionService.getUserCollection(userObjectId)
+    ]);
+    if (!userAfterUpdate) throw new BadRequestError("User not found after update.");
 
-    const achievementsResult = await achievementService.getUserAchievements(userId, newCollections);
-    const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked);
+    const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections);
+    const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !userBeforeUpdate?.achievements.some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
 
     collectionStatus = {
-      isNewBreed: newCollectionSize > oldCollectionSize,
-      totalCollected: newCollectionSize,
+      isNewBreed: newCollections.length > oldCollectionCount, // So sánh với số lượng collection cũ đã lưu
+      totalCollected: newCollections.length,
       achievementsUnlocked: unlockedAchievements.map(ach => ach.key)
     };
   }
@@ -120,7 +133,7 @@ export const bffPredictionController = {
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
     const predictionPromise = predictionService.makePrediction(userId, file, "image", req);
-    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString());
+    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString()); // Giữ nguyên userId string cho logic hiện tại
     res.status(200).json(data);
   },
 
@@ -130,7 +143,7 @@ export const bffPredictionController = {
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
     const predictionPromise = predictionService.makePrediction(userId, file, "video", req);
-    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString());
+    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString()); // Giữ nguyên userId string cho logic hiện tại
     res.status(200).json(data);
   },
 
@@ -141,14 +154,12 @@ export const bffPredictionController = {
     if (!files || files.length === 0) {
       throw new BadRequestError("Không có file nào được cung cấp.");
     }
-    
+
     // 1. Gọi service lõi để dự đoán hàng loạt
     const batchPredictionResults = await predictionService.makeBatchPredictions(userId, files, req);
 
     // 2. Thu thập TẤT CẢ các slug duy nhất từ TẤT CẢ các ảnh để làm giàu một lần duy nhất
-    const allSlugs = batchPredictionResults.flatMap(result =>
-      result.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-'))
-    );
+    const allSlugs = batchPredictionResults.flatMap(result => result.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-')));
     const uniqueSlugs: string[] = [...new Set(allSlugs)];
 
     // 3. Làm giàu dữ liệu song song để tối ưu hiệu suất
@@ -160,20 +171,31 @@ export const bffPredictionController = {
         breeds.forEach(breed => wikiInfoMap.set(breed.slug, breed));
       })
     ];
-    
+
     if (userId && uniqueSlugs.length > 0) {
-      const userObjectId = Types.ObjectId.isValid(userId) ? new Types.ObjectId(userId) : userId;
+      const userObjectId = new Types.ObjectId(userId);
       enrichmentPromises.push(
         (async () => {
-          const oldCollectionSize = await UserCollectionModel.countDocuments({ user_id: userObjectId });
+          const [userBeforeUpdate, oldCollections] = await Promise.all([
+            userService.getById(userObjectId.toString()),
+            collectionService.getUserCollection(userObjectId)
+          ]);
+          if (!userBeforeUpdate) return;
+          const oldCollectionCount = oldCollections.length;
+
           await collectionService.addOrUpdateManyCollections(userObjectId, uniqueSlugs);
-          const newCollections = await UserCollectionModel.find({ user_id: userObjectId });
-          const newCollectionSize = newCollections.length;
-          const achievementsResult = await achievementService.getUserAchievements(userId.toString(), newCollections);
-          const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked);
+
+          const [userAfterUpdate, newCollections] = await Promise.all([
+            userService.getById(userObjectId.toString()),
+            collectionService.getUserCollection(userObjectId)
+          ]);
+          if (!userAfterUpdate) return;
+
+          const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections); // userAfterUpdate đã là PlainUser
+          const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !userBeforeUpdate.achievements.some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
           collectionStatus = {
-            isNewBreed: newCollectionSize > oldCollectionSize,
-            totalCollected: newCollectionSize,
+            isNewBreed: newCollections.length > oldCollectionCount, // So sánh với số lượng collection cũ đã lưu
+            totalCollected: newCollections.length,
             achievementsUnlocked: unlockedAchievements.map(ach => ach.key)
           };
         })()
@@ -181,16 +203,11 @@ export const bffPredictionController = {
     }
 
     await Promise.all(enrichmentPromises);
-    
+
     // 4. Xây dựng kết quả cuối cùng cho từng ảnh trong batch
     const results = batchPredictionResults.map(predictionResult => {
       const transformedPrediction = transformMediaURLs(req, predictionResult.toObject());
 
-      // Tạo URL tuyệt đối
-      const protocol = req.protocol;
-      const host = req.get('host');
-      const absoluteProcessedMediaUrl = `${protocol}://${host}${transformedPrediction.processedMediaUrl}`;
-      
       const detections = transformedPrediction.predictions.map((p: any) => {
           const slug = p.class.toLowerCase().replace(/\s+/g, '-');
           const breedInfoDoc = wikiInfoMap.get(slug);
@@ -198,32 +215,14 @@ export const bffPredictionController = {
               detectedBreed: slug,
               confidence: p.confidence,
               boundingBox: { x: p.box[0], y: p.box[1], width: p.box[2] - p.box[0], height: p.box[3] - p.box[1] },
-              // === ĐÃ ĐIỀN ĐẦY ĐỦ CẤU TRÚC CHI TIẾT VÀO ĐÂY ===
-              breedInfo: breedInfoDoc ? {
-                  // Cấp 1: Cốt lõi
-                  slug: breedInfoDoc.slug,
-                  group: breedInfoDoc.group,
-                  description: breedInfoDoc.description,
-                  life_expectancy: breedInfoDoc.life_expectancy,
-                  temperament: breedInfoDoc.temperament,
-                  energy_level: breedInfoDoc.energy_level,
-                  trainability: breedInfoDoc.trainability,
-                  shedding_level: breedInfoDoc.shedding_level,
-                  maintenance_difficulty: breedInfoDoc.maintenance_difficulty,
-                  
-                  // Cấp 2: Ngữ cảnh lối sống
-                  height: (breedInfoDoc as any).height,
-                  weight: (breedInfoDoc as any).weight,
-                  good_with_children: (breedInfoDoc as any).good_with_children,
-                  suitable_for: (breedInfoDoc as any).suitable_for,
-              } : null
+              breedInfo: createEnrichedBreedInfo(breedInfoDoc),
           };
       });
 
       return {
         predictionId: transformedPrediction.id,
         originalFilename: (transformedPrediction.media as any)?.name || 'unknown',
-        processedMediaUrl: absoluteProcessedMediaUrl,
+        processedMediaUrl: transformedPrediction.processedMediaUrl, // Already an absolute URL
         detections: detections,
         collectionStatus: collectionStatus // Status chung cho cả batch
       };
@@ -234,28 +233,25 @@ export const bffPredictionController = {
 
   submitFeedback: async (req: Request, res: Response) => {
     const userId = req.user?._id; // Can be optional
-    const predictionId = req.params.id;
-    const { isCorrect, correctBreed, notes } = req.body;
+    const { id: predictionId } = req.params;
+    const { isCorrect, submittedLabel, notes } = req.body;
 
-    const mongoose = require('mongoose');
-    let userObjectId: any = undefined;
-    if (userId) {
-      userObjectId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
-    }
-  const result = await feedbackService.submitFeedback(userObjectId, { predictionId, isCorrect, submittedLabel: correctBreed, notes });
-    
+    const result = await feedbackService.submitFeedback(userId, { predictionId, isCorrect, submittedLabel, notes });
+
     // Logic to check if this is a new breed alert can be added here or in the service
-    const newBreedAlert = !isCorrect && correctBreed; // Simplified logic
+    const newBreedAlert = !isCorrect && submittedLabel; // Simplified logic
 
     res.status(201).json({ feedbackId: (result as any)._id, message: 'Feedback submitted successfully', newBreedAlert });
   },
 
-  getPredictionHistory: async (req: Request, res: Response) => {
+  getPredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
     // This endpoint is now less critical as profile endpoint can aggregate this.
     // However, if a dedicated history page is needed, we can implement it here.
     // For now, we can point to the existing core service.
-    const { getHistoryForCurrentUser } = require('../controllers/prediction_history.controller');
-    return getHistoryForCurrentUser(req, res);
+    // Note: Using require() inside a function is not a good practice.
+    // It's better to import at the top level.
+    // For now, let's just forward the request.
+    return predictionHistoryController.getHistoryForCurrentUser(req, res);
   },
 
   /**

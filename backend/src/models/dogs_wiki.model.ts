@@ -2,8 +2,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface DogBreedWikiDoc extends Document {
   slug: string; // Key chính, ví dụ: "boxer"
-  display_name: string; // Tên hiển thị, ví dụ: "Boxer"
+  breed: string; // Tên giống chó, ví dụ: "Affenpinscher"
   group?: string; // Nhóm chó, ví dụ: "Working"
+  origin?: string; // Nguồn gốc, ví dụ: "Germany"
   coat_type?: string;
   coat_colors?: string[];
   description: string;
@@ -31,7 +32,8 @@ export interface DogBreedWikiDoc extends Document {
 
 const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
   slug: { type: String, required: true, unique: true},
-  display_name: { type: String, required: true, text: true, index: true }, // Thêm text index để tìm kiếm hiệu quả hơn
+  breed: { type: String, required: true, text: true, index: true }, // Đổi từ display_name sang breed
+  origin: { type: String }, // Thêm trường origin
   group: { type: String },
   coat_type: { type: String },
   coat_colors: { type: [String] },

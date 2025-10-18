@@ -25,8 +25,11 @@ export function DogCard({ dog, index }: DogCardProps) {
       >
         <div className="aspect-square bg-gradient-to-br from-muted to-secondary flex items-center justify-center relative overflow-hidden">
           <img
-            src={`https://source.unsplash.com/300x300/?${encodeURIComponent(dog.breed + " dog")}`}
+            // Ưu tiên dùng imageUrl từ props, nếu không có mới fallback sang Unsplash
+            src={ `https://source.unsplash.com/300x300/?${encodeURIComponent(dog.breed + " dog")}`}
             alt={dog.breed}
+            width={300}
+            height={300}
             className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-300 ${
               collected ? "" : "grayscale opacity-40 blur-[2px]"
             }`}

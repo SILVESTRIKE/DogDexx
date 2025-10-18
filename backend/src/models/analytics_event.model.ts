@@ -1,13 +1,30 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+export enum AnalyticsEventName {
+  // User Authentication
+  USER_REGISTRATION = "USER_REGISTRATION",
+  USER_LOGIN = "USER_LOGIN",
+
+  // Core Feature Usage
+  SUCCESSFUL_PREDICTION = "SUCCESSFUL_PREDICTION",
+  SUCCESSFUL_PREDICTION_BATCH = "SUCCESSFUL_PREDICTION_BATCH",
+  SUCCESSFUL_PREDICTION_VIEW = "SUCCESSFUL_PREDICTION_VIEW",
+  SUCCESSFUL_PREDICTION_STREAM = "SUCCESSFUL_PREDICTION_STREAM",
+
+  // General
+  PAGE_VISIT = "PAGE_VISIT",
+}
+
 export interface AnalyticsEventDoc extends Document {
-  eventName: "SUCCESSFUL_TRIAL";
+  eventName: AnalyticsEventName;
   fingerprint?: string;
+  user?: mongoose.Types.ObjectId; // Add user field for tracking logged-in users
   ip?: string;
   userAgent?: string;
-  isDeleted: boolean; // <-- THÊM MỚI
+  eventData?: mongoose.Schema.Types.Mixed;
+  isDeleted: boolean;
   createdAt: Date;
-  updatedAt: Date; // <-- THÊM MỚI
+  updatedAt: Date;
 }
 
 const analyticsEventSchema = new Schema(
@@ -15,13 +32,14 @@ const analyticsEventSchema = new Schema(
     eventName: {
       type: String,
       required: true,
-      enum: ["SUCCESSFUL_TRIAL"],
+      enum: Object.values(AnalyticsEventName),
     },
+    user: { type: Schema.Types.ObjectId, ref: 'User', required: false },
+    eventData: { type: Schema.Types.Mixed },
     fingerprint: { type: String },
     ip: { type: String },
     userAgent: { type: String },
     isDeleted: {
-      // <-- THÊM MỚI
       type: Boolean,
       default: false,
       select: false, // Ẩn trường này khỏi các câu query mặc định
@@ -34,8 +52,6 @@ const analyticsEventSchema = new Schema(
       virtuals: true,
       transform(doc: any, ret: any) {
         ret.id = ret._id.toString();
-
-        delete ret.id;
         delete ret._id;
         delete ret.__v;
         delete ret.isDeleted;

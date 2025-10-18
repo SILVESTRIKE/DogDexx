@@ -21,7 +21,10 @@ export const optionalAuthMiddleware: RequestHandler = async (req, res, next) => 
       if (user) {
         req.user = user as PlainUser;
       }
-    } catch (error) {}
+    } catch (error) {
+      // Token is invalid or expired, just ignore it and proceed as a guest.
+      // Do not call next(error) as this is optional authentication.
+    }
   }
   next();
 };

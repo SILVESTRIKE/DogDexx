@@ -26,8 +26,8 @@ export default function Home() {
   const [isDetecting, setIsDetecting] = useState(false)
 
   useEffect(() => {
-    trackVisit()
-  }, [trackVisit])
+    trackVisit("home")
+  }, [trackVisit]) // Dependency array vẫn giữ nguyên
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)

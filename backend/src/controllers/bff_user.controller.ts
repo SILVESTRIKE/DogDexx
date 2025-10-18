@@ -4,7 +4,6 @@ import { userService } from '../services/user.service';
 import { authService } from '../services/auth.service';
 import { collectionService } from '../services/user_collections.service';
 import { predictionHistoryService } from '../services/prediction_history.service';
-import { tokenService } from '../services/token.service';
 import { transformMediaURLs } from '../utils/media.util';
 import { Types } from 'mongoose';
 

@@ -1,13 +1,15 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from "react"
 import { apiClient } from "./api-client"
 import { useAuth } from "./auth-context"
 import type { Achievement, CollectionStats } from "./types"
+import { toast } from "sonner"
 
 interface CollectionContextType {
   collectedDogs: Set<string>
   toggleCollected: (dogSlug: string) => Promise<void>
+  setInitialCollection: (breeds: any[], stats: CollectionStats) => void
   isCollected: (dogSlug: string) => boolean
   collectionCount: number
   unlockedAchievements: Achievement[]
@@ -24,32 +26,19 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
   const [collectionStats, setCollectionStats] = useState<CollectionStats | null>(null)
   const [isLoaded, setIsLoaded] = useState(false)
 
+  // Hàm này sẽ được gọi từ PokedexPage để khởi tạo dữ liệu
+  const setInitialCollection = useCallback((breeds: any[], stats: CollectionStats) => {
+    const collectedSlugs = new Set<string>(
+      breeds.filter((breed: { isCollected: boolean }) => breed.isCollected).map((breed: { slug: string }) => breed.slug)
+    )
+    setCollectedDogs(collectedSlugs)
+    setCollectionStats(stats)
+    setIsLoaded(true)
+  }, [])
+
   useEffect(() => {
     const loadCollection = async () => {
-      if (user) {
-        try {
-          // Optimized: Fetch Pokedex and Achievements in parallel.
-          // The Pokedex endpoint already includes collection stats.
-          const [pokedexResponse, achievementsResponse] = await Promise.all([
-            apiClient.getPokedex(),
-            apiClient.getAchievements(),
-          ])
-
-          // 1. Set collected dogs from the Pokedex response
-          const collectedSlugs = new Set<string>(
-            pokedexResponse.breeds.filter((breed: { isCollected: boolean }) => breed.isCollected).map((breed: { slug: string }) => breed.slug)
-          )
-          setCollectedDogs(collectedSlugs)
-
-          // 2. Set stats from the Pokedex response
-          setCollectionStats(pokedexResponse.stats)
-
-          // 3. Set achievements
-          setUnlockedAchievements(achievementsResponse.achievements || [])
-        } catch (error) {
-          console.error("[v0] Failed to load collection:", error)
-        }
-      } else {
+      if (!user) { // Chỉ xử lý cho guest
         const stored = localStorage.getItem("dogdex-collection")
         if (stored) {
           try {
@@ -62,8 +51,8 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
             console.error("[v0] Failed to parse collection data", e)
           }
         }
+        setIsLoaded(true)
       }
-      setIsLoaded(true)
     }
 
     loadCollection()
@@ -81,25 +70,24 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         const isCurrentlyCollected = collectedDogs.has(dogSlug)
 
         if (!isCurrentlyCollected) {
-          // Optimized: Use the response from `addToCollection` to update state,
-          // avoiding the need for a separate `refreshCollection` call.
-          const response = await apiClient.addToCollection(dogSlug)
+          await apiClient.addToCollection(dogSlug)
+          toast.success("Breed added to your collection!")
           setCollectedDogs((prev) => {
             const newSet = new Set(prev)
             newSet.add(dogSlug)
             return newSet
           })
-
-          // Update stats and achievements directly from the API response
-          if (response) {
-            await refreshCollection() // Refresh to get the complete, updated list
-          }
+          // Tăng số lượng đã sưu tầm trong stats
+          setCollectionStats(prev => prev ? { ...prev, collectedBreeds: (prev.collectedBreeds || 0) + 1 } : null)
         } else {
-          // TODO: Implement API call for removing a breed from the collection.
-          // For now, this only updates local state and will be out of sync on page refresh.
-          console.warn(`[v0] Removal for slug '${dogSlug}' is not implemented on the backend.`)
-          // Example: await apiClient.removeFromCollection(dogSlug);
-          // Then update state and refresh.
+          // TODO: Implement API để xóa khỏi collection
+          toast.warning("Removing from collection is not yet supported.")
+          // setCollectedDogs((prev) => {
+          //   const newSet = new Set(prev)
+          //   newSet.delete(dogSlug)
+          //   return newSet
+          // })
+          // setCollectionStats(prev => prev ? { ...prev, collectedBreeds: (prev.collectedBreeds || 1) - 1 } : null)
         }
       } catch (error) {
         console.error("[v0] Failed to toggle collection:", error)
@@ -122,23 +110,13 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
   }
 
   const refreshCollection = async () => {
-    if (user) {
-      try {
-        // This function can be used to force a full refresh of collection data.
-        const [statsResponse, achievementsResponse, pokedexResponse] = await Promise.all([
-          apiClient.getCollectionStats(),
-          apiClient.getAchievements(),
-          apiClient.getPokedex({ limit: 2000 }), // Fetch all to ensure collected set is accurate
-        ])
-
-        const collectedSlugs = new Set<string>(pokedexResponse.breeds.filter((b: { isCollected: boolean }) => b.isCollected).map((b: { slug: string }) => b.slug))
-
-        setCollectedDogs(collectedSlugs)
-        setCollectionStats(statsResponse)
-        setUnlockedAchievements(achievementsResponse.achievements || [])
-      } catch (error) {
-        console.error("[v0] Failed to refresh collection:", error)
-      }
+    // Hàm này giờ chỉ cần để tải lại achievements nếu cần
+    if (!user) return;
+    try {
+      const achievementsResponse = await apiClient.getAchievements();
+      setUnlockedAchievements(achievementsResponse.achievements || []);
+    } catch (error) {
+      console.error("[v0] Failed to refresh achievements:", error);
     }
   }
 
@@ -147,8 +125,9 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
       value={{
         collectedDogs,
         toggleCollected,
+        setInitialCollection,
         isCollected,
-        collectionCount: collectedDogs.size,
+        collectionCount: collectionStats?.collectedBreeds ?? collectedDogs.size,
         unlockedAchievements,
         collectionStats,
         refreshCollection,

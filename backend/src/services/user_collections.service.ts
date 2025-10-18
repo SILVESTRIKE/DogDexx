@@ -67,9 +67,40 @@ export const collectionService = {
       .populate({
         path: 'breed_id',
         model: 'DogBreedWiki',
-        select: 'display_name slug group' // Lấy các trường cần thiết để hiển thị
+        select: 'breed slug group' // Lấy các trường cần thiết để hiển thị
       });
 
     return collection;
-  }
+  },
+
+  /**
+   * Lấy các thống kê về bộ sưu tập của người dùng.
+   */
+  async getCollectionStats(userId: Types.ObjectId) {
+    const [totalCollected, totalCountResult, topBreeds] = await Promise.all([
+      // Đếm số lượng giống chó duy nhất đã sưu tầm
+      UserCollectionModel.countDocuments({ user_id: userId }),
+      // Tính tổng số lần sưu tầm (bao gồm cả các lần trùng lặp)
+      UserCollectionModel.aggregate([
+        { $match: { user_id: userId } },
+        { $group: { _id: null, total: { $sum: "$collection_count" } } }
+      ]),
+      // Lấy 5 giống chó được sưu tầm nhiều nhất
+      UserCollectionModel.find({ user_id: userId }).sort({ collection_count: -1 }).limit(5).populate('breed_id', 'breed slug')
+    ]);
+
+    const totalPredictionsInCollection = totalCountResult[0]?.total || 0;
+
+    return { totalCollected, totalPredictionsInCollection, topBreeds };
+  },
+
+  /**
+   * Lấy một item trong bộ sưu tập của người dùng bằng slug của giống chó.
+   */
+  async getCollectionItemBySlug(userId: Types.ObjectId, breedSlug: string) {
+    return UserCollectionModel.findOne({ user_id: userId })
+      .populate({ path: 'breed_id', match: { slug: breedSlug } })
+      .exec()
+      .then(result => result && (result as any).breed_id ? result : null);
+  },
 };

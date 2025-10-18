@@ -1,24 +1,23 @@
 // result/page.tsx
 "use client"
 import { useEffect, useState, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import type {BffPredictionResponse, Detection } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useCollection } from "@/lib/collection-context"
-import { useAnalytics } from "@/lib/analytics-context"
-import { ArrowLeft, CheckCircle, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle } from "lucide-react"
+import { ArrowLeft, CheckCircle, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, User } from "lucide-react"
 import Link from "next/link"
 import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
+import { apiClient } from "@/lib/api-client"
+import { useAuth } from '@/lib/auth-context';
 
 export default function ResultsPage() {
   const router = useRouter()
-  const { trackPrediction } = useAnalytics()
   const mounted = useMounted()
   
   const [allDetections, setAllDetections] = useState<Detection[]>([])
@@ -27,9 +26,8 @@ export default function ResultsPage() {
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
-
-  const { isCollected, toggleCollected } = useCollection()
   const { t } = useI18n()
+  const { user } = useAuth();
 
   useEffect(() => {
     const resultData = sessionStorage.getItem("detection-result")
@@ -39,12 +37,18 @@ export default function ResultsPage() {
       return
     }
 
-    trackPrediction()
-
     try {
       const result: BffPredictionResponse = JSON.parse(resultData)
       console.log("Processed Image URL:", result.processedMediaUrl);
       setProcessedMediaUrl(result.processedMediaUrl);
+      
+      // Only track trial usage for guest users
+      if (!user && result.predictionId) {
+        apiClient.trackEvent('SUCCESSFUL_PREDICTION', { predictionId: result.predictionId })
+          .catch(analyticsError => {
+            console.warn("Guest prediction tracking failed:", analyticsError);
+          });
+      }
 
       if (!result.detections || result.detections.length === 0) {
         setNoDetectionsFound(true);
@@ -64,7 +68,7 @@ export default function ResultsPage() {
       console.error("[v0] Failed to parse prediction result:", error)
       router.push("/")
     }
-  }, [router, trackPrediction])
+  }, [router, user])
   
   const handleSelectionChange = (selectionKey: string) => {
     const index = parseInt(selectionKey.split('-').pop() || '0', 10);
@@ -114,7 +118,6 @@ export default function ResultsPage() {
   const primaryDisplayName = (primaryBreedInfo as any).display_name || primaryBreedInfo.slug.replace(/-/g, ' ');
 
   const primaryConfidence = Math.round(primaryDetection.confidence * 100);
-  const collected = isCollected(primaryBreedInfo.slug);
   
   const selectedBreedInfo = selectedDetection?.breedInfo;
   const selectedDisplayName = (selectedBreedInfo as any)?.display_name || selectedBreedInfo?.slug.replace(/-/g, ' ');
@@ -176,15 +179,14 @@ export default function ResultsPage() {
                   <Progress value={primaryConfidence} className="h-3" />
                 </div>
                 <Button
-                  onClick={() => toggleCollected(primaryBreedInfo.slug)}
-                  variant={collected ? "secondary" : "default"}
+                  onClick={() => router.push(`/dog/${primaryBreedInfo.slug}`)}
                   size="lg"
                   className="w-full gap-2"
                 >
                   <CheckCircle className="h-5 w-5" />
-                  {collected ? t("results.added") : t("results.addToCollection")}
+                  {t("results.addToCollection")}
                 </Button>
-                <Link href={`/pokedex/${primaryBreedInfo.slug}`}>
+                <Link href={`/dog/${primaryBreedInfo.slug}`}>
                   <Button variant="outline" size="lg" className="w-full bg-transparent">
                     {t("results.viewDetails")}
                   </Button>

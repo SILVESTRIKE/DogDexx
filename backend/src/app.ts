@@ -16,7 +16,8 @@ import { collectionRoutes } from "./routes/user_collection.route";
 import { adminFeedbackRouter } from "./routes/feedback.route";
 import { predictionHistoryRouter } from "./routes/prediction_history.route";
 import { adminPredictionHistoryRouter } from "./routes/admin_prediction_history.route";
-import swaggerUi from "swagger-ui-express";
+import aiModelsRoutes from "./routes/ai_models.route";
+import analyticsRoutes from "./routes/analytics.route";
 
 import bffUserRoutes from './routes/bff_user.route';
 import bffPredictionRoutes from './routes/bff_prediction.route';
@@ -25,23 +26,29 @@ import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
 import bffRealtimeRoutes from './routes/bff_realtime.route';
 import achievementRoute from './routes/achievement.route';
+import swaggerUi from "swagger-ui-express";
+import swaggerJSDoc from "swagger-jsdoc";
+import { options as swaggerOptions } from "../swaggerConfig.js";
 
-// @ts-ignore - 
-import swaggerSpec from '../swaggerConfig';
-
+const swaggerSpec = swaggerJSDoc(swaggerOptions);
 dotenv.config();
 const app = express();
 
-// --- FIX: Chuẩn hóa và đơn giản hóa cấu hình CORS ---
-// Lấy URL của frontend từ biến môi trường, mặc định là http://localhost:3001
-// Thêm cả http://localhost:3000 để hỗ trợ môi trường dev khi frontend chạy ở port mặc định.
 const allowedOrigins = [
   process.env.FRONTEND_URL || "http://localhost:3001",
   "http://localhost:3000",
 ];
 
 const corsOptions = {
-  origin: allowedOrigins, // Cung cấp trực tiếp mảng các origin được phép
+  // Sử dụng một function cho origin để xử lý linh hoạt hơn
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    // Cho phép các request không có origin (ví dụ: từ Postman, curl, hoặc same-origin requests)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization",
@@ -57,11 +64,19 @@ app.use(Fingerprint());
 const publicDirectory = path.join(__dirname, "..", "public");
 app.use('/public', express.static(publicDirectory));
 
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// --- Swagger Routes ---
+// This route serves the generated swagger.json file
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
+
+// This route serves the Swagger UI, pointing it to the .json file
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(undefined, {
+  swaggerUrl: '/api-docs.json', // Tell UI where to find the spec
+  swaggerOptions: { tryItOutEnabled: true }
+}));
+
 app.get("/test", (req, res) => {
   // Di chuyển configureViewEngine xuống đây để nó không ảnh hưởng đến các route khác
   configureViewEngine(app);
@@ -85,6 +100,8 @@ app.use(mediasRouter);
 app.use(wikiRoutes);
 app.use(collectionRoutes);
 app.use(adminFeedbackRouter);
+app.use(analyticsRoutes);
+app.use(aiModelsRoutes);
 app.use(predictionHistoryRouter);
 app.use(adminPredictionHistoryRouter);
 

@@ -39,15 +39,13 @@ export const predictionService = {
   ): Promise<PredictionHistoryDoc[]> => {
     if (!files.length) throw new BadRequestError("Không có file nào được cung cấp.");
 
-    const tempFilePaths = files.map(file => file.path); // Lưu danh sách các file tạm
-    
-    try {
-      let directory_id: Types.ObjectId | undefined;
-      if (userId) {
-        const user = await UserModel.findById(userId);
-        if (!user || !user.directory_id) throw new BadRequestError("Không tìm thấy thông tin thư mục người dùng.");
-        directory_id = user.directory_id;
-      }
+    const tempFilePaths = files.map(file => file.path);
+    let directory_id: Types.ObjectId | undefined;
+    if (userId) {
+      const user = await UserModel.findById(userId);
+      if (!user || !user.directory_id) throw new BadRequestError("Không tìm thấy thông tin thư mục người dùng.");
+      directory_id = user.directory_id;
+    }
 
       // Tạo form-data với nhiều file
       const formData = new FormData();
@@ -114,10 +112,10 @@ export const predictionService = {
 
       if (!userId) {
         AnalyticsEventModel.create({
-          eventName: 'SUCCESSFUL_TRIAL_BATCH',
+          eventName: 'SUCCESSFUL_TRIAL_BATCH', // Đã hợp lệ sau khi sửa model
           fingerprint: (req as any).fingerprint?.hash,
-          ip: req.ip,
-          userAgent: req.headers['user-agent'],
+          ip: req.ip, // Thêm dấu phẩy
+          userAgent: req.headers['user-agent'], // Thêm dấu phẩy
         }).catch(err => console.error('Failed to log analytics event:', err));
       }
 
@@ -128,15 +126,7 @@ export const predictionService = {
         );
       }
 
-      return predictions;
-    } finally {
-        // Đảm bảo tất cả file tạm được xóa, ngay cả khi có lỗi xảy ra
-        tempFilePaths.forEach(filePath => {
-            if (fs.existsSync(filePath)) {
-                fs.unlinkSync(filePath);
-            }
-        });
-    }
+    return predictions;
   },
   /**
    * Xử lý một file upload, gửi đến AI service để dự đoán, và lưu kết quả.
@@ -149,22 +139,24 @@ export const predictionService = {
   ): Promise<PredictionHistoryDoc> => {
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
-    const { path: mediaPath, originalname: originalFilename } = file;
-    
-    try {
-        let directory_id: Types.ObjectId | undefined;
-        if (userId) {
-          const user = await UserModel.findById(userId);
-          if (!user || !user.directory_id) throw new BadRequestError("Không tìm thấy thông tin thư mục người dùng.");
-          directory_id = user.directory_id;
-        }
+    const { path: physicalPath, originalname: originalFilename } = file;
+    let directory_id: Types.ObjectId | undefined;
+    if (userId) {
+      const user = await UserModel.findById(userId);
+      if (!user || !user.directory_id) throw new BadRequestError("Không tìm thấy thông tin thư mục người dùng.");
+      directory_id = user.directory_id;
+    }
+
+        // Chuyển đổi đường dẫn vật lý thành URL có thể truy cập
+        const relativePath = path.relative(path.join(__dirname, '../../public'), physicalPath).replace(/\\/g, '/');
+        const mediaUrl = `/public/${relativePath}`;
 
         const newMedia = new MediaModel({
-          name: originalFilename, mediaPath, creator_id: userId, directory_id, type,
+          name: originalFilename, mediaPath: mediaUrl, creator_id: userId, directory_id, type,
         });
         
         const formData = new FormData();
-        formData.append("file", fs.createReadStream(mediaPath), { filename: originalFilename });
+        formData.append("file", fs.createReadStream(physicalPath), { filename: originalFilename });
 
         const endpoint = type === "image" ? "/predict/image" : "/predict/video";
         const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
@@ -197,8 +189,10 @@ export const predictionService = {
         
         if (!userId) {
           AnalyticsEventModel.create({
-            eventName: 'SUCCESSFUL_TRIAL',
-            fingerprint: (req as any).fingerprint?.hash, ip: req.ip, userAgent: req.headers['user-agent'],
+            eventName: 'SUCCESSFUL_TRIAL', // Đã hợp lệ sau khi sửa model
+            fingerprint: (req as any).fingerprint?.hash,
+            ip: req.ip,
+            userAgent: req.headers['user-agent'],
           }).catch(err => console.error('Failed to log analytics event:', err));
         }
 
@@ -217,14 +211,7 @@ export const predictionService = {
         }
 
         return await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
-    } finally {
-        // Đảm bảo file tạm được xóa
-        if (fs.existsSync(mediaPath)) {
-            fs.unlinkSync(mediaPath);
-        }
-    }
-  },
-
+  }, // <-- THÊM DẤU PHẨY QUAN TRỌNG Ở ĐÂY
   /**
    * Lưu kết quả từ một phiên dự đoán stream.
    */
@@ -265,8 +252,10 @@ export const predictionService = {
 
     if (!userId) {
       AnalyticsEventModel.create({
-        eventName: 'SUCCESSFUL_TRIAL_STREAM',
-        fingerprint: (req as any).fingerprint?.hash, ip: req.ip, userAgent: req.headers['user-agent'],
+        eventName: 'SUCCESSFUL_TRIAL_STREAM', // Đã hợp lệ sau khi sửa model
+        fingerprint: (req as any).fingerprint?.hash,
+        ip: req.ip,
+        userAgent: req.headers['user-agent'],
       }).catch(err => console.error('Failed to log analytics event:', err));
     }
 
@@ -285,5 +274,5 @@ export const predictionService = {
     
     // Trả về document đã được populate đầy đủ
     return await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
-  }
+  },
 };

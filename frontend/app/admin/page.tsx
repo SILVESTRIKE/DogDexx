@@ -1,99 +1,81 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity, Users, Brain, TrendingUp, AlertTriangle } from "lucide-react"
+import { Activity, Users, Brain, TrendingUp, AlertTriangle, BarChart, ThumbsUp } from "lucide-react"
 import { useEffect, useState } from "react"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
+import { getAdminDashboardData, getSystemAlerts, DashboardData, SystemAlert } from "@/lib/admin-api"
+import { Skeleton } from "@/components/ui/skeleton"
 
-interface Feedback {
-  id: string
-  isCorrect: boolean
-  correctBreed: string
+const initialDashboardData: DashboardData = {
+  stats: {
+    totalUsers: 0,
+    totalPredictions: 0,
+    totalFeedback: 0,
+    accuracy: 0,
+    todayVisits: 0,
+    todayPredictions: 0,
+  },
+  charts: {
+    weeklyActivity: [],
+    topBreeds: [],
+    accuracyTrend: [],
+  },
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({
-    totalVisits: 0,
-    totalPredictions: 0,
-    totalUsers: 0,
-    activeModel: "YOLOv8-Dog-Detector",
-  })
-  const [newBreedAlerts, setNewBreedAlerts] = useState<Array<{ breed: string; count: number }>>([])
+  const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData)
+  const [alerts, setAlerts] = useState<SystemAlert[]>([])
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Load stats from localStorage
-    const visits = localStorage.getItem("dogdex_visits") || "0"
-    const predictions = localStorage.getItem("dogdex_predictions") || "0"
-    const users = localStorage.getItem("dogdex_users")
-    const userCount = users ? JSON.parse(users).length : 0
-
-    setStats({
-      totalVisits: Number.parseInt(visits),
-      totalPredictions: Number.parseInt(predictions),
-      totalUsers: userCount,
-      activeModel: "YOLOv8-Dog-Detector",
-    })
-
-    const feedbackData = localStorage.getItem("dogdex_feedback")
-    if (feedbackData) {
-      const feedback: Feedback[] = JSON.parse(feedbackData)
-      const incorrectByBreed = feedback
-        .filter((f) => !f.isCorrect)
-        .reduce(
-          (acc, f) => {
-            const breed = f.correctBreed.toLowerCase().trim()
-            if (!acc[breed]) {
-              acc[breed] = 0
-            }
-            acc[breed]++
-            return acc
-          },
-          {} as Record<string, number>,
-        )
-
-      const alerts = Object.entries(incorrectByBreed)
-        .filter(([_, count]) => count >= 5)
-        .map(([breed, count]) => ({ breed, count }))
-        .sort((a, b) => b.count - a.count)
-
-      setNewBreedAlerts(alerts)
+    async function fetchData() {
+      try {
+        setLoading(true)
+        const [dashboardRes, alertsRes] = await Promise.all([getAdminDashboardData(), getSystemAlerts()])
+        setDashboardData(dashboardRes)
+        setAlerts(alertsRes.alerts)
+      } catch (error) {
+        console.error("Failed to fetch admin data:", error)
+        // Optionally, show a toast notification
+      } finally {
+        setLoading(false)
+      }
     }
+
+    fetchData()
   }, [])
 
-  // Mock chart data
-  const chartData = [
-    { date: "Mon", predictions: 12, visits: 45 },
-    { date: "Tue", predictions: 19, visits: 62 },
-    { date: "Wed", predictions: 15, visits: 58 },
-    { date: "Thu", predictions: 25, visits: 71 },
-    { date: "Fri", predictions: 22, visits: 68 },
-    { date: "Sat", predictions: 30, visits: 89 },
-    { date: "Sun", predictions: 28, visits: 82 },
-  ]
+  const { stats, charts } = dashboardData
+  const chartData = charts.weeklyActivity.map((item) => ({
+    date: new Date(item.day).toLocaleDateString("en-US", { weekday: "short" }),
+    predictions: item.predictions,
+    visits: item.visits,
+  }))
 
   const chartConfig = {
     predictions: {
       label: "Predictions",
-      color: "hsl(220 90% 56%)",
+      color: "hsl(var(--chart-1))",
     },
     visits: {
       label: "Visits",
-      color: "hsl(220 70% 70%)",
+      color: "hsl(var(--chart-2))",
     },
   }
 
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Dashboard Overview</h2>
-        <p className="text-muted-foreground">Monitor your app's performance and usage statistics</p>
+        <h2 className="text-3xl font-bold tracking-tight">Tổng quan Dashboard</h2>
+        <p className="text-muted-foreground">Theo dõi hiệu suất và thống kê sử dụng ứng dụng của bạn</p>
       </div>
 
-      {newBreedAlerts.length > 0 && (
+      {alerts.length > 0 && (
         <Card className="border-2 border-orange-500 bg-orange-50">
           <CardHeader>
             <div className="flex items-center justify-between">
@@ -102,27 +84,21 @@ export default function AdminDashboard() {
                 <CardTitle className="text-orange-600">Cảnh báo giống chó mới</CardTitle>
               </div>
               <Badge variant="destructive" className="text-sm">
-                {newBreedAlerts.length} giống
+                {alerts.length} giống
               </Badge>
             </div>
             <CardDescription>
-              Phát hiện {newBreedAlerts.length} giống chó có nhiều báo cáo sai - có thể cần thêm vào model
+              Phát hiện {alerts.length} giống chó có nhiều báo cáo sai - có thể cần thêm vào model
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {newBreedAlerts.slice(0, 3).map((alert) => (
-                <div key={alert.breed} className="flex items-center justify-between p-3 bg-white rounded-lg border">
+              {alerts.slice(0, 3).map((alert) => (
+                <div key={alert.id} className="flex items-center justify-between p-3 bg-white rounded-lg border">
                   <div>
-                    <p className="font-semibold capitalize">{alert.breed}</p>
-                    <p className="text-sm text-muted-foreground">{alert.count} báo cáo sai</p>
+                    <p className="font-semibold capitalize">{alert.id}</p>
+                    <p className="text-sm text-muted-foreground">{alert.message}</p>
                   </div>
-                  {alert.count >= 200 && (
-                    <Badge variant="destructive" className="gap-1">
-                      <AlertTriangle className="h-3 w-3" />
-                      Cần train ngay
-                    </Badge>
-                  )}
                 </div>
               ))}
               <Link href="/admin/feedback">
@@ -139,45 +115,57 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Visits</CardTitle>
+            <CardTitle className="text-sm font-medium">Lượt dùng thử (hôm nay)</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalVisits.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+12% from last week</p>
+            {loading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats.todayVisits.toLocaleString()}</div>
+            )}
+            <p className="text-xs text-muted-foreground">Số lượt dự đoán từ khách</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Predictions</CardTitle>
+            <CardTitle className="text-sm font-medium">Dự đoán (hôm nay)</CardTitle>
             <Brain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPredictions.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">+8% from last week</p>
+            {loading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats.todayPredictions.toLocaleString()}</div>
+            )}
+            <p className="text-xs text-muted-foreground">Số lượt dự đoán từ user</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Tổng người dùng</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalUsers}</div>
-            <p className="text-xs text-muted-foreground">+3 new this week</p>
+            {loading ? <Skeleton className="h-8 w-20" /> : <div className="text-2xl font-bold">{stats.totalUsers}</div>}
+            <p className="text-xs text-muted-foreground">Tổng số tài khoản đã đăng ký</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Model</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Độ chính xác (Feedback)</CardTitle>
+            <ThumbsUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-sm">{stats.activeModel}</div>
-            <p className="text-xs text-muted-foreground">Running smoothly</p>
+            {loading ? (
+              <Skeleton className="h-8 w-20" />
+            ) : (
+              <div className="text-2xl font-bold">{stats.accuracy}%</div>
+            )}
+            <p className="text-xs text-muted-foreground">Dựa trên {stats.totalFeedback} phản hồi</p>
           </CardContent>
         </Card>
       </div>
@@ -186,29 +174,28 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Weekly Activity</CardTitle>
-            <CardDescription>Predictions and visits over the last 7 days</CardDescription>
+            <CardTitle>Hoạt động trong tuần</CardTitle>
+            <CardDescription>Số lượt dự đoán trong 7 ngày qua</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
-              <AreaChart data={chartData} width={500} height={300}>
+              <AreaChart
+                accessibilityLayer
+                data={chartData}
+                margin={{
+                  left: 12,
+                  right: 12,
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                <XAxis dataKey="date" className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
-                <YAxis className="text-xs" tick={{ fill: "hsl(var(--muted-foreground))" }} />
+                <XAxis dataKey="date" tickLine={false} axisLine={false} tickMargin={8} />
+                <YAxis tickLine={false} axisLine={false} tickMargin={8} />
                 <ChartTooltip content={<ChartTooltipContent />} />
                 <Area
                   type="monotone"
                   dataKey="predictions"
-                  stroke="hsl(220 90% 56%)"
-                  fill="hsl(220 90% 56%)"
-                  fillOpacity={0.2}
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="visits"
-                  stroke="hsl(220 70% 70%)"
-                  fill="hsl(220 70% 70%)"
+                  stroke="var(--color-predictions)"
+                  fill="var(--color-predictions)"
                   fillOpacity={0.2}
                   strokeWidth={2}
                 />
@@ -219,37 +206,21 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>System Status</CardTitle>
-            <CardDescription>Current system health and performance</CardDescription>
+            <CardTitle>Các giống chó được dự đoán nhiều nhất</CardTitle>
+            <CardDescription>Top 5 giống chó xuất hiện nhiều nhất trong các dự đoán</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">API Response Time</span>
-                <span className="text-sm text-muted-foreground">125ms</span>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-primary w-[85%]" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Model Accuracy</span>
-                <span className="text-sm text-muted-foreground">94.2%</span>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-secondary w-[94%]" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Server Uptime</span>
-                <span className="text-sm text-muted-foreground">99.9%</span>
-              </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
-                <div className="h-full bg-accent w-[99%]" />
-              </div>
-            </div>
+            {loading
+              ? Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)
+              : charts.topBreeds.map((breed) => (
+                  <div key={breed.breed} className="flex items-center">
+                    <p className="flex-1 capitalize text-sm font-medium">{breed.breed.replace(/_/g, " ")}</p>
+                    <div className="flex items-center gap-2">
+                      <BarChart className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">{breed.count} lần</span>
+                    </div>
+                  </div>
+                ))}
           </CardContent>
         </Card>
       </div>

@@ -1,5 +1,5 @@
 import { DogBreedWikiModel, DogBreedWikiDoc } from '../models/dogs_wiki.model';
-import { ConflictError } from '../errors';
+import { ConflictError, NotFoundError } from '../errors';
 
 // Các tùy chọn cho việc lấy danh sách
 interface QueryOptions {
@@ -19,11 +19,11 @@ export const wikiService = {
    * CREATE: Admin thêm một giống chó mới vào wiki
    */
   async createBreed(data: Partial<DogBreedWikiDoc>): Promise<DogBreedWikiDoc> {
-    if (!data.slug || !data.display_name) {
-      throw new Error('Slug và Display Name là bắt buộc.');
+    if (!data.slug || !data.breed) {
+      throw new Error('Slug và Breed Name là bắt buộc.');
     }
     const existing = await DogBreedWikiModel.findOne({ 
-      $or: [{ slug: data.slug }, { display_name: data.display_name }] 
+      $or: [{ slug: data.slug }, { breed: data.breed }] 
     });
     if (existing) {
       throw new ConflictError('Slug hoặc Display Name đã tồn tại.');
@@ -40,7 +40,7 @@ export const wikiService = {
       isDeleted: false,
     });
     if (!breed) {
-      throw new ConflictError(`Không tìm thấy thông tin cho giống chó với slug: ${slug}`);
+      throw new NotFoundError(`Không tìm thấy thông tin cho giống chó với slug: ${slug}`);
     }
     return breed;
   },
@@ -64,15 +64,22 @@ export const wikiService = {
    * READ (Multiple): Lấy danh sách tất cả các giống chó (có phân trang và tìm kiếm)
    */
   async getAllBreeds(options: QueryOptions) {
-    const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for, sort = 'display_name' } = options;
+    const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for } = options;
     const skip = (page - 1) * limit;
+
+    const allowedSortFields = ['breed', 'energy_level', 'trainability', 'shedding_level', 'maintenance_difficulty'];
+    const sortField = allowedSortFields.includes(options.sort || '') ? options.sort : 'breed';
 
     // Lấy tất cả breed nếu isDeleted không phải là true
     const query: any = { isDeleted: { $ne: true } };
     
     // Xây dựng query động
     if (search) {
-      query.display_name = { $regex: search, $options: 'i' };
+      const searchRegex = { $regex: search, $options: 'i' };
+      query.$or = [
+        { breed: searchRegex },
+        { slug: searchRegex }
+      ];
     }
     if (group) query.group = group;
     if (energy_level) query.energy_level = energy_level;
@@ -80,13 +87,16 @@ export const wikiService = {
     if (shedding_level) query.shedding_level = shedding_level;
     if (suitable_for) query.suitable_for = suitable_for;
 
-    const breeds = await DogBreedWikiModel.find(query)
-      // Sắp xếp theo trường được chỉ định hoặc mặc định là display_name
-      .sort({ [sort]: 1 })
-      .skip(skip)
-      .limit(limit);
-
-    const total = await DogBreedWikiModel.countDocuments(query);
+    // Thực hiện 2 truy vấn song song để tối ưu
+    const [breeds, total] = await Promise.all([
+      DogBreedWikiModel.find(query)
+        // Sắp xếp theo trường được chỉ định hoặc mặc định là display_name
+        .sort({ [sortField!]: 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(), // Sử dụng .lean() để tăng hiệu năng, trả về plain JS object
+      DogBreedWikiModel.countDocuments(query)
+    ]);
     
     return {
       data: breeds,
@@ -95,6 +105,13 @@ export const wikiService = {
       limit,
       totalPages: Math.ceil(total / limit),
     };
+  },
+
+  /**
+   * READ: Đếm tổng số giống chó trong hệ thống.
+   */
+  async getTotalBreedsCount(): Promise<number> {
+    return DogBreedWikiModel.countDocuments({ isDeleted: { $ne: true } });
   },
 
   /**
@@ -107,7 +124,7 @@ export const wikiService = {
       { new: true, runValidators: true }
     );
     if (!breed) {
-      throw new ConflictError(`Không tìm thấy giống chó với slug: ${slug} để cập nhật.`);
+      throw new NotFoundError(`Không tìm thấy giống chó với slug: ${slug} để cập nhật.`);
     }
     return breed;
   },
@@ -121,7 +138,7 @@ export const wikiService = {
       { isDeleted: true }
     );
     if (result.modifiedCount === 0) {
-        throw new ConflictError(`Không tìm thấy giống chó với slug: ${slug} để xóa.`);
+        throw new NotFoundError(`Không tìm thấy giống chó với slug: ${slug} để xóa.`);
     }
     return { message: 'Giống chó đã được xóa mềm thành công.' };
   },

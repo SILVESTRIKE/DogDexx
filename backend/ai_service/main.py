@@ -1,6 +1,6 @@
 # main.py
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import JSONResponse
 from pymongo import MongoClient
 from ultralytics import YOLO
@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import tempfile
 import os
+import json
 import uuid
 import base64
 import traceback
@@ -40,6 +41,7 @@ class Config:
             self.db = self.mongo_client[DB_NAME]
             self.model = None  # Model instance
             self.set_defaults() # Set defaults first
+            # Tải cấu hình lần đầu khi khởi động
             self.load() # Then try to load from DB
         except Exception as e:
             print(f"❌ FATAL: Could not connect to MongoDB at {MONGO_URI}. Error: {e}")
@@ -48,41 +50,55 @@ class Config:
             self.model = None
             self.set_defaults()
 
-    def load(self):
-        # FIX: Pymongo DB objects don't support truthiness checks. Compare with None instead.
+    def load(self, config_data: dict = None):
+        """
+        Tải cấu hình. Nếu config_data được cung cấp, sử dụng nó.
+        Nếu không, đọc từ MongoDB.
+        """
         if self.db is None:
             print("⚠️ Skipping config load because DB connection failed.")
-            self.load_model_from_defaults()
+            self.apply_config_and_load_model({})
             return
-            
-        print("Loading configuration from MongoDB...")
-        config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
-        if config_doc:
-            self.IMAGE_CONF_THRESHOLD = config_doc.get("image_conf", 0.25)
-            self.VIDEO_CONF_THRESHOLD = config_doc.get("video_conf", 0.5)
-            self.STREAM_CONF_THRESHOLD = config_doc.get("stream_conf", 0.4)
-            self.STREAM_HIGH_CONF_THRESHOLD = config_doc.get("stream_high_conf", 0.8)
-            self.DEVICE = config_doc.get("device", "cpu")
-            self.MODEL_PATH = config_doc.get("model_path", "models/epoch90.pt")
-            self.HUGGINGFACE_REPO = config_doc.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
-            # --- FIX: Thêm log chi tiết ---
-            print("✅ Configuration loaded successfully from DB:")
-            print(f"   - Model Path: {self.MODEL_PATH}")
-            print(f"   - Device: {self.DEVICE}")
-            print(f"   - HuggingFace Repo: {self.HUGGINGFACE_REPO}")
-            print(f"   - Image Confidence: {self.IMAGE_CONF_THRESHOLD}")
-            print(f"   - Video Confidence: {self.VIDEO_CONF_THRESHOLD}")
-            print(f"   - Stream Confidence: {self.STREAM_CONF_THRESHOLD}")
-            print(f"   - Stream High Confidence: {self.STREAM_HIGH_CONF_THRESHOLD}")
+
+        if config_data:
+            print("Applying configuration from provided data (e.g., /config/reload)...")
+            self.apply_config_and_load_model(config_data)
         else:
-            print("⚠️ No configuration found in DB. Creating one with default values...")
-            self.set_defaults()
-            self.create_default_config_in_db()
+            print("Loading configuration from MongoDB on initial startup...")
+            # Lấy cả config và model active
+            config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
+            active_model_doc = self.db.ai_models.find_one({"status": "ACTIVE", "taskType": "DOG_BREED_CLASSIFICATION"})
+
+            if config_doc:
+                # Kết hợp thông tin từ cả hai
+                full_config = {**config_doc}
+                if active_model_doc:
+                    full_config["model_path"] = active_model_doc.get("fileName")
+                    full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
+                    full_config["labels_path"] = active_model_doc.get("labelsFileName")
+                self.apply_config_and_load_model(full_config)
+            else:
+                print("⚠️ No configuration found in DB. Using hardcoded defaults.")
+                self.apply_config_and_load_model({}) # Dùng giá trị mặc định
         
-        # --- Ensure model directory exists ---
-        # FIX: Call the model loading logic after configuration is determined.
-        self.load_model_from_defaults()
-    def load_model_from_defaults(self):
+    def apply_config_and_load_model(self, config_data: dict):
+        """Áp dụng các giá trị cấu hình và tải lại model."""
+        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf", 0.25)
+        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf", 0.5)
+        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf", 0.4)
+        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf", 0.8)
+        self.DEVICE = config_data.get("device", "cpu")
+        self.MODEL_PATH = config_data.get("model_path", "models/epoch90.pt")
+        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
+        self.LABELS_PATH = config_data.get("labels_path", "labels.json") # THÊM
+
+        print("✅ Configuration applied:")
+        print(f"   - Model Path: {self.MODEL_PATH}")
+        print(f"   - Labels Path: {self.LABELS_PATH}")
+        print(f"   - Device: {self.DEVICE}")
+        print(f"   - HuggingFace Repo: {self.HUGGINGFACE_REPO}")
+        print(f"   - Image Confidence: {self.IMAGE_CONF_THRESHOLD}")
+
         model_dir = os.path.dirname(self.MODEL_PATH)
         if model_dir and not os.path.exists(model_dir):
             os.makedirs(model_dir)
@@ -91,12 +107,27 @@ class Config:
         if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
             self.download_model()
 
+        # Tải file labels nếu chưa có
+        if not os.path.exists(self.LABELS_PATH) and self.HUGGINGFACE_REPO:
+            self.download_labels()
+
         # --- Reload the model with the new path and device ---
         try:
             print(f"Loading model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
             self.model = YOLO(self.MODEL_PATH) 
             self.model.to(self.DEVICE)
-            print("YOLO model loaded/reloaded successfully.")
+            
+            # Tải lại tên class từ file labels.json nếu có
+            if os.path.exists(self.LABELS_PATH):
+                with open(self.LABELS_PATH, 'r') as f:
+                    labels_data = json.load(f)
+                    # Giả sử file json có dạng {"0": "class_a", "1": "class_b"}
+                    # hoặc là một list ["class_a", "class_b"]
+                    self.model.names = labels_data.get('names', self.model.names)
+                print(f"✅ Custom labels loaded from {self.LABELS_PATH}")
+
+            print("✅ YOLO model loaded/reloaded successfully.")
+
         except Exception as e:
             print(f"FATAL: Error loading YOLO model: {e}")
             self.model = None
@@ -109,6 +140,15 @@ class Config:
             print("Model downloaded successfully.")
         except Exception as e:
             print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
+    
+    def download_labels(self):
+        from huggingface_hub import hf_hub_download
+        print(f"Labels file not found at {self.LABELS_PATH}. Downloading from Hugging Face...")
+        try:
+            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.LABELS_PATH), local_dir=os.path.dirname(self.LABELS_PATH) or '.')
+            print("Labels file downloaded successfully.")
+        except Exception as e:
+            print(f"Error downloading labels file from repo '{self.HUGGINGFACE_REPO}': {e}")
 
     def set_defaults(self):
         self.IMAGE_CONF_THRESHOLD = 0.25
@@ -118,25 +158,7 @@ class Config:
         self.DEVICE = "cpu"
         self.MODEL_PATH = "models/epoch90.pt"
         self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
-    
-    def create_default_config_in_db(self):
-        if self.db is None:
-            return
-        try:
-            default_config = {
-                "key": "model_thresholds",
-                "image_conf": self.IMAGE_CONF_THRESHOLD,
-                "video_conf": self.VIDEO_CONF_THRESHOLD,
-                "stream_conf": self.STREAM_CONF_THRESHOLD,
-                "stream_high_conf": self.STREAM_HIGH_CONF_THRESHOLD,
-                "device": self.DEVICE,
-                "model_path": self.MODEL_PATH,
-                "huggingface_repo": self.HUGGINGFACE_REPO,
-            }
-            self.db.configurations.update_one({"key": "model_thresholds"}, {"$setOnInsert": default_config}, upsert=True)
-            print("✅ Default configuration document created/ensured in the database.")
-        except Exception as e:
-            print(f"❌ Error creating default config in DB: {e}")
+        self.LABELS_PATH = "labels.json"
 
 
 # Define the save directory relative to this script's location
@@ -242,11 +264,11 @@ def health_check():
     )
 
 @app.post("/config/reload", summary="Reload configuration from DB")
-def reload_config():
+def reload_config(payload: dict = Body(...)):
 
     """Forces the service to reload its configuration and model from the database."""
     try:
-        config.load()
+        config.load(config_data=payload)
         if not config.model:
             return JSONResponse(content={"status": "error", "message": "Configuration reloaded but model failed to load. Check logs."}, status_code=500)
             
@@ -255,6 +277,25 @@ def reload_config():
         traceback.print_exc()
         return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
 
+
+@app.get("/config", summary="Get current configuration")
+def get_config():
+    """Returns the currently active configuration of the AI service."""
+    if not config.model:
+        model_names = "Model not loaded"
+    else:
+        model_names = config.model.names
+
+    current_config = {
+        "model_path": config.MODEL_PATH,
+        "device": config.DEVICE,
+        "image_conf_threshold": config.IMAGE_CONF_THRESHOLD,
+        "video_conf_threshold": config.VIDEO_CONF_THRESHOLD,
+        "stream_conf_threshold": config.STREAM_CONF_THRESHOLD,
+        "stream_high_conf_threshold": config.STREAM_HIGH_CONF_THRESHOLD,
+        "model_classes": model_names,
+    }
+    return JSONResponse(content={"status": "ok", "configuration": current_config})
 
 @app.post("/predict/image", summary="Predict from a single image")
 async def predict_from_image_file(file: UploadFile = File(...)):

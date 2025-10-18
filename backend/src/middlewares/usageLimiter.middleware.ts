@@ -9,12 +9,12 @@ const LIMITS = {
   user: { image: 100, video: 5 },
 };
 
-// Limiter cho Guest: 5 lần/ngày/IP
+// Limiter cho Guest: 5 lần/tuần/IP
 const guestLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000, // 1 ngày
+  windowMs: 7 * 24 * 60 * 60 * 1000, // 7 ngày (1 tuần)
   max: 5,
   message: {
-    message: "Bạn đã hết lượt dùng thử trong hôm nay. Vui lòng đăng ký để sử dụng nhiều hơn.",
+    message: "Bạn đã hết lượt dùng thử trong tuần này. Vui lòng đăng ký để sử dụng không giới hạn.",
   },
   standardHeaders: true,
   legacyHeaders: false,

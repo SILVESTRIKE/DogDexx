@@ -1,50 +1,24 @@
 "use client"
 
-import { createContext, useContext, useEffect, type ReactNode } from "react"
+import { createContext, useContext, type ReactNode, useCallback } from "react"
+import { apiClient } from "./api-client"
 
 interface AnalyticsContextType {
-  trackVisit: () => void
-  trackPrediction: () => void
-  getVisits: () => number
-  getPredictions: () => number
+  trackVisit: (page: string) => void
 }
 
 const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined)
 
 export function AnalyticsProvider({ children }: { children: ReactNode }) {
-  useEffect(() => {
-    // Initialize analytics if not exists
-    if (!localStorage.getItem("dogdex_visits")) {
-      localStorage.setItem("dogdex_visits", "0")
-    }
-    if (!localStorage.getItem("dogdex_predictions")) {
-      localStorage.setItem("dogdex_predictions", "0")
-    }
+  const trackVisit = useCallback((page: string) => {
+    // Đây là một "fire-and-forget" call, chúng ta không cần đợi nó hoàn thành
+    apiClient.trackVisit(page).catch((error: Error) => {
+      console.warn("[Analytics] Failed to track visit:", error.message)
+    })
   }, [])
 
-  const trackVisit = () => {
-    const currentVisits = Number.parseInt(localStorage.getItem("dogdex_visits") || "0")
-    localStorage.setItem("dogdex_visits", (currentVisits + 1).toString())
-  }
-
-  const trackPrediction = () => {
-    const currentPredictions = Number.parseInt(localStorage.getItem("dogdex_predictions") || "0")
-    localStorage.setItem("dogdex_predictions", (currentPredictions + 1).toString())
-  }
-
-  const getVisits = () => {
-    return Number.parseInt(localStorage.getItem("dogdex_visits") || "0")
-  }
-
-  const getPredictions = () => {
-    return Number.parseInt(localStorage.getItem("dogdex_predictions") || "0")
-  }
-
-  return (
-    <AnalyticsContext.Provider value={{ trackVisit, trackPrediction, getVisits, getPredictions }}>
-      {children}
-    </AnalyticsContext.Provider>
-  )
+  const value = { trackVisit }
+  return <AnalyticsContext.Provider value={value}>{children}</AnalyticsContext.Provider>
 }
 
 export function useAnalytics() {

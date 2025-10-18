@@ -1,18 +1,19 @@
 import Achievement, { IAchievement } from '../models/achievement.model';
 import { UserCollectionDoc } from '../models/user_collection.model';
 import { DogBreedWikiModel } from '../models/dogs_wiki.model';
+import { UserModel } from '../models/user.model';
+import { PlainUser } from './user.service';
 
 let cachedAchievements: IAchievement[] | null = null;
 let totalBreedsInDB: number | null = null;
 
 export const achievementService = {
-  async getUserAchievements(userId: string, userCollections: UserCollectionDoc[]) {
-    // Lấy tất cả achievements từ cache hoặc DB
-    if (!cachedAchievements) {
-      console.log("Caching achievements from DB...");
-      cachedAchievements = await Achievement.find();
-    }
+  async processUserAchievements(user: PlainUser, userCollections: UserCollectionDoc[]) {
+    const allAchievements = await this.getAllAchievementDefinitions();
     
+    // Lấy các key thành tích đã mở khóa từ chính document user
+    const unlockedKeys = new Set(user.achievements.map(ach => ach.key));
+
     if (totalBreedsInDB === null) {
         console.log("Caching total breed count from DB...");
         totalBreedsInDB = await DogBreedWikiModel.countDocuments({ isDeleted: { $ne: true } });
@@ -26,50 +27,63 @@ export const achievementService = {
 
     const collectionCount = userCollections.length;
 
-    // --- Tự động tạo các thành tích "Sưu tầm X giống chó" ---
-    const dynamicCollectionAchievements: IAchievement[] = [];
-    // Chỉ tạo ra 2 cột mốc tiếp theo để người dùng hướng tới, tránh vòng lặp lớn
-    const nextMilestone = Math.floor(collectionCount / 10) * 10 + 10;
-    const milestonesToGenerate = [nextMilestone, nextMilestone + 10];
+    // Tính toán trạng thái unlock cho từng achievement
+    const achievementsWithStatus = allAchievements.map(ach => {
+      // Một thành tích được coi là đã mở khóa nếu nó có trong danh sách của user HOẶC nó thỏa mãn điều kiện hiện tại
+      const isUnlockedNow = this.isAchievementConditionMet(ach, collectionCount, collectedBreedSlugs, totalBreedsInDB);
+      return { ...ach, unlocked: unlockedKeys.has(ach.key) || isUnlockedNow };
+    });
 
-    for (const milestone of milestonesToGenerate) {
-      // Chỉ tạo nếu chưa có trong DB
-      if (totalBreedsInDB && milestone <= totalBreedsInDB && !cachedAchievements.some(ach => ach.condition.type === 'collection_count' && ach.condition.value === milestone)) {
-        dynamicCollectionAchievements.push({
-          key: `collect-${milestone}`,
-          name: `Nhà Sưu Tầm ${milestone / 10}`,
-          description: `Sưu tầm ${milestone} giống chó khác nhau.`,
-          condition: { type: 'collection_count', value: milestone },
-          // Bạn có thể thêm icon mặc định ở đây
-        } as IAchievement);
-      }
+    // Tìm các thành tích MỚI được mở khóa và ghi vào DB
+    const newlyUnlocked = achievementsWithStatus.filter(ach => ach.unlocked && !unlockedKeys.has(ach.key));
+
+    if (newlyUnlocked.length > 0) {
+      const newAchievementsToEmbed = newlyUnlocked.map(ach => ({
+        key: ach.key,
+        unlockedAt: new Date()
+      }));
+
+      // Thêm các thành tích mới vào mảng achievements của user
+      await UserModel.updateOne(
+        { _id: user._id },
+        { $push: { achievements: { $each: newAchievementsToEmbed } } }
+      );
+      console.log(`User ${user.username} unlocked ${newlyUnlocked.length} new achievements.`);
     }
 
-    const allAchievements = [...cachedAchievements, ...dynamicCollectionAchievements];
+    return achievementsWithStatus;
+  },
 
-    // Tính trạng thái unlock cho từng achievement
-    return allAchievements.map(ach => {
-      let unlocked = false;
-      switch (ach.condition.type) {
-        case 'collection_count':
-          unlocked = collectionCount >= ach.condition.value;
-          break;
-        case 'rare_breed':
-          // Sửa lỗi: So sánh slug với slug, không phải slug với ID
-          unlocked = collectedBreedSlugs.has(ach.condition.breedSlug || '');
-          break;
-        case 'all_breeds':
-          // So sánh với tổng số breed thực tế trong DB
-          unlocked = collectionCount >= (totalBreedsInDB || ach.condition.value);
-          break;
-        case 'custom':
-          // Custom logic nếu cần
-          unlocked = false;
-          break;
+  /**
+   * Helper: Lấy tất cả định nghĩa thành tích (cache-aware)
+   */
+  async getAllAchievementDefinitions(): Promise<IAchievement[]> {
+    if (!cachedAchievements) {
+      cachedAchievements = await Achievement.find().lean();
+    } 
+    return cachedAchievements as IAchievement[];
+  },
+
+  /**
+   * Helper: Kiểm tra điều kiện mở khóa của một thành tích
+   */
+  isAchievementConditionMet(
+    achievement: IAchievement,
+    collectionCount: number,
+    collectedSlugs: Set<string>,
+    totalBreeds: number | null
+  ): boolean {
+    switch (achievement.condition.type) {
+      case 'collection_count':
+        return collectionCount >= achievement.condition.value;
+      case 'rare_breed':
+        return collectedSlugs.has(achievement.condition.breedSlug || '');
+      case 'all_breeds':
+        return collectionCount >= (totalBreeds || achievement.condition.value);
+      case 'custom':
+        return false; // Logic tùy chỉnh
+      default:
+        return false;
       }
-      // Nếu ach là document từ Mongoose, gọi toObject(), ngược lại thì giữ nguyên
-      const achObject = typeof ach.toObject === 'function' ? ach.toObject() : ach;
-      return { ...achObject, unlocked };
-    });
-  }
+    }
 };

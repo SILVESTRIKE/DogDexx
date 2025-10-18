@@ -26,28 +26,40 @@ import {
   Award,
 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { apiClient } from "@/lib/api-client"
-import type { DogBreed } from "@/lib/dog-data"
+import { apiClient } from "@/lib/api-client";
+import type { DogBreed as LegacyDogBreed } from "@/lib/dog-data"; // Rename to avoid conflict
+
+// Define a new type that matches the API response from bff_content.controller
+interface EnrichedDogBreed {
+  breed: LegacyDogBreed; // The core breed info
+  collectionStatus: {
+    isCollected: boolean;
+    collectedAt: string | null;
+  };
+  media: {
+    url: string;
+    type: string;
+  }[];
+}
 
 interface PageProps {
   params: { slug: string }
 }
 
-export default function DogDetailPage({ params }: PageProps) {
-  const { slug } = params
-  const [dog, setDog] = useState<DogBreed | null>(null)
+export default function DogDetailPage({ params: { slug } }: PageProps) {
+  const [data, setData] = useState<EnrichedDogBreed | null>(null);
   const [loading, setLoading] = useState(true)
-  const { isCollected, toggleCollected } = useCollection()
+  const { toggleCollected } = useCollection()
 
   useEffect(() => {
     const fetchBreed = async () => {
       try {
         setLoading(true)
         const response = await apiClient.getBreedBySlug(slug)
-        setDog(response.breed || response)
+        setData(response); // The API returns the full object { breed, collectionStatus, media }
       } catch (error) {
         console.error("[v0] Failed to fetch breed:", error)
-        setDog(null)
+        setData(null);
       } finally {
         setLoading(false)
       }
@@ -67,11 +79,13 @@ export default function DogDetailPage({ params }: PageProps) {
     )
   }
 
-  if (!dog) {
+  if (!data || !data.breed) {
     notFound()
   }
 
-  const collected = isCollected(dog.slug)
+  // Use the collection status directly from the API response
+  const dog = data.breed;
+  const collected = data.collectionStatus.isCollected;
 
   return (
     <main className="min-h-screen bg-background">
