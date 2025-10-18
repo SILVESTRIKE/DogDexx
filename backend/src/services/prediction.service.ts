@@ -139,7 +139,6 @@ export const predictionService = {
     const uniqueFilename = `${uuidv4()}.jpg`;
     const publicDir = path.join(__dirname, `../../public/processed-images`);
     const publicUrl = `/public/processed-images/${uniqueFilename}`;
-
     fs.mkdirSync(publicDir, { recursive: true });
     fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);
     
