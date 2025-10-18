@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-
+import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 const router = Router();
+router.use(optionalAuthMiddleware);
 
 // This proxies WebSocket requests to the AI service for real-time detection
 router.use('/', createProxyMiddleware({

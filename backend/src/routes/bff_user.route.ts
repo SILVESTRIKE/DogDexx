@@ -1,6 +1,8 @@
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout } from '../controllers/bff_user.controller';
+import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
+import { validateData } from '../middlewares/validateBody.middleware';
+import { LoginPayloadSchema } from '../types/zod/auth.zod';
 
 const router = Router();
 
@@ -56,7 +58,31 @@ router.post('/register', register);
  *       200:
  *         description: Đăng nhập thành công, trả về dữ liệu tổng hợp.
  */
-router.post('/login', login);
+router.post('/login', validateData(LoginPayloadSchema,'body'), login);
+
+/**
+ * @swagger
+ * /bff/user/verify-otp:
+ *   post:
+ *     summary: (BFF) Xác thực OTP
+ *     tags: [BFF-User]
+ *     description: Xác thực mã OTP được gửi đến email người dùng sau khi đăng ký.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *               otp:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Xác thực thành công.
+ */
+router.post('/verify-otp', verifyOtp);
 
 /**
  * @swagger
@@ -113,5 +139,24 @@ router.put('/profile', authMiddleware, updateProfile);
  *         description: Đăng xuất thành công.
  */
 router.post('/logout', logout);
+
+/**
+ * @swagger
+ * /bff/user/refresh:
+ *   post:
+ *     summary: (BFF) Làm mới access token
+ *     tags: [BFF-User]
+ *     description: Sử dụng refresh token để lấy một cặp access token và refresh token mới.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RefreshTokenPayload'
+ *     responses:
+ *       200:
+ *         description: Làm mới token thành công.
+ */
+router.post('/refresh', refreshToken);
 
 export default router;

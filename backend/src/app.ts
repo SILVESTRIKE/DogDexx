@@ -24,40 +24,49 @@ import bffCollectionRoutes from './routes/bff_collection.route';
 import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
 import bffRealtimeRoutes from './routes/bff_realtime.route';
+import achievementRoute from './routes/achievement.route';
 
 // @ts-ignore - 
 import swaggerSpec from '../swaggerConfig';
 
 dotenv.config();
 const app = express();
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173", // URL của frontend
-  credentials: true, // Cho phép gửi credentials (cookies, headers xác thực)
-}));
+
+// --- FIX: Chuẩn hóa và đơn giản hóa cấu hình CORS ---
+// Lấy URL của frontend từ biến môi trường, mặc định là http://localhost:3001
+// Thêm cả http://localhost:3000 để hỗ trợ môi trường dev khi frontend chạy ở port mặc định.
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:3001",
+  "http://localhost:3000",
+];
+
+const corsOptions = {
+  origin: allowedOrigins, // Cung cấp trực tiếp mảng các origin được phép
+  credentials: true,
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(Fingerprint());
 
-configureViewEngine(app);
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
-app.use(
-  "/processed-images",
-  express.static(path.join(__dirname, "..", "public", "processed-images"))
-);
-app.use(
-  "/processed-videos",
-  express.static(path.join(__dirname, "..", "public", "processed-videos"))
-);
+// Cấu hình thư mục public để phục vụ các file tĩnh (ảnh, video,...)
+const publicDirectory = path.join(__dirname, "..", "public");
+app.use('/public', express.static(publicDirectory));
+
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
 app.get("/test", (req, res) => {
+  // Di chuyển configureViewEngine xuống đây để nó không ảnh hưởng đến các route khác
+  configureViewEngine(app);
   res.render("test");
 });
-import achievementRoute from './routes/achievement.route';
 
 // BFF Routes
 app.use('/bff/user', bffUserRoutes);
@@ -67,6 +76,7 @@ app.use('/bff/content', bffContentRoutes);
 app.use('/bff/admin', bffAdminRoutes);
 app.use('/bff/live', bffRealtimeRoutes);
 
+// Core API Routes (Legacy or for other purposes)
 app.use(authRoutes);
 app.use(achievementRoute);
 app.use(userRoutes);
@@ -77,5 +87,6 @@ app.use(collectionRoutes);
 app.use(adminFeedbackRouter);
 app.use(predictionHistoryRouter);
 app.use(adminPredictionHistoryRouter);
+
 app.use(errorHandlerMiddleware);
 export default app;

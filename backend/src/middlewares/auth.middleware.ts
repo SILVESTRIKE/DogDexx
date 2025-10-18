@@ -15,7 +15,7 @@ export const authMiddleware = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return NotAuthorizedError;
+    return next(new NotAuthorizedError("Token is not provided"));
   }
 
   const token = authHeader.split(" ")[1];
@@ -25,13 +25,13 @@ export const authMiddleware = async (
     const user = await userService.getById(decoded.userId);
 
     if (!user) {
-      return NotAuthorizedError;
+      return next(new NotAuthorizedError("User not found"));
     }
 
     req.user = user as PlainUser;
 
     next();
   } catch (error) {
-    return NotAuthorizedError;
+    return next(new NotAuthorizedError("Token is invalid or expired"));
   }
 };

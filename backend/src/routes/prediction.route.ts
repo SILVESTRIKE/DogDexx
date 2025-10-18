@@ -8,6 +8,7 @@ import { setMediaType } from "../middlewares/setMediaType.middleware";
 import { checkAllowedRoles } from "../middlewares/role.middleware";
 import * as dotenv from "dotenv";
 import { IncomingMessage, ServerResponse, ClientRequest } from "http";
+import jwt from 'jsonwebtoken';
 import { Socket } from "net";
 
 dotenv.config();
@@ -118,13 +119,6 @@ router.post(
   predictionController.saveStreamResult
 );
 
-router.get(
-  "/api/predictions/status/:predictionId",
-  optionalAuthMiddleware,
-  predictionController.getPredictionStatus
-);
-
-
 /**
  * @swagger
  * /api/predictions/status/{predictionId}:
@@ -168,47 +162,6 @@ router.get(
   predictionController.getPredictionStatus
 );
 
-/**
- * @swagger
- * /api/predictions/stream-result:
- *   post:
- *     summary: Lưu kết quả dự đoán từ stream
- *     description: Lưu kết quả dự đoán giống chó từ một stream hình ảnh, yêu cầu đăng nhập tùy chọn.
- *     tags: [Predictions]
- *     security:
- *       - bearerAuth: []
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             $ref: '#/components/schemas/PredictionHistoryCreatePayload'
- *     responses:
- *       201:
- *         description: Kết quả stream được lưu thành công
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/PredictionHistoryResponse'
- *       400:
- *         description: Yêu cầu không hợp lệ
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Không được phép (nếu vượt quá giới hạn sử dụng)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       404:
- *         description: Không tìm thấy tài nguyên
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- */
 router.post(
   "/api/predictions/stream-result",
   optionalAuthMiddleware,
@@ -267,23 +220,42 @@ const proxyOptions: Options = {
       console.error('[HPM] Proxy Error:', err);
       if ('writeHead' in res) {
         if (!res.headersSent) {
-          res.writeHead(502, { 'Content-Type': 'text/plain' });
+          res.writeHead(502, { 'Content-Type': 'application/json' });
         }
-        res.end('Proxy Error');
+        res.end(JSON.stringify({ message: "Proxy Error: Could not connect to AI service." }));
       } else {
-        res.destroy(err);
+        // For WebSocket upgrade requests, the response is a socket.
+        (res as Socket).destroy(err);
       }
     },
     proxyReqWs: (proxyReq: ClientRequest, req: IncomingMessage, socket: Socket, options: Options, head: Buffer) => {
-      console.log(`[HPM] Proxying WebSocket request to: ${options.target?.toString()}`);
+      // --- LOGIC XÁC THỰC WEBSOCKET MỚI ---
+      const url = new URL(req.url || '', `http://${req.headers.host}`);
+      const token = url.searchParams.get('token');
+
+      if (token) {
+        try {
+          jwt.verify(token, process.env.JWT_SECRET!);
+          console.log(`[HPM-Auth] Valid token found for user. Proxying WebSocket request to: ${options.target?.toString()}`);
+        } catch (error: any) {
+          console.warn(`[HPM-Auth] Invalid token for WebSocket: ${error.message}. Closing connection.`);
+          // Gửi mã lỗi 4001 (custom) và đóng socket
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return; // Ngăn không cho proxy tiếp tục
+        }
+      } else {
+        // Đây là người dùng khách (guest), vẫn cho phép kết nối
+        console.log(`[HPM-Auth] No token found (guest user). Proxying WebSocket request to: ${options.target?.toString()}`);
+      }
     },
   }
 };
 
 router.use(
   "/api/predict/stream",
-  optionalAuthMiddleware,
-  checkUsageLimit,
+  // Middleware HTTP (optionalAuth, checkUsageLimit) không hoạt động với WebSocket upgrade requests.
+  // Logic xác thực đã được chuyển vào onProxyReqWs.
   createProxyMiddleware(proxyOptions)
 );
 
