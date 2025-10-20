@@ -1,32 +1,45 @@
 import { Router } from "express";
-import { AnalyticsEventModel, AnalyticsEventName } from "../models/analytics_event.model";
-import Fingerprint from "express-fingerprint";
+import { AnalyticsEventModel } from "../models/analytics_event.model";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 
 const router = Router();
 
 /**
- * @route POST /track-visit
+ * @route POST /api/analytics/track-visit
  * @desc Ghi nhận một lượt truy cập trang
  * @access Public
  */ 
-router.post("/api/analytics/track-visit", optionalAuthMiddleware, Fingerprint(), async (req, res, next) => {
+router.post("/api/analytics/track-visit", optionalAuthMiddleware, async (req, res, next) => {
   try {
-    const { page } = req.body;
-    
-    const eventPayload: any = {
-      eventName: "PAGE_VISIT",
-      eventData: { page: page || "unknown" },
-      fingerprint: req.fingerprint?.hash,
-      ip: req.ip,
-      userAgent: req.headers["user-agent"],
+    // SỬA LỖI: Tối ưu việc ghi nhận lượt truy cập
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const query: any = {
+      eventName: 'PAGE_VISIT',
+      date: today,
     };
 
     if (req.user?._id) {
-      eventPayload.user = req.user._id;
+      query.user = req.user._id;
+    } else if (req.fingerprint?.hash) {
+      query.fingerprint = req.fingerprint.hash;
     }
 
-    await AnalyticsEventModel.create(eventPayload);
+    const update = {
+      $inc: { visitCount: 1 },
+      $setOnInsert: {
+        ip: req.ip,
+        userAgent: req.headers["user-agent"],
+        eventData: { page: req.body.page || "unknown" },
+      },
+    };
+
+    await AnalyticsEventModel.findOneAndUpdate(query, update, {
+      upsert: true, 
+      new: true, 
+    });
+
     res.status(200).json({ message: "Visit tracked successfully" });
   } catch (error) {
     next(error);
@@ -53,7 +66,7 @@ router.post("/api/analytics/track-visit", optionalAuthMiddleware, Fingerprint(),
  *       200:
  *         description: Ghi nhận sự kiện thành công.
  */
-router.post("/api/analytics/track-event", optionalAuthMiddleware, Fingerprint(), async (req, res, next) => {
+router.post("/api/analytics/track-event", optionalAuthMiddleware, async (req, res, next) => {
   try {
     const { eventName, eventData } = req.body;
     

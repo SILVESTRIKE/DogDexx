@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { ThumbsUp, ThumbsDown, Send } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { apiClient } from "@/lib/api-client"
+import { useI18n } from "@/lib/i18n-context"
 
 interface FeedbackFormProps {
   detectedBreed: string
@@ -18,6 +19,7 @@ interface FeedbackFormProps {
 }
 
 export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId }: FeedbackFormProps) {
+  const { t } = useI18n();
   const { user } = useAuth()
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
   const [correctBreed, setCorrectBreed] = useState("")
@@ -59,7 +61,7 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
       setSubmitted(true)
     } catch (error) {
       console.error("[v0] Failed to submit feedback:", error)
-      alert("Gửi phản hồi thất bại. Vui lòng thử lại.")
+      alert(t('feedback.error'))
     } finally {
       setIsSubmitting(false)
     }
@@ -73,9 +75,9 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
               <Send className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-xl font-bold mb-2">Cảm ơn phản hồi của bạn!</h3>
+            <h3 className="text-xl font-bold mb-2">{t('feedback.thankYou')}</h3>
             <p className="text-muted-foreground">
-              Phản hồi của bạn giúp chúng tôi cải thiện độ chính xác của mô hình AI.
+              {t('feedback.thankYouDescription')}
             </p>
           </div>
         </CardContent>
@@ -86,13 +88,13 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
   return (
     <Card className="border-2">
       <CardHeader>
-        <CardTitle>Đánh giá kết quả nhận diện</CardTitle>
-        <CardDescription>Phản hồi của bạn giúp chúng tôi cải thiện độ chính xác của hệ thống</CardDescription>
+        <CardTitle>{t('feedback.title')}</CardTitle>
+        <CardDescription>{t('feedback.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Correct/Incorrect Selection */}
         <div className="space-y-3">
-          <Label className="text-base font-semibold">Kết quả nhận diện có chính xác không?</Label>
+          <Label className="text-base font-semibold">{t('feedback.wasCorrect')}</Label>
           <div className="flex gap-4">
             <Button
               variant={isCorrect === true ? "default" : "outline"}
@@ -101,7 +103,7 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
               onClick={() => setIsCorrect(true)}
             >
               <ThumbsUp className="h-5 w-5" />
-              Đúng
+              {t('feedback.yes')}
             </Button>
             <Button
               variant={isCorrect === false ? "default" : "outline"}
@@ -110,7 +112,7 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
               onClick={() => setIsCorrect(false)}
             >
               <ThumbsDown className="h-5 w-5" />
-              Sai
+              {t('feedback.no')}
             </Button>
           </div>
         </div>
@@ -119,11 +121,11 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
         {isCorrect === false && (
           <div className="space-y-2">
             <Label htmlFor="correct-breed" className="text-base font-semibold">
-              Giống chó đúng là gì? <span className="text-destructive">*</span>
+              {t('feedback.correctBreed')} <span className="text-destructive">*</span>
             </Label>
             <Input
               id="correct-breed"
-              placeholder="Nhập tên giống chó đúng..."
+              placeholder={t('feedback.selectBreed')}
               value={correctBreed}
               onChange={(e) => setCorrectBreed(e.target.value)}
               className="text-base"
@@ -134,11 +136,11 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
         {/* Optional Notes */}
         <div className="space-y-2">
           <Label htmlFor="notes" className="text-base font-semibold">
-            Ghi chú thêm (tùy chọn)
+            {t('feedback.additionalComments')}
           </Label>
           <Textarea
             id="notes"
-            placeholder="Thêm thông tin chi tiết về ảnh, góc chụp, đặc điểm của chó..."
+            placeholder={t('feedback.commentsPlaceholder')}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={4}
@@ -154,7 +156,7 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
           className="w-full gap-2"
         >
           <Send className="h-5 w-5" />
-          {isSubmitting ? "Đang gửi..." : "Gửi phản hồi"}
+          {isSubmitting ? t('feedback.submitting') : t('feedback.submit')}
         </Button>
       </CardContent>
     </Card>

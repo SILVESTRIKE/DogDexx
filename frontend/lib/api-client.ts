@@ -78,9 +78,12 @@ class ApiClient {
         await fetch(`${this.baseUrl}/bff/content/breeds`);
         TokenManager.setGuestSession();
         console.log("Guest session created and flag set in localStorage.");
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to ping server for guest session:", error);
-        // Ném lỗi để promise được lưu là Rejected
+        // Cải thiện xử lý lỗi cho các lỗi mạng
+        if (error instanceof TypeError && error.message === 'Failed to fetch') {
+          throw new Error('Network error: Could not connect to the backend server to create a guest session.');
+        }
         throw error;
       } finally {
         // QUAN TRỌNG: Luôn luôn xóa promise để lần gọi tiếp theo có thể thử lại
@@ -156,11 +159,7 @@ class ApiClient {
       }
 
       if (!response.ok) {
-        // Cho phép trình duyệt xử lý 304 Not Modified một cách tự nhiên mà không ném lỗi
         if (response.status === 304) {
-          // Khi nhận 304, trình duyệt sẽ tự động sử dụng cache.
-          // Việc gọi .json() vẫn sẽ hoạt động và trả về nội dung từ cache.
-          // Do đó, chúng ta không cần làm gì đặc biệt ở đây và để code tiếp tục chạy.
         } else {
             const errorData = await response.json().catch(() => ({})); // { success: false, errors: [{ message: '...' }] }
             // Lấy message từ lỗi đầu tiên trong mảng errors, hoặc fallback về message chung
@@ -269,7 +268,8 @@ class ApiClient {
       return response.json();
     } catch (error) {
       console.error("[ApiClient] FormData request failed:", error, `(URL: ${url})`);
-
+      
+      // Cải thiện logic xử lý lỗi để cung cấp thông báo chi tiết hơn
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         throw new Error('Network error: Could not connect to the server. Please check your internet connection or contact support.');
       }
@@ -277,8 +277,69 @@ class ApiClient {
       if (error instanceof Error) {
         throw error;
       }
-      throw new Error('An unexpected error occurred during file upload.');
+      // Fallback cho các trường hợp khác
+      throw new Error('Something went wrong during the file upload.');
     }
+  }
+  private async requestWithUploadProgress<T>(
+    endpoint: string,
+    formData: FormData,
+    onProgress: (progress: number) => void,
+    requiresAuth = false
+  ): Promise<T> {
+    return new Promise(async (resolve, reject) => {
+      const url = new URL(endpoint, this.baseUrl).toString();
+      const xhr = new XMLHttpRequest();
+
+      xhr.open("POST", url, true);
+
+      // Đảm bảo guest session (nếu cần)
+      await this.ensureGuestSession().catch(reject);
+
+      // Đính kèm token
+      const token = TokenManager.getAccessToken();
+      if (token) {
+        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      } else if (requiresAuth) {
+        return reject(new Error("Token is not provided for an authenticated request."));
+      }
+
+      // Theo dõi tiến trình upload
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100);
+          onProgress(progress);
+        }
+      };
+
+      // Xử lý khi hoàn thành
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const jsonResponse = JSON.parse(xhr.responseText);
+            resolve(jsonResponse);
+          } catch (e) {
+            reject(new Error("Failed to parse server response."));
+          }
+        } else {
+          // Xử lý lỗi tương tự như trong hàm request()
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
+            reject(new Error(errorMessage));
+          } catch (e) {
+            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+
+      // Xử lý lỗi mạng
+      xhr.onerror = () => {
+        reject(new Error("Network error occurred during the upload."));
+      };
+
+      xhr.send(formData);
+    });
   }
 
   private async refreshAccessToken(): Promise<boolean> {
@@ -308,11 +369,19 @@ class ApiClient {
   }
 
   // BFF-User endpoints
-  async register(username: string, email: string, password: string) {
-    return this.request<any>("/bff/user/register", {
-      method: "POST",
-      body: JSON.stringify({ username, email, password }),
+  async register(data: {
+    username: string;
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+    avatar?: File;
+  }) {
+    const formData = new FormData();
+    Object.entries(data).forEach(([key, value]) => {
+      if (value) formData.append(key, value);
     });
+    return this.requestWithFormData<any>("/bff/user/register", formData, false);
   }
 
   async verifyOtp(email: string, otp: string) {
@@ -330,12 +399,16 @@ class ApiClient {
   }
 
   async logout() {
+    // 1. Lấy refreshToken từ TokenManager
+    const refreshToken = TokenManager.getRefreshToken();
+    // 2. Gửi nó lên trong body của request
     return this.request<any>(
       "/bff/user/logout",
       {
         method: "POST",
+        body: JSON.stringify({ refreshToken }), // Thêm body vào đây
       },
-      true
+      true // Yêu cầu xác thực (để gửi accessToken nếu có)
     );
   }
 
@@ -343,19 +416,21 @@ class ApiClient {
     return this.request<import("./types").ProfileResponse>("/bff/user/profile", { cache: "no-cache" }, true);
   }
 
-  async updateProfile(data: {
-    username?: string;
-    firstName?: string;
-    lastName?: string;
-  }) {
-    return this.request<any>(
+  async updateProfile(formData: FormData) {
+    return this.requestWithFormData<any>(
       "/bff/user/profile",
-      {
-        method: "PUT",
-        body: JSON.stringify(data),
-      },
+      formData,
       true
     );
+  }
+
+  async updateAvatar(file: File) {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    return this.requestWithFormData<any>(
+      "/bff/user/avatar",
+      formData,
+      true);
   }
 
   // BFF-Collection endpoints
@@ -369,6 +444,7 @@ class ApiClient {
     shedding_level?: number;
     suitable_for?: string;
     sort?: string;
+    isCollected?: 'true' | 'false';
   }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -382,7 +458,7 @@ class ApiClient {
     return this.request<any>(
       `/bff/collection/pokedex${query ? `?${query}` : ""}`,
       {},
-      false
+      !!params?.isCollected // Chỉ yêu cầu xác thực khi lọc theo trạng thái 'collected'
     );
   }
 
@@ -396,9 +472,11 @@ class ApiClient {
     );
   }
 
-  async getAchievements(userId?: string) {
-    const query = userId ? `?userId=${userId}` : "";
-    return this.request<any>(`/bff/collection/achievements${query}`, {}, true);
+  async getAchievements(lang: 'vi' | 'en') {
+    const queryParams = new URLSearchParams();
+    queryParams.append('lang', lang);
+
+    return this.request<any>(`/bff/collection/achievements?${queryParams.toString()}`, {}, true);
   }
 
   async getCollectionStats() {
@@ -426,24 +504,36 @@ class ApiClient {
   }
 
   // BFF-Prediction endpoints
-  async predictImage(file: File) {
+  async predictImage(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    // Prediction can be done by guests, so requiresAuth is true to *try* and add the token if it exists.
-    // The backend uses optionalAuthMiddleware.
-    return this.requestWithFormData<any>("/bff/predict/image", formData, true);
+    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+    const requiresAuth = !!TokenManager.getAccessToken();
+    return this.requestWithUploadProgress<any>(
+      "/bff/predict/image",
+      formData,
+      onProgress,
+      requiresAuth
+    );
   }
 
-  async predictVideo(file: File) {
+  async predictVideo(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    return this.requestWithFormData<any>("/bff/predict/video", formData, true);
+    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+    const requiresAuth = !!TokenManager.getAccessToken();
+    return this.requestWithUploadProgress<any>(
+      "/bff/predict/video",
+      formData,
+      onProgress,
+      requiresAuth
+    );
   }
 
   async predictBatch(files: File[]) {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
-    return this.requestWithFormData<any>("/bff/predict/batch", formData, true);
+    return this.requestWithFormData<any>("/bff/predict/batch", formData, true); // Giữ lại true vì batch thường là tính năng cho user
   }
 
   async submitPredictionFeedback(
@@ -464,8 +554,29 @@ class ApiClient {
     );
   }
 
-  async getPredictionHistory() {
-    return this.request<any>("/bff/predict/history", {}, true);
+  async getPredictionHistory(params?: { page?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined) {
+          queryParams.append(key, String(value));
+        }
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<any>(
+      `/bff/predict/history${query ? `?${query}` : ""}`, {}, true
+    );
+  }
+
+  async deletePredictionHistory(id: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/bff/predict/history/${id}`,
+      {
+        method: 'DELETE',
+      },
+      true
+    );
   }
 
   // Analytics endpoint
@@ -511,6 +622,26 @@ class ApiClient {
     return this.request<any>(`/bff/admin/feedback${query ? `?${query}` : ""}`, {}, true);
   }
 
+  async adminApproveFeedback(feedbackId: string) {
+    return this.request<any>(
+      `/bff/admin/feedback/${feedbackId}/approve`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+
+  async adminRejectFeedback(feedbackId: string) {
+    return this.request<any>(
+      `/bff/admin/feedback/${feedbackId}/reject`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+
   async getAdminUsers(params?: { page?: number; limit?: number; search?: string }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -539,6 +670,46 @@ class ApiClient {
 
   async getAlerts() {
     return this.request<any>("/bff/admin/alerts", {}, true);
+  }
+
+  async getAdminUsageStats() {
+    return this.request<any>("/bff/admin/usage", {}, true);
+  }
+
+  async getAdminHistories(params?: { page?: number; limit?: number; search?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== "") queryParams.append(key, String(value));
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<any>(`/bff/admin/histories${query ? `?${query}` : ""}`, {}, true);
+  }
+
+  async browseAdminHistories(path: string, params?: { breed?: string, startDate?: string, endDate?: string }) {
+    const queryParams = new URLSearchParams();
+    if (path) queryParams.append('path', path);
+    if (params?.breed && params.breed !== 'all') queryParams.append('breed', params.breed);
+    if (params?.startDate) queryParams.append('startDate', params.startDate);
+    if (params?.endDate) queryParams.append('endDate', params.endDate);
+    return this.request<any>(`/bff/admin/histories/browse?${queryParams.toString()}`, {}, true);
+  }
+
+  async browseAdminMedia(path: string, options: RequestInit = {}) {
+    const queryParams = new URLSearchParams();
+    if (path) queryParams.append('path', path);
+    return this.request<any>(`/bff/admin/media/browse?${queryParams.toString()}`, options, true);
+  }
+
+  async adminDeleteMedia(mediaId: string): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      `/bff/admin/media/${mediaId}`,
+      {
+        method: 'DELETE',
+      },
+      true
+    );
   }
 
   // Core User Management (Admin)

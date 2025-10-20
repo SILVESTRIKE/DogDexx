@@ -2,6 +2,10 @@ import { Router } from "express";
 import { bffPredictionController } from "../controllers/bff_prediction.controller";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
+import { authMiddleware } from "../middlewares/auth.middleware";
+import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
+import { setMediaType } from "../middlewares/setMediaType.middleware";
+import { checkStreamUsageLimit } from "../middlewares/wsUsageLimiter.middleware";
 
 const router = Router();
 router.use(optionalAuthMiddleware);
@@ -29,7 +33,7 @@ router.use(optionalAuthMiddleware);
  *       200:
  *         description: Dự đoán thành công, trả về kết quả tổng hợp.
  */
-router.post("/image", uploadSingle, bffPredictionController.predictImage);
+router.post("/image", uploadSingle, setMediaType(), checkUsageLimit, bffPredictionController.predictImage);
 
 /**
  * @swagger
@@ -54,7 +58,7 @@ router.post("/image", uploadSingle, bffPredictionController.predictImage);
  *       200:
  *         description: Dự đoán thành công, trả về kết quả tổng hợp.
  */
-router.post("/video", uploadSingle, bffPredictionController.predictVideo);
+router.post("/video", uploadSingle, setMediaType(), checkUsageLimit, bffPredictionController.predictVideo);
 
 /**
  * @swagger
@@ -81,7 +85,7 @@ router.post("/video", uploadSingle, bffPredictionController.predictVideo);
  *       200:
  *         description: Dự đoán thành công.
  */
-router.post("/batch", uploadMultiple, bffPredictionController.predictBatch);
+router.post("/batch", uploadMultiple, setMediaType('multiple'), checkUsageLimit, bffPredictionController.predictBatch);
 
 /**
  * @swagger
@@ -106,7 +110,7 @@ router.post("/batch", uploadMultiple, bffPredictionController.predictBatch);
  *         content:
  *           application/json: {}
  */
-router.get('/stream', (req, res) => {
+router.get('/stream', checkStreamUsageLimit, (req, res) => {
   // Đây là một placeholder. Logic thực sự nằm ở server 'upgrade' event.
   // Nếu một client HTTP GET thông thường gọi đến đây, báo lỗi.
   res.status(426).send('Upgrade Required: This endpoint requires a WebSocket connection.');
@@ -162,4 +166,4 @@ router.post("/:id/feedback", bffPredictionController.submitFeedback);
  *       200:
  *         description: Lấy lịch sử thành công.
  */
-router.get("/history", bffPredictionController.getPredictionHistory);
+router.get("/history", authMiddleware, bffPredictionController.getPredictionHistory);

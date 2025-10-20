@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState, useCallback, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ThumbsUp, ThumbsDown, AlertTriangle, Eye, Check, X, Hourglass, UserCheck } from "lucide-react"
+import { ThumbsUp, ThumbsDown, AlertTriangle, Eye, Check, X, Hourglass, UserCheck, Search, Calendar as CalendarIcon } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -15,10 +15,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { getAdminFeedback, AdminFeedbackResponse } from "@/lib/admin-api"
+import { Input } from "@/components/ui/input"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Calendar } from "@/components/ui/calendar"
+import { getAdminFeedback, approveAdminFeedback, rejectAdminFeedback, AdminFeedbackResponse, Feedback } from "@/lib/admin-api"
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
+import { useI18n } from "@/lib/i18n-context"
+import { PaginationComponent } from "@/components/ui/pagination"
+import { DateRange } from "react-day-picker"
+import { format } from "date-fns"
 
 const initialData: AdminFeedbackResponse = {
   stats: { pending_review: 0, approved_for_training: 0, rejected: 0 },
@@ -27,50 +33,127 @@ const initialData: AdminFeedbackResponse = {
 }
 
 export default function FeedbackManagement() {
+  const { t } = useI18n();
   const [data, setData] = useState<AdminFeedbackResponse>(initialData)
   const [loading, setLoading] = useState(true)
   const [page, setPage] = useState(1)
-  const [filter, setFilter] = useState<string>("all")
+  const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
+  const [dateRange, setDateRange] = useState<DateRange | undefined>()
 
-  const fetchFeedback = useCallback(async (currentPage: number, status: string) => {
+  // Debounce search query
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 500);
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
+  const fetchFeedback = useCallback(async (params: { page: number; status: string; search: string; startDate?: string; endDate?: string }) => {
     setLoading(true)
     try {
-      const statusParam = status === "all" ? undefined : status
-      const result = await getAdminFeedback({ page: currentPage, limit: 10, status: statusParam })
+      const statusParam = params.status === "all" ? undefined : params.status
+      const result = await getAdminFeedback({ 
+        page: params.page, 
+        limit: 10, 
+        status: statusParam,
+        search: params.search || undefined,
+        startDate: params.startDate,
+        endDate: params.endDate,
+      })
       setData(result)
     } catch (error) {
-      toast.error("Failed to fetch feedback.", { description: (error as Error).message })
+      toast.error(t('admin.feedback.errors.fetchFailed'), { description: (error as Error).message })
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [t])
 
   useEffect(() => {
-    setPage(1) // Reset page when filter changes
-    fetchFeedback(1, filter)
-  }, [filter, fetchFeedback])
+    setPage(1); // Reset page when filters change
+  }, [statusFilter, debouncedSearchQuery, dateRange]);
 
   useEffect(() => {
-    fetchFeedback(page, filter)
-  }, [page, fetchFeedback])
+    fetchFeedback({
+      page,
+      status: statusFilter,
+      search: debouncedSearchQuery,
+      startDate: dateRange?.from?.toISOString(),
+      endDate: dateRange?.to?.toISOString(),
+    })
+  }, [page, statusFilter, debouncedSearchQuery, dateRange, fetchFeedback])
 
   const { stats, userStats, feedbacks } = data
   const totalFeedback = stats.pending_review + stats.approved_for_training + stats.rejected
   const accuracy =
     totalFeedback > 0 ? ((stats.approved_for_training / totalFeedback) * 100).toFixed(1) : "0.0"
 
+  const handleApprove = async (feedbackId: string) => {
+    const toastId = toast.loading(t('admin.feedback.actions.approving'));
+    try {
+      const result = await approveAdminFeedback(feedbackId);
+      toast.success(result.message, { id: toastId });
+      // Cập nhật lại UI, bao gồm cả stats và danh sách
+      setData(prevData => {
+        const newStats = { ...prevData.stats };
+        newStats.pending_review = Math.max(0, newStats.pending_review - 1);
+        newStats.approved_for_training += 1;
+
+        return {
+          ...prevData,
+          stats: newStats,
+          feedbacks: {
+            ...prevData.feedbacks,
+            data: prevData.feedbacks.data.map(f => 
+              f.id === feedbackId ? { ...f, status: 'approved_for_training' } : f
+            )
+          }
+        };
+      });
+    } catch (error) {
+      toast.error(t('admin.feedback.errors.approveFailed'), { id: toastId, description: (error as Error).message });
+    }
+  }
+
+  const handleReject = async (feedbackId: string) => {
+    const toastId = toast.loading(t('admin.feedback.actions.rejecting'));
+    try {
+      const result = await rejectAdminFeedback(feedbackId);
+      toast.success(result.message, { id: toastId });
+      // Cập nhật lại UI, bao gồm cả stats và danh sách
+      setData(prevData => {
+        const newStats = { ...prevData.stats };
+        newStats.pending_review = Math.max(0, newStats.pending_review - 1);
+        newStats.rejected += 1;
+
+        return {
+          ...prevData,
+          stats: newStats,
+          feedbacks: {
+            ...prevData.feedbacks,
+            data: prevData.feedbacks.data.map(f => 
+              f.id === feedbackId ? { ...f, status: 'rejected' } : f
+            )
+          }
+        };
+      });
+    } catch (error) {
+      toast.error(t('admin.feedback.errors.rejectFailed'), { id: toastId, description: (error as Error).message });
+    }
+  }
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Quản lý phản hồi</h2>
-        <p className="text-muted-foreground">Xem, phân tích và duyệt các phản hồi từ người dùng.</p>
+        <h2 className="text-3xl font-bold tracking-tight">{t('admin.feedback.title')}</h2>
+        <p className="text-muted-foreground">{t('admin.feedback.description')}</p>
       </div>
 
       {/* Stats Cards */}
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Chờ duyệt</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('admin.feedback.stats.pending')}</CardTitle>
             <Hourglass className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
@@ -80,7 +163,7 @@ export default function FeedbackManagement() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đã duyệt (Approved)</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('admin.feedback.stats.approved')}</CardTitle>
             <Check className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -90,7 +173,7 @@ export default function FeedbackManagement() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Đã từ chối</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('admin.feedback.stats.rejected')}</CardTitle>
             <X className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
@@ -100,7 +183,7 @@ export default function FeedbackManagement() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tỷ lệ duyệt</CardTitle>
+            <CardTitle className="text-sm font-medium">{t('admin.feedback.stats.approvalRate')}</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-20" /> : <div className="text-2xl font-bold">{accuracy}%</div>}
@@ -110,37 +193,67 @@ export default function FeedbackManagement() {
 
       <Tabs defaultValue="feedbacks" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="feedbacks">Danh sách phản hồi</TabsTrigger>
-          <TabsTrigger value="user-stats">Thống kê người dùng</TabsTrigger>
+          <TabsTrigger value="feedbacks">{t('admin.feedback.tabs.list')}</TabsTrigger>
+          <TabsTrigger value="user-stats">{t('admin.feedback.tabs.userStats')}</TabsTrigger>
         </TabsList>
         <TabsContent value="feedbacks">
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle>Danh sách phản hồi</CardTitle>
-                  <CardDescription>Tất cả phản hồi từ người dùng</CardDescription>
+                  <CardTitle>{t('admin.feedback.table.title')}</CardTitle>
+                  <CardDescription>{t('admin.feedback.table.description')}</CardDescription>
                 </div>
-                <Tabs value={filter} onValueChange={(v) => setFilter(v as typeof filter)}>
-                  <TabsList>
-                    <TabsTrigger value="all">Tất cả</TabsTrigger>
-                    <TabsTrigger value="pending_review">Chờ duyệt</TabsTrigger>
-                    <TabsTrigger value="approved_for_training">Đã duyệt</TabsTrigger>
-                    <TabsTrigger value="rejected">Đã từ chối</TabsTrigger>
-                  </TabsList>
-                </Tabs>
+                <div className="flex items-center gap-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder={t('admin.feedback.filters.searchPlaceholder')}
+                      className="pl-10 w-64"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="date"
+                        variant={"outline"}
+                        className="w-[300px] justify-start text-left font-normal"
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "LLL dd, y")} -{" "}
+                              {format(dateRange.to, "LLL dd, y")}
+                            </>
+                          ) : (
+                            format(dateRange.from, "LLL dd, y")
+                          )
+                        ) : (
+                          <span>{t('admin.feedback.filters.pickDate')}</span>
+                        )}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="end">
+                      <Calendar initialFocus mode="range" defaultMonth={dateRange?.from} selected={dateRange} onSelect={setDateRange} numberOfMonths={2} />
+                    </PopoverContent>
+                  </Popover>
+                  <Button variant="ghost" onClick={() => { setSearchQuery(''); setDateRange(undefined); }} className={!searchQuery && !dateRange ? 'hidden' : ''}>{t('admin.feedback.filters.clear')}</Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Thời gian</TableHead>
-                    <TableHead>Người dùng</TableHead>
-                    <TableHead>Dự đoán</TableHead>
-                    <TableHead>Kết quả</TableHead>
-                    <TableHead>Trạng thái</TableHead>
-                    <TableHead>Hành động</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.time')}</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.user')}</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.prediction')}</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.result')}</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.status')}</TableHead>
+                    <TableHead>{t('admin.feedback.table.headers.action')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -155,94 +268,143 @@ export default function FeedbackManagement() {
                   ) : feedbacks.data.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                        Chưa có phản hồi nào
+                        {t('admin.feedback.table.noFeedback')}
                       </TableCell>
                     </TableRow>
                   ) : (
                     feedbacks.data.map((f) => (
-                      <TableRow key={f._id}>
+                      <TableRow key={f.id}>
                         <TableCell className="text-sm">
-                          {new Date(f.createdAt).toLocaleDateString("vi-VN", {
+                          {new Date(f.feedbackTimestamp).toLocaleDateString("vi-VN", {
                             day: "2-digit",
                             month: "2-digit",
                             year: "numeric",
                           })}
                         </TableCell>
-                        <TableCell className="text-sm">{f.user_id?.username || "Guest"}</TableCell>
-                        <TableCell className="font-medium">{f.original_prediction.class}</TableCell>
+                        <TableCell className="text-sm">{f.user?.name || t('common.guest')}</TableCell>
+                        <TableCell className="font-medium">{f.aiPrediction?.class || 'N/A'}</TableCell>
                         <TableCell>
-                          {f.is_correct ? (
+                          {f.feedbackContent.isCorrect ? (
                             <Badge variant="default" className="gap-1 bg-green-600">
                               <ThumbsUp className="h-3 w-3" />
-                              Đúng
+                              {t('feedback.yes')}
                             </Badge>
                           ) : (
                             <Badge variant="destructive" className="gap-1">
                               <ThumbsDown className="h-3 w-3" />
-                              Sai
+                              {t('feedback.no')}
                             </Badge>
                           )}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">{f.status.replace(/_/g, " ")}</Badge>
+                          {f.status === 'pending_review' && (
+                            <Badge variant="outline" className="border-yellow-500 text-yellow-600">
+                              <Hourglass className="h-3 w-3 mr-1" />
+                              {t('admin.feedback.filters.pending')}
+                            </Badge>
+                          )}
+                          {f.status === 'approved_for_training' && (
+                            <Badge variant="default" className="bg-green-600 hover:bg-green-700">
+                              <Check className="h-3 w-3 mr-1" />
+                              {t('admin.feedback.filters.approved')}
+                            </Badge>
+                          )}
+                          {f.status === 'rejected' && (
+                            <Badge variant="destructive">{t('admin.feedback.filters.rejected')}</Badge>
+                          )}
                         </TableCell>
                         <TableCell>
-                          {/* Dialog and other actions here */}
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="sm:max-w-[600px]">
+                              <DialogHeader>
+                                <DialogTitle>{t('admin.feedback.dialog.title')}</DialogTitle>
+                                <DialogDescription>
+                                  {t('admin.feedback.dialog.description')}
+                                </DialogDescription>
+                              </DialogHeader>
+                              <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <p className="text-right font-semibold">{t('admin.feedback.dialog.originalImage')}:</p>
+                                  <div className="col-span-3 flex gap-4">
+                                    <a href={f.originalMediaUrl} target="_blank" rel="noopener noreferrer">
+                                      <img src={f.originalMediaUrl} alt="Original" className="max-h-32 w-auto rounded-md border hover:opacity-80 transition-opacity" />
+                                    </a>
+                                    <a href={f.processedMediaUrl} target="_blank" rel="noopener noreferrer">
+                                      <img src={f.processedMediaUrl} alt="Processed" className="max-h-32 w-auto rounded-md border hover:opacity-80 transition-opacity" />
+                                    </a>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <p className="text-right font-semibold">{t('admin.feedback.dialog.aiPrediction')}:</p>
+                                  <p className="col-span-3">{f.aiPrediction?.class || 'N/A'} ({Math.round((f.aiPrediction?.confidence || 0) * 100)}%)</p>
+                                </div>
+                                <div className="grid grid-cols-4 items-center gap-4">
+                                  <p className="text-right font-semibold">{t('admin.feedback.dialog.userSays')}:</p>
+                                  <p className="col-span-3 font-bold">{f.feedbackContent.isCorrect ? t('feedback.yes') : `${t('feedback.no')}, ${t('admin.feedback.dialog.mustBe')}: ${f.feedbackContent.userSubmittedLabel}`}</p>
+                                </div>
+                                {f.feedbackContent.notes && (
+                                  <div className="grid grid-cols-4 items-center gap-4">
+                                    <p className="text-right font-semibold">{t('admin.feedback.dialog.notes')}:</p>
+                                    <p className="col-span-3 text-sm text-muted-foreground italic">"{f.feedbackContent.notes}"</p>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="flex justify-end gap-2 pt-4 border-t">
+                                {f.status === 'pending_review' && (
+                                  <>
+                                    <Button variant="destructive" size="sm" onClick={() => handleReject(f.id)}>
+                                      <X className="h-4 w-4 mr-2" />{t('admin.feedback.actions.reject')}
+                                    </Button>
+                                    <Button variant="default" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApprove(f.id)} >
+                                      <Check className="h-4 w-4 mr-2" />{t('admin.feedback.actions.approve')}
+                                    </Button>
+                                  </>
+                                )}
+                                {f.status === 'approved_for_training' && (
+                                    <Badge variant="default" className="bg-green-600 gap-1"><Check className="h-3 w-3" />{t('admin.feedback.status.approved')}</Badge>
+                                )}
+                                {f.status === 'rejected' && (
+                                    <Badge variant="destructive" className="gap-1"><X className="h-3 w-3" />{t('admin.feedback.status.rejected')}</Badge>
+                                )}
+                              </div>
+                            </DialogContent>
+                          </Dialog>
                         </TableCell>
                       </TableRow>
                     ))
                   )}
                 </TableBody>
               </Table>
-              <Pagination className="mt-4">
-                <PaginationContent>
-                  <PaginationItem>
-                    <PaginationPrevious
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        setPage((p) => Math.max(1, p - 1))
-                      }}
-                      className={page <= 1 ? "pointer-events-none opacity-50" : ""}
-                    />
-                  </PaginationItem>
-                  <PaginationItem>
-                    <span className="px-4 py-2 text-sm">
-                      Trang {feedbacks.page} / {feedbacks.totalPages}
-                    </span>
-                  </PaginationItem>
-                  <PaginationItem>
-                    <PaginationNext
-                      href="#"
-                      onClick={(e) => {
-                        e.preventDefault()
-                        setPage((p) => Math.min(feedbacks.totalPages, p + 1))
-                      }}
-                      className={page >= feedbacks.totalPages ? "pointer-events-none opacity-50" : ""}
-                    />
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+              {!loading && feedbacks.totalPages > 1 && (
+                <PaginationComponent
+                  currentPage={feedbacks.page}
+                  totalPages={feedbacks.totalPages}
+                  onPageChange={setPage}
+                  className="mt-6"
+                />
+              )}
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="user-stats">
           <Card>
             <CardHeader>
-              <CardTitle>Thống kê người dùng</CardTitle>
-              <CardDescription>Top 10 người dùng gửi phản hồi nhiều nhất.</CardDescription>
+              <CardTitle>{t('admin.feedback.userStats.title')}</CardTitle>
+              <CardDescription>{t('admin.feedback.userStats.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Người dùng</TableHead>
-                    <TableHead>Tổng gửi</TableHead>
-                    <TableHead>Đã duyệt</TableHead>
-                    <TableHead>Đã từ chối</TableHead>
+                    <TableHead>{t('admin.feedback.userStats.headers.user')}</TableHead>
+                    <TableHead>{t('admin.feedback.userStats.headers.total')}</TableHead>
+                    <TableHead>{t('admin.feedback.userStats.headers.approved')}</TableHead>
+                    <TableHead>{t('admin.feedback.userStats.headers.rejected')}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

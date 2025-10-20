@@ -16,6 +16,12 @@ const guestLimiter = rateLimit({
   message: {
     message: "Bạn đã hết lượt dùng thử trong tuần này. Vui lòng đăng ký để sử dụng không giới hạn.",
   },
+  keyGenerator: (req: Request): string => {
+    // SỬA LỖI: Ưu tiên fingerprint, nếu không có thì dùng req.ip.
+    // express-rate-limit sẽ tự động xử lý IPv6 một cách an toàn khi key là địa chỉ IP.
+    // Thêm fallback 'unknown' để đảm bảo hàm luôn trả về một string.
+    return req.fingerprint?.hash || req.ip || 'unknown';
+  },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -56,4 +62,23 @@ export const checkUsageLimit = async (req: Request, res: Response, next: NextFun
   } catch (error) {
     next(error);
   }
+};
+
+/**
+ * Tăng bộ đếm sử dụng cho người dùng đã đăng nhập.
+ * Hàm này nên được gọi SAU KHI một tác vụ tốn tài nguyên (như dự đoán) hoàn tất.
+ */
+export const incrementUsage = async (req: Request) => {
+  if (!req.user || req.user.role === 'admin') {
+    return; // Bỏ qua nếu là khách hoặc admin
+  }
+
+  const type = (req as any).mediaType as 'image' | 'video';
+  if (!type) return;
+
+  const updateField = type === 'image' ? 'photoUploadsThisWeek' : 'videoUploadsThisWeek';
+  await UserModel.updateOne(
+    { _id: req.user._id },
+    { $inc: { [updateField]: 1 } }
+  );
 };

@@ -38,11 +38,25 @@ const refreshTokenSchema = new Schema<RefreshTokenDoc>(
     isDeleted: {
       type: Boolean,
       default: false,
+      select: false,
     },
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "refresh_tokens",
+    toJSON: {
+      transform: (doc, ret: { [key: string]: any }) => {
+        delete ret._id;
+        delete ret.__v;
+        delete ret.isDeleted;
+        delete ret.token; // Không bao giờ trả về token đã hash
+      }
+    },
+    toObject: {
+      transform: (doc, ret: { [key: string]: any }) => {
+        delete ret.token;
+      }
+    }
   }
 );
 

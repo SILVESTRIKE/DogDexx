@@ -1,11 +1,10 @@
-// navbar.tsx
-
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
+import { usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
-import { useI18n } from "@/lib/i18n-context"
+import { I18nContextType, useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
@@ -19,6 +18,8 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
+import { cn } from "@/lib/utils";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function Navbar() {
   const { user, logout, isLoading, isAuthenticated } = useAuth()
@@ -27,6 +28,9 @@ export function Navbar() {
   const [showAuthModal, setShowAuthModal] = useState(false)
   const [authMode, setAuthMode] = useState<"login" | "register">("login")
   const [scrolled, setScrolled] = useState(false)
+  const pathname = usePathname()
+  const navContainerRef = useRef<HTMLDivElement>(null)
+  const [indicatorStyle, setIndicatorStyle] = useState({})
 
   const handleAuthClick = (mode: "login" | "register") => {
     setAuthMode(mode)
@@ -34,137 +38,140 @@ export function Navbar() {
   }
 
   useEffect(() => {
-    const handleScroll = () => {
-      // Set trạng thái 'scrolled' thành true nếu người dùng cuộn xuống hơn 10px
-      setScrolled(window.scrollY > 10)
-    }
-
+    const handleScroll = () => setScrolled(window.scrollY > 10)
     window.addEventListener("scroll", handleScroll)
-    return () => {
-      window.removeEventListener("scroll", handleScroll)
-    }
+    handleScroll() // Check initial scroll position
+    return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  const renderNavLinks = () => {
-    if (!mounted) {
-      return (
-        <>
-          <div className="h-5 w-16 bg-muted rounded-md animate-pulse" />
-          <div className="h-5 w-12 bg-muted rounded-md animate-pulse" />
-        </>
-      );
+  const navLinks = useMemo(() => [
+    { href: "/", label: t("nav.detect"), auth: false },
+    { href: "/live", label: t("nav.live"), auth: false },
+    { href: "/pokedex", label: t("nav.pokedex"), auth: false },
+    { href: "/achievements", label: t("nav.achievements"), auth: true },
+    { href: "/history", label: t("nav.history"), auth: true },
+  ], [t]);
+
+  useEffect(() => {
+    const activeLink = navContainerRef.current?.querySelector(`[data-active="true"]`) as HTMLElement;
+    if (activeLink) {
+      setIndicatorStyle({
+        left: activeLink.offsetLeft,
+        width: activeLink.offsetWidth,
+        opacity: 1,
+      });
+    } else {
+      setIndicatorStyle({ opacity: 0 });
     }
+  }, [pathname, navLinks, isAuthenticated]);
 
-    // Định nghĩa navLinks bên trong hàm render để đảm bảo `t()` được gọi lại mỗi khi re-render
-    const navLinks = [
-      { href: "/", label: t("nav.detect"), auth: false },
-      { href: "/live", label: t("nav.live"), auth: false },
-      { href: "/pokedex", label: t("nav.pokedex"), auth: true },
-      { href: "/achievements", label: t("nav.achievements"), auth: true },
-    ]
-
-    return navLinks
-      .filter((link) => !link.auth || (link.auth && isAuthenticated))
-      .map((link) => (
+  const navLinksContent = useMemo(() => (
+    navLinks
+    .filter((link) => !link.auth || (link.auth && isAuthenticated))
+    .map((link) => {
+      const isActive = pathname === link.href;
+      return (
         <Link
           key={link.href}
           href={link.href}
-          className="text-foreground/70 hover:text-foreground transition-colors"
+          data-active={isActive}
+          className={cn(
+            "relative transition-colors px-4 py-2 rounded-full text-sm font-medium z-10",
+            isActive ? "text-primary-foreground" : "text-foreground/70 hover:text-foreground"
+          )}
         >
           {link.label}
         </Link>
-      ));
-  }
-
-  const renderUserMenu = () => {
-    // Nếu chưa mounted hoặc đang loading, hiển thị skeleton/loading
-    if (!mounted || isLoading) {
-      return (
-        <div className="flex items-center gap-2">
-          <div className="h-9 w-24 bg-muted rounded-md animate-pulse" />
-        </div>
       );
+    })
+  ), [navLinks, isAuthenticated, pathname]);
+
+  const mobileNavLinks = useMemo(() => (
+    navLinks
+      .filter(link => !link.auth || isAuthenticated)
+      .map(link => (
+        <DropdownMenuItem key={`mobile-${link.href}`} asChild>
+          <Link href={link.href} className={cn(
+            "cursor-pointer",
+            pathname === link.href && "bg-accent"
+          )}>
+            {link.label}
+          </Link>
+        </DropdownMenuItem>
+      ))
+  ), [navLinks, isAuthenticated, pathname]);
+
+  const userMenuContent = useMemo(() => {
+    if (isLoading) {
+      return <div className="h-10 w-24 bg-muted rounded-md animate-pulse" /> // Tăng chiều cao cho skeleton loader
     }
 
-    // Nếu đã xác thực (sau khi loading xong)
-    if (isAuthenticated) {
-      // Khi isAuthenticated là true, user CHẮC CHẮN phải có dữ liệu sau khi isLoading = false.
-      const userNameDisplay = user?.username || t("nav.account"); 
-
+    if (isAuthenticated && user) {
       return (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
-              <User className="h-4 w-4 mr-2" />
-              {userNameDisplay}
+            <Button variant="outline" className="flex items-center gap-2 rounded-full pl-1.5 pr-3 h-9">
+              <Avatar className="h-6 w-6">
+                <AvatarImage src={user.avatarUrl} alt={user.username} />
+                <AvatarFallback>{user.username.charAt(0).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              {user.username}
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem asChild>
-              <Link href="/profile" className="cursor-pointer">
-                <User className="h-4 w-4 mr-2" />
-                {t("nav.profile")}
-              </Link>
-            </DropdownMenuItem>
-            
-            {user?.role === "admin" && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/admin" className="cursor-pointer">
-                    <Shield className="h-4 w-4 mr-2" />
-                    {t("nav.adminPanel")}
-                  </Link>
-                </DropdownMenuItem>
-              </>
+            {/* Mobile Nav Links */}
+            <div className="md:hidden">
+              {mobileNavLinks}
+              <DropdownMenuSeparator />
+            </div>
+
+            <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer"><User className="h-4 w-4 mr-2" />{t("nav.profile")}</Link></DropdownMenuItem>
+            {user.role === "admin" && (
+              <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href="/admin" className="cursor-pointer"><Shield className="h-4 w-4 mr-2" />{t("nav.adminPanel")}</Link></DropdownMenuItem></>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout} className="cursor-pointer">
-              {t("nav.logout")}
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">{t("nav.logout")}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      );
+      )
     }
 
-    // Nếu không, hiển thị nút đăng nhập/đăng ký
     return (
       <>
-        <Button onClick={() => handleAuthClick("login")} variant="outline" size="sm">{t("nav.login")}</Button>
-        <Button onClick={() => handleAuthClick("register")} size="sm">{t("nav.register")}</Button>
+        <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
+        <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
       </>
-    );
-  }
+    )
+  }, [isLoading, isAuthenticated, user, t, logout, mobileNavLinks, pathname])
 
   return (
     <>
-      <nav
-        className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
-          scrolled ? "bg-background/90 backdrop-blur-sm border-border" : "bg-background border-transparent"
-        }`}
-      >
+      <nav className={`sticky top-0 z-50 border-b transition-colors duration-300 ${scrolled ? "bg-background/90 backdrop-blur-lg border-border" : "bg-background border-transparent"}`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Link href="/" className="text-2xl font-bold">
-              {mounted ? t("common.appName") : "DogDex AI"}
-            </Link>
-            <nav className="hidden md:flex gap-4">{renderNavLinks()}</nav>
+          <div className="flex items-center gap-8 flex-1">
+            <Link href="/" className="text-2xl font-bold">{t("common.appName")}</Link>
           </div>
-
-          <div className="flex items-center gap-3">
+          <div className="hidden md:flex flex-1 justify-center">
+            <div ref={navContainerRef} className="flex items-center justify-around relative bg-muted rounded-full h-9">
+              {mounted ? (
+                <>
+                  <div className="absolute bg-primary rounded-full h-[calc(100%-4px)] transition-all duration-300 ease-in-out" style={indicatorStyle} />
+                  {navLinksContent}
+                </>
+              ) : (
+                <div className="h-full w-96 bg-muted-foreground/10 rounded-full animate-pulse" />
+              )}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 flex-1">
             <ThemeToggle />
             <LanguageToggle />
-            {renderUserMenu()}
+            {/* Thay đổi chiều cao skeleton loader để khớp với button mặc định */}
+            {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted rounded-md animate-pulse" />}
           </div>
         </div>
       </nav>
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        mode={authMode}
-        onSwitchMode={(mode) => setAuthMode(mode)}
-      />
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} mode={authMode} onSwitchMode={setAuthMode} />
     </>
   )
 }

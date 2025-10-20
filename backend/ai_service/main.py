@@ -75,7 +75,6 @@ class Config:
                 if active_model_doc:
                     full_config["model_path"] = active_model_doc.get("fileName")
                     full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
-                    full_config["labels_path"] = active_model_doc.get("labelsFileName")
                 self.apply_config_and_load_model(full_config)
             else:
                 print("⚠️ No configuration found in DB. Using hardcoded defaults.")
@@ -83,14 +82,13 @@ class Config:
         
     def apply_config_and_load_model(self, config_data: dict):
         """Áp dụng các giá trị cấu hình và tải lại model."""
-        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf", 0.25)
-        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf", 0.5)
-        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf", 0.4)
-        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf", 0.8)
-        self.DEVICE = config_data.get("device", "cpu")
-        self.MODEL_PATH = config_data.get("model_path", "models/epoch90.pt")
-        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
-        self.LABELS_PATH = config_data.get("labels_path", "labels.json") # THÊM
+        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf")
+        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf")
+        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf")
+        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf")
+        self.DEVICE = config_data.get("device")
+        self.MODEL_PATH = config_data.get("model_path")
+        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo")
 
         print("✅ Configuration applied:")
         print(f"   - Model Path: {self.MODEL_PATH}")
@@ -107,9 +105,7 @@ class Config:
         if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
             self.download_model()
 
-        # Tải file labels nếu chưa có
-        if not os.path.exists(self.LABELS_PATH) and self.HUGGINGFACE_REPO:
-            self.download_labels()
+
 
         # --- Reload the model with the new path and device ---
         try:
@@ -117,14 +113,14 @@ class Config:
             self.model = YOLO(self.MODEL_PATH) 
             self.model.to(self.DEVICE)
             
-            # Tải lại tên class từ file labels.json nếu có
-            if os.path.exists(self.LABELS_PATH):
-                with open(self.LABELS_PATH, 'r') as f:
-                    labels_data = json.load(f)
-                    # Giả sử file json có dạng {"0": "class_a", "1": "class_b"}
-                    # hoặc là một list ["class_a", "class_b"]
-                    self.model.names = labels_data.get('names', self.model.names)
-                print(f"✅ Custom labels loaded from {self.LABELS_PATH}")
+            # # Tải lại tên class từ file labels.json nếu có
+            # if os.path.exists(self.LABELS_PATH):
+            #     with open(self.LABELS_PATH, 'r') as f:
+            #         labels_data = json.load(f)
+            #         # Giả sử file json có dạng {"0": "class_a", "1": "class_b"}
+            #         # hoặc là một list ["class_a", "class_b"]
+            #         self.model.names = labels_data.get('names', self.model.names)
+            #     print(f"✅ Custom labels loaded from {self.LABELS_PATH}")
 
             print("✅ YOLO model loaded/reloaded successfully.")
 
@@ -141,14 +137,14 @@ class Config:
         except Exception as e:
             print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
     
-    def download_labels(self):
-        from huggingface_hub import hf_hub_download
-        print(f"Labels file not found at {self.LABELS_PATH}. Downloading from Hugging Face...")
-        try:
-            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.LABELS_PATH), local_dir=os.path.dirname(self.LABELS_PATH) or '.')
-            print("Labels file downloaded successfully.")
-        except Exception as e:
-            print(f"Error downloading labels file from repo '{self.HUGGINGFACE_REPO}': {e}")
+    # def download_labels(self):
+    #     from huggingface_hub import hf_hub_download
+    #     print(f"Labels file not found at {self.LABELS_PATH}. Downloading from Hugging Face...")
+    #     try:
+    #         hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.LABELS_PATH), local_dir=os.path.dirname(self.LABELS_PATH) or '.')
+    #         print("Labels file downloaded successfully.")
+    #     except Exception as e:
+    #         print(f"Error downloading labels file from repo '{self.HUGGINGFACE_REPO}': {e}")
 
     def set_defaults(self):
         self.IMAGE_CONF_THRESHOLD = 0.25
@@ -158,7 +154,7 @@ class Config:
         self.DEVICE = "cpu"
         self.MODEL_PATH = "models/epoch90.pt"
         self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
-        self.LABELS_PATH = "labels.json"
+        # self.LABELS_PATH = "labels.json"
 
 
 # Define the save directory relative to this script's location

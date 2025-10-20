@@ -85,23 +85,23 @@ export const deleteUser = async (userId: string): Promise<void> => {
 
 // --- Feedback Management ---
 export interface Feedback {
-  _id: string
-  prediction_id: string
-  user_id: {
-    _id: string
-    username: string
-  }
-  original_prediction: {
-    class: string
-    confidence: number
-  }
-  is_correct: boolean
-  user_submitted_label?: string
-  notes?: string
-  status: "pending_review" | "approved_for_training" | "rejected"
-  image_url: string
-  createdAt: string
-  updatedAt: string
+  id: string;
+  predictionId: string;
+  feedbackTimestamp: string;
+  predictionTimestamp: string;
+  user: {
+    name: string;
+    email: string | null;
+  };
+  feedbackContent: {
+    isCorrect: boolean;
+    userSubmittedLabel?: string;
+    notes?: string;
+  };
+  aiPrediction: { class: string; confidence: number } | null;
+  originalMediaUrl: string;
+  processedMediaUrl: string;
+  status: "pending_review" | "approved_for_training" | "rejected";
 }
 
 export interface FeedbackStats {
@@ -130,8 +130,23 @@ export interface AdminFeedbackResponse {
   }
 }
 
-export const getAdminFeedback = async (params: { page: number; limit: number; status?: string; search?: string }): Promise<AdminFeedbackResponse> => {
+export const getAdminFeedback = async (params: { 
+  page: number; 
+  limit: number; 
+  status?: string; 
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<AdminFeedbackResponse> => {
   return apiClient.getAdminFeedback(params)
+}
+
+export const approveAdminFeedback = async (feedbackId: string): Promise<{ message: string; data: Feedback }> => {
+  return apiClient.adminApproveFeedback(feedbackId);
+}
+
+export const rejectAdminFeedback = async (feedbackId: string): Promise<{ message: string; data: Feedback }> => {
+  return apiClient.adminRejectFeedback(feedbackId);
 }
 
 // --- AI Model Configuration ---
@@ -181,4 +196,56 @@ export const getAIModels = async (): Promise<AIModel[]> => {
 
 export const activateAIModel = async (modelId: string): Promise<any> => {
   return apiClient.activateAIModel(modelId);
+}
+
+// --- History Management ---
+export interface AdminHistoryItem {
+  id: string;
+  user: {
+    id: string | null;
+    name: string;
+    email: string | null;
+  };
+  media: {
+    type: string;
+    url: string;
+    name: string;
+  };
+  predictions: {
+    class: string;
+    confidence: number;
+  }[];
+  createdAt: string;
+  source: 'image_upload' | 'video_upload' | 'stream_capture';
+  processedMediaUrl?: string;
+  feedback: { id: string } | null;
+}
+
+export interface PaginatedAdminHistoryResponse {
+  data: AdminHistoryItem[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
+export const getAdminHistories = async (params: { page: number; limit: number; search?: string }): Promise<PaginatedAdminHistoryResponse> => {
+  return apiClient.getAdminHistories(params);
+}
+
+export interface DirectoryItem {
+  id?: string;
+  name: string | number;
+  type: 'user' | 'year' | 'month' | 'day';
+}
+
+export interface BrowseHistoryResponse {
+  directories: DirectoryItem[];
+  histories: AdminHistoryItem[];
+}
+
+export const browseAdminHistories = async (path: string, params?: { startDate?: string, endDate?: string }): Promise<BrowseHistoryResponse> => {
+  return apiClient.browseAdminHistories(path, params);
 }

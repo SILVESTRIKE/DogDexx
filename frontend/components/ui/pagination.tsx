@@ -116,6 +116,81 @@ function PaginationEllipsis({
   )
 }
 
+interface PaginationComponentProps {
+  currentPage: number
+  totalPages: number
+  onPageChange: (page: number) => void
+  className?: string
+}
+
+function PaginationComponent({
+  currentPage,
+  totalPages,
+  onPageChange,
+  className,
+}: PaginationComponentProps) {
+  const getPageNumbers = () => {
+    const pageNumbers = []
+    const maxPagesToShow = 5
+    const half = Math.floor(maxPagesToShow / 2)
+
+    if (totalPages <= maxPagesToShow) {
+      for (let i = 1; i <= totalPages; i++) {
+        pageNumbers.push(i)
+      }
+    } else {
+      pageNumbers.push(1)
+      if (currentPage > half + 2) {
+        pageNumbers.push('...')
+      }
+
+      let start = Math.max(2, currentPage - half)
+      let end = Math.min(totalPages - 1, currentPage + half)
+
+      if (currentPage <= half + 1) {
+        end = maxPagesToShow - 1
+      }
+      if (currentPage >= totalPages - half) {
+        start = totalPages - maxPagesToShow + 2
+      }
+
+      for (let i = start; i <= end; i++) {
+        pageNumbers.push(i)
+      }
+
+      if (currentPage < totalPages - half - 1) {
+        pageNumbers.push('...')
+      }
+      pageNumbers.push(totalPages)
+    }
+    return pageNumbers
+  }
+
+  return (
+    <Pagination className={className}>
+      <PaginationContent>
+        <PaginationItem className={currentPage === 1 ? "cursor-not-allowed" : ""}>
+          <PaginationPrevious onClick={() => onPageChange(currentPage - 1)} className={currentPage === 1 ? "pointer-events-none opacity-50" : undefined} />
+        </PaginationItem>
+        {getPageNumbers().map((page, index) => (
+          <PaginationItem key={index}>
+            {typeof page === 'number' ? (
+              <PaginationLink isActive={page === currentPage} onClick={() => onPageChange(page)}>
+                {page}
+              </PaginationLink>
+            ) : (
+              <PaginationEllipsis />
+            )}
+          </PaginationItem>
+        ))}
+        <PaginationItem className={currentPage === totalPages ? "cursor-not-allowed" : ""}>
+          <PaginationNext onClick={() => onPageChange(currentPage + 1)} className={currentPage === totalPages ? "pointer-events-none opacity-50" : undefined} />
+        </PaginationItem>
+      </PaginationContent>
+    </Pagination>
+  )
+}
+
 export {
   Pagination,
   PaginationContent,
@@ -124,4 +199,5 @@ export {
   PaginationPrevious,
   PaginationNext,
   PaginationEllipsis,
+  PaginationComponent,
 }

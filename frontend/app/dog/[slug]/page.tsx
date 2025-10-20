@@ -1,6 +1,6 @@
 "use client"
 
-import { notFound } from "next/navigation"
+import { notFound, useParams } from "next/navigation"
 import Link from "next/link"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -25,13 +25,14 @@ import {
   XCircle,
   Award,
 } from "lucide-react"
-import { useEffect, useState } from "react"
-import { apiClient } from "@/lib/api-client";
-import type { DogBreed as LegacyDogBreed } from "@/lib/dog-data"; // Rename to avoid conflict
+import { useI18n } from "@/lib/i18n-context"
+import React, { useEffect, useState } from "react" // Import React
+import { apiClient } from "@/lib/api-client"
+import type { DogBreed } from "@/lib/types"
 
 // Define a new type that matches the API response from bff_content.controller
 interface EnrichedDogBreed {
-  breed: LegacyDogBreed; // The core breed info
+  breed: DogBreed // The core breed info
   collectionStatus: {
     isCollected: boolean;
     collectedAt: string | null;
@@ -46,15 +47,18 @@ interface PageProps {
   params: { slug: string }
 }
 
-export default function DogDetailPage({ params: { slug } }: PageProps) {
+export default function DogDetailPage() {
   const [data, setData] = useState<EnrichedDogBreed | null>(null);
   const [loading, setLoading] = useState(true)
   const { toggleCollected } = useCollection()
+  const { t } = useI18n()
+  const params = useParams() as { slug: string }; // Lấy params bằng hook
 
   useEffect(() => {
     const fetchBreed = async () => {
       try {
         setLoading(true)
+        const slug = params.slug; // Sử dụng slug từ hook
         const response = await apiClient.getBreedBySlug(slug)
         setData(response); // The API returns the full object { breed, collectionStatus, media }
       } catch (error) {
@@ -66,14 +70,14 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
     }
 
     fetchBreed()
-  }, [slug])
+  }, [params, t])
 
   if (loading) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Loading breed details...</p>
+          <p className="text-muted-foreground">{t('common.loading')}</p>
         </div>
       </main>
     )
@@ -98,17 +102,8 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
               className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
             >
               <ArrowLeft className="h-5 w-5" />
-              Back to DogDex
+              {t('dogDetails.backToPokedex')}
             </Link>
-            <Button
-              onClick={() => toggleCollected(dog.slug)}
-              variant={collected ? "secondary" : "default"}
-              size="lg"
-              className="gap-2"
-            >
-              <CheckCircle className="h-5 w-5" />
-              {collected ? "Collected" : "Mark as Collected"}
-            </Button>
           </div>
         </div>
       </header>
@@ -119,13 +114,13 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
           <div className="relative">
             <div className="aspect-square rounded-2xl overflow-hidden border-4 border-primary shadow-xl bg-gradient-to-br from-muted to-muted/50">
               <img
-                src={`/.jpg?key=n4p6g&height=600&width=600&query=${encodeURIComponent(dog.breed + " dog portrait")}`}
+                src={dog.mediaUrl || `https://via.placeholder.com/600?text=${encodeURIComponent(dog.breed)}`}
                 alt={dog.breed}
-                className={`w-full h-full object-cover ${collected ? "" : "grayscale opacity-60"}`}
+                className={`w-full h-full object-cover ${collected ? "" : "opacity-60"}`}
               />
             </div>
             <div className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full text-lg shadow-lg">
-              #{String((dog.number || 0) + 1).padStart(3, "0")}
+              #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
             </div>
             {collected && (
               <div className="absolute top-4 right-4 bg-secondary text-secondary-foreground rounded-full p-3 shadow-lg">
@@ -157,7 +152,7 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Activity className="h-5 w-5 text-primary" />
-                  Quick Stats
+                  {t('dogDetails.quickStats')}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -165,41 +160,41 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
                       <Activity className="h-4 w-4 text-primary" />
-                      Energy Level
+                      {t('results.energy')}
                     </span>
                     <span className="text-sm font-bold">{dog.energy_level}/5</span>
                   </div>
-                  <Progress value={dog.energy_level * 20} className="h-2" />
+                  <Progress value={(dog.energy_level ?? 0) * 20} className="h-2" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
                       <Brain className="h-4 w-4 text-secondary" />
-                      Trainability
+                      {t('results.trainability')}
                     </span>
                     <span className="text-sm font-bold">{dog.trainability}/5</span>
                   </div>
-                  <Progress value={dog.trainability * 20} className="h-2" />
+                  <Progress value={(dog.trainability ?? 0) * 20} className="h-2" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
                       <Wind className="h-4 w-4 text-accent" />
-                      Shedding Level
+                      {t('results.shedding')}
                     </span>
                     <span className="text-sm font-bold">{dog.shedding_level}/5</span>
                   </div>
-                  <Progress value={dog.shedding_level * 20} className="h-2" />
+                  <Progress value={(dog.shedding_level ?? 0) * 20} className="h-2" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
                       <Wrench className="h-4 w-4 text-chart-4" />
-                      Maintenance
+                      {t('dogDetails.maintenance')}
                     </span>
                     <span className="text-sm font-bold">{dog.maintenance_difficulty}/5</span>
                   </div>
-                  <Progress value={dog.maintenance_difficulty * 20} className="h-2" />
+                  <Progress value={(dog.maintenance_difficulty ?? 0) * 20} className="h-2" />
                 </div>
               </CardContent>
             </Card>
@@ -213,29 +208,29 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Ruler className="h-5 w-5 text-primary" />
-                Physical Info
+                {t('results.physicalInfo')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-sm text-muted-foreground">Height</p>
+                <p className="text-sm text-muted-foreground">{t('results.height')}</p>
                 <p className="font-semibold">{dog.height}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Weight</p>
+                <p className="text-sm text-muted-foreground">{t('results.weight')}</p>
                 <p className="font-semibold">{dog.weight}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Life Expectancy</p>
+                <p className="text-sm text-muted-foreground">{t('results.lifespan')}</p>
                 <p className="font-semibold flex items-center gap-2">
                   <Calendar className="h-4 w-4" />
                   {dog.life_expectancy}
                 </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Coat Colors</p>
+                <p className="text-sm text-muted-foreground mb-2">{t('results.coatColors')}</p>
                 <div className="flex flex-wrap gap-1.5">
-                  {dog.coat_colors.map((color) => (
+                  {(dog.coat_colors ?? []).map((color) => (
                     <Badge key={color} variant="outline" className="text-xs">
                       {color}
                     </Badge>
@@ -250,12 +245,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Heart className="h-5 w-5 text-primary" />
-                Temperament
+                {t('results.temperament')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {dog.temperament.map((trait) => (
+                {(dog.temperament ?? []).map((trait) => (
                   <Badge key={trait} variant="secondary">
                     {trait}
                   </Badge>
@@ -269,34 +264,34 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Thermometer className="h-5 w-5 text-primary" />
-                Living Conditions
+                {t('dogDetails.livingConditions')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <p className="text-sm text-muted-foreground">Climate Preference</p>
+                <p className="text-sm text-muted-foreground">{t('dogDetails.climatePreference')}</p>
                 <p className="font-semibold">{dog.climate_preference}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Good With Children</p>
+                <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithChildren')}</p>
                 <Badge variant={dog.good_with_children ? "default" : "destructive"}>
                   {dog.good_with_children ? (
                     <CheckCircle className="h-3 w-3 mr-1" />
                   ) : (
                     <XCircle className="h-3 w-3 mr-1" />
                   )}
-                  {dog.good_with_children ? "Yes" : "No"}
+                  {dog.good_with_children ? t('feedback.yes') : t('feedback.no')}
                 </Badge>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground mb-2">Good With Other Pets</p>
+                <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithPets')}</p>
                 <Badge variant={dog.good_with_other_pets ? "default" : "destructive"}>
                   {dog.good_with_other_pets ? (
                     <CheckCircle className="h-3 w-3 mr-1" />
                   ) : (
                     <XCircle className="h-3 w-3 mr-1" />
                   )}
-                  {dog.good_with_other_pets ? "Yes" : "No"}
+                  {dog.good_with_other_pets ? t('feedback.yes') : t('feedback.no')}
                 </Badge>
               </div>
             </CardContent>
@@ -310,12 +305,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-secondary" />
-                Suitable For
+                {t('dogDetails.suitableFor')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {dog.suitable_for.map((item) => (
+                {(dog.suitable_for ?? []).map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <CheckCircle className="h-4 w-4 text-secondary flex-shrink-0" />
                     <span className="capitalize">{item}</span>
@@ -330,12 +325,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <XCircle className="h-5 w-5 text-destructive" />
-                Not Suitable For
+                {t('dogDetails.notSuitableFor')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {dog.unsuitable_for.map((item) => (
+                {(dog.unsuitable_for ?? []).map((item) => (
                   <li key={item} className="flex items-center gap-2">
                     <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />
                     <span className="capitalize">{item}</span>
@@ -353,12 +348,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Utensils className="h-5 w-5 text-primary" />
-                Favorite Foods
+                {t('dogDetails.favoriteFoods')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-2">
-                {dog.favorite_foods.map((food) => (
+                {(dog.favorite_foods ?? []).map((food) => (
                   <Badge key={food} variant="secondary" className="capitalize">
                     {food}
                   </Badge>
@@ -372,12 +367,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <AlertCircle className="h-5 w-5 text-destructive" />
-                Common Health Issues
+                {t('dogDetails.healthIssues')}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <ul className="space-y-2">
-                {dog.common_health_issues.map((issue) => (
+                {(dog.common_health_issues ?? []).map((issue) => (
                   <li key={issue} className="flex items-center gap-2">
                     <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
                     <span className="capitalize">{issue}</span>
@@ -393,12 +388,12 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="h-5 w-5 text-accent" />
-              Trainable Skills
+              {t('dogDetails.trainableSkills')}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {dog.trainable_skills.map((skill) => (
+              {(dog.trainable_skills ?? []).map((skill) => (
                 <Badge key={skill} variant="outline" className="capitalize">
                   {skill}
                 </Badge>
@@ -412,7 +407,7 @@ export default function DogDetailPage({ params: { slug } }: PageProps) {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="h-5 w-5 text-accent" />
-              Fun Fact
+              {t('dogDetails.funFact')}
             </CardTitle>
           </CardHeader>
           <CardContent>

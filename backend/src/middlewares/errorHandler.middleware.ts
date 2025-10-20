@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { CustomError } from "../errors/CustomError";
+import { logger } from "../utils/logger.util";
 
 export const errorHandlerMiddleware = (
   err: Error,
@@ -7,7 +8,7 @@ export const errorHandlerMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  console.error(err);
+  logger.error(err); // Sử dụng logger để ghi lại lỗi với đầy đủ stack trace
   if (err instanceof CustomError) {
     return res.status(err.statusCode).send({
       success: false,

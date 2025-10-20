@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, CheckCircle, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, User } from "lucide-react"
+import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, User } from "lucide-react"
 import Link from "next/link"
 import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
@@ -114,13 +114,11 @@ export default function ResultsPage() {
   }
   
   const primaryBreedInfo = primaryDetection.breedInfo;
-  // FIX: primaryBreedInfo có thể không có display_name nếu không tìm thấy trong wiki, dùng slug thay thế
-  const primaryDisplayName = (primaryBreedInfo as any).display_name || primaryBreedInfo.slug.replace(/-/g, ' ');
+  const primaryDisplayName = (primaryBreedInfo as any).breed;
 
   const primaryConfidence = Math.round(primaryDetection.confidence * 100);
   
   const selectedBreedInfo = selectedDetection?.breedInfo;
-  const selectedDisplayName = (selectedBreedInfo as any)?.display_name || selectedBreedInfo?.slug.replace(/-/g, ' ');
 
   return (
     <main className="min-h-screen bg-background">
@@ -138,24 +136,33 @@ export default function ResultsPage() {
             <CardTitle className="text-2xl">{t("results.title")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Ảnh đã xử lý với tất cả bounding box */}
-              <div className="relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center">
+            <div className="grid md:grid-cols-2 gap-8 items-center">
+              {/* SỬA LỖI: Thay đổi khung ảnh thành 1:1 và thêm hiệu ứng nền blend */}
+              <div className="relative rounded-lg overflow-hidden bg-gradient-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
                 {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
                   (
                     <video
                       src={processedMediaUrl}
-                      className="w-full h-full object-contain"
+                      className="w-full h-full object-contain z-10"
                       controls
                       autoPlay
                       loop
                       muted
                     />
                   ) : (
-                    <img 
-                      src={processedMediaUrl} 
-                      alt="Detection result" 
-                      className="w-full h-auto object-contain" />
+                    <>
+                      {/* Ảnh nền bị làm mờ để tạo hiệu ứng blend */}
+                      <img 
+                        src={processedMediaUrl} 
+                        alt="Background" 
+                        className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50" 
+                      />
+                      {/* Ảnh chính, hiển thị đầy đủ */}
+                      <img 
+                        src={processedMediaUrl} 
+                        alt="Detection result" 
+                        className="relative w-full h-full object-contain z-10" />
+                    </>
                   )
                 )}
               </div>
@@ -179,12 +186,12 @@ export default function ResultsPage() {
                   <Progress value={primaryConfidence} className="h-3" />
                 </div>
                 <Button
-                  onClick={() => router.push(`/dog/${primaryBreedInfo.slug}`)}
+                  onClick={() => router.push(`/pokedex?highlight=${primaryBreedInfo.slug}`)}
                   size="lg"
                   className="w-full gap-2"
                 >
-                  <CheckCircle className="h-5 w-5" />
-                  {t("results.addToCollection")}
+                  <BookOpen className="h-5 w-5" />
+                  {t("results.viewInPokedex")}
                 </Button>
                 <Link href={`/dog/${primaryBreedInfo.slug}`}>
                   <Button variant="outline" size="lg" className="w-full bg-transparent">
@@ -214,7 +221,7 @@ export default function ResultsPage() {
                       key={`${det.detectedBreed}-${index}`}
                       value={`${det.detectedBreed}-${index}`}
                     >
-                      {`${(det.breedInfo as any)?.display_name || det.detectedBreed.replace(/-/g, ' ')} (${Math.round(det.confidence * 100)}%)`}
+                      {`${det.breedInfo?.breed || det.detectedBreed.replace(/-/g, ' ')} (${Math.round(det.confidence * 100)}%)`}
                     </SelectItem>
                   ))}
                 </SelectContent>

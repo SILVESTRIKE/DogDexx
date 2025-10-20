@@ -6,12 +6,14 @@ import { useState, useEffect } from "react"
 import { Upload, Camera, ImageIcon, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { useAuth } from "@/lib/auth-context"
 import { useAnalytics } from "@/lib/analytics-context"
 import { useI18n } from "@/lib/i18n-context"
 import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api-client"
 import { useMounted } from '@/hooks/use-mounted'
+import { toast } from "sonner"
 
 export default function Home() {
   const mounted = useMounted()
@@ -24,6 +26,8 @@ export default function Home() {
   const [fileType, setFileType] = useState<"image" | "video" | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [isDetecting, setIsDetecting] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const [isProcessing, setIsProcessing] = useState(false)
 
   useEffect(() => {
     trackVisit("home")
@@ -70,23 +74,49 @@ export default function Home() {
   const handleDetect = async () => {
     if (selectedFile && previewUrl) {
       setIsDetecting(true)
+      setIsProcessing(false)
+      setUploadProgress(0)
+      const detectionToast = toast.loading(t("home.uploadingFile"))
 
       try {
+        const onProgress = (progress: number) => {
+          setUploadProgress(progress)
+          if (progress === 100) {
+            // Khi tải lên xong, chuyển sang trạng thái xử lý
+            setIsProcessing(true)
+            toast.loading(t("home.processingFile"), { id: detectionToast })
+          }
+        };
+
         let response
         if (fileType === "image") {
-          response = await apiClient.predictImage(selectedFile)
+          response = await apiClient.predictImage(selectedFile, onProgress)
         } else if (fileType === "video") {
-          response = await apiClient.predictVideo(selectedFile)
+          response = await apiClient.predictVideo(selectedFile, onProgress)
         }
 
         sessionStorage.setItem("detection-result", JSON.stringify(response))
         sessionStorage.setItem("detection-image", previewUrl)
 
         router.push("/results")
-      } catch (error) {
-        console.error("[v0] Prediction failed:", error)
-        alert(t("home.detectionFailed"))
-        setIsDetecting(false)
+
+        toast.success(t("results.title"), { id: detectionToast })
+        // Không cần reset ở đây nữa vì sẽ chuyển trang
+
+      } catch (error: any) {
+        console.error("Prediction failed:", error)
+        // Hiển thị popup lỗi chi tiết cho người dùng
+        toast.error(t("home.detectionFailed"), {
+          id: detectionToast,
+          description: error.message || "An unknown error occurred. Please try again.",
+        })
+      } finally {
+        // Nếu có lỗi, reset lại trạng thái để người dùng có thể thử lại
+        if (!sessionStorage.getItem("detection-result")) {
+            setIsDetecting(false)
+            setUploadProgress(0)
+            setIsProcessing(false)
+        }
       }
     }
   }
@@ -95,6 +125,8 @@ export default function Home() {
     setSelectedFile(null)
     setPreviewUrl(null)
     setFileType(null)
+    setUploadProgress(0)
+    setIsProcessing(false)
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl)
     }
@@ -107,11 +139,11 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-8">
         {/* Hero Section */}
-        <div className="text-center mb-12">
+        <div className="text-center mb-6">
           <h1 className="text-5xl font-bold mb-4 text-balance">{t("home.heroTitle")}</h1>
-          <p className="text-xl text-muted-foreground text-balance max-w-2xl mx-auto">{t("home.heroDescription")}</p>
+          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">{t("home.heroDescription")}</p>
         </div>
 
         {/* Upload Section */}
@@ -200,6 +232,19 @@ export default function Home() {
                     {isDetecting ? t("home.detecting") : t("home.detectButton")}
                   </Button>
                 </div>
+
+                {isDetecting && (
+                  <div className="space-y-2 pt-4">
+                    <Progress 
+                      value={isProcessing ? undefined : uploadProgress} 
+                      className="w-full" 
+                    />
+                    <p className="text-sm text-center text-muted-foreground">
+                      {isProcessing ? t("home.processingFile") 
+                        : `${t("home.uploading")} ${uploadProgress}%`}
+                    </p>
+                  </div>
+                )}
 
                 {!user && <p className="text-sm text-muted-foreground text-center">{t("home.loginToSave")}</p>}
               </div>

@@ -1,7 +1,19 @@
 {
-  "/pokedex/page": "app/pokedex/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/achievements/page": "app/achievements/page.js",
+  "/dog/[slug]/page": "app/dog/[slug]/page.js",
+  "/history/page": "app/history/page.js",
   "/page": "app/page.js",
+  "/live/page": "app/live/page.js",
+  "/pokedex/page": "app/pokedex/page.js",
+  "/pricing/page": "app/pricing/page.js",
+  "/results/page": "app/results/page.js",
   "/profile/page": "app/profile/page.js",
+  "/admin/feedback/page": "app/admin/feedback/page.js",
+  "/admin/images/page": "app/admin/images/page.js",
   "/admin/models/page": "app/admin/models/page.js",
-  "/admin/page": "app/admin/page.js"
+  "/admin/page": "app/admin/page.js",
+  "/admin/histories/page": "app/admin/histories/page.js",
+  "/admin/users/page": "app/admin/users/page.js",
+  "/admin/usage/page": "app/admin/usage/page.js"
 }

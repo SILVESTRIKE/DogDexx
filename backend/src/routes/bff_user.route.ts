@@ -1,8 +1,10 @@
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken } from '../controllers/bff_user.controller';
+import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
+import { uploadAvatar } from '../middlewares/upload.middleware';
+import { RegisterSchema } from '../types/zod/user.zod';
 
 const router = Router();
 
@@ -16,11 +18,15 @@ const router = Router();
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
  *               username:
+ *                 type: string
+ *               firstName:
+ *                 type: string
+ *               lastName:
  *                 type: string
  *               email:
  *                 type: string
@@ -28,11 +34,15 @@ const router = Router();
  *               password:
  *                 type: string
  *                 format: password
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *                 description: File ảnh đại diện (tùy chọn).
  *     responses:
  *       201:
  *         description: Đăng ký thành công, chờ xác thực OTP.
  */
-router.post('/register', register);
+router.post('/register', uploadAvatar, validateData(RegisterSchema.shape.body, 'body'), register);
 
 /**
  * @swagger
@@ -127,6 +137,30 @@ router.get('/profile', authMiddleware, getProfile);
  */
 router.put('/profile', authMiddleware, updateProfile);
 
+/**
+ * @swagger
+ * /bff/user/avatar:
+ *   put:
+ *     summary: (BFF) Cập nhật ảnh đại diện
+ *     tags: [BFF-User]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Tải lên và thay đổi ảnh đại diện của người dùng. Avatar cũ sẽ được đánh dấu xóa.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Cập nhật ảnh đại diện thành công.
+ */
+router.put('/avatar', authMiddleware, uploadAvatar, updateAvatar);
 /**
  * @swagger
  * /bff/user/logout:

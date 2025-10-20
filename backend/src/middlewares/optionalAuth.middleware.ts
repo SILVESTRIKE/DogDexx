@@ -4,6 +4,7 @@ import { userService } from "../services/user.service";
 import { PlainUser } from "../services/user.service";
 import { IncomingMessage } from 'http';
 import { parse } from 'url';
+import { logger } from '../utils/logger.util';
 
 interface JwtPayload {
   userId: string;
@@ -40,15 +41,15 @@ export const authenticateSocket = async (req: IncomingMessage, callback: () => v
       if (user) {
         // Gắn user vào request để controller có thể sử dụng
         (req as any).user = user;
-        console.log(`[SocketAuth] User ${user.username} authenticated for WebSocket.`);
+        logger.info(`[SocketAuth] User ${user.username} authenticated for WebSocket.`);
       } else {
-        console.log(`[SocketAuth] Token valid, but user not found.`);
+        logger.warn(`[SocketAuth] Token valid, but user not found for token.`);
       }
     } catch (error) {
-      console.log(`[SocketAuth] Invalid token for WebSocket: ${(error as Error).message}`);
+      logger.warn(`[SocketAuth] Invalid token for WebSocket: ${(error as Error).message}`);
     }
   } else {
-    console.log('[SocketAuth] No token provided for WebSocket connection. Continuing as guest.');
+    logger.info('[SocketAuth] No token provided for WebSocket connection. Continuing as guest.');
   }
 
   // Luôn gọi callback để tiếp tục xử lý, dù có xác thực thành công hay không

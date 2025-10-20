@@ -11,23 +11,23 @@ export function LanguageToggle() {
   const mounted = useMounted()
 
   if (!mounted) {
-    return <Button variant="outline" size="icon" className="h-9 w-9 bg-muted animate-pulse" />;
+    return <Button variant="outline" size="icon" className="h-9 w-9 bg-muted animate-pulse rounded-full" />;
   }
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="icon">
+        <Button variant="outline" size="icon" className="rounded-full">
           <Languages className="h-[1.2rem] w-[1.2rem]" />
-          <span className="sr-only">{mounted ? t("language.toggle") : "Change language"}</span>
+          <span className="sr-only">{t("language.toggle")}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem onClick={() => setLocale("vi")} className={locale === "vi" ? "bg-accent" : ""}>
-          Tiếng Việt
+          {t('nav.vietnamese')}
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => setLocale("en")} className={locale === "en" ? "bg-accent" : ""}>
-          English
+          {t('nav.english')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

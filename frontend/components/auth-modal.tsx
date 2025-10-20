@@ -1,11 +1,13 @@
 "use client"
 
 import type React from "react"
+import { useRouter } from "next/navigation"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
 import { useI18n } from "@/lib/i18n-context"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -20,10 +22,14 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProps) {
   const { login, register, verifyOtp } = useAuth()
+  const router = useRouter()
   const { t } = useI18n()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [name, setName] = useState("")
+  const [username, setUsername] = useState("")
+  const [firstName, setFirstName] = useState("")
+  const [lastName, setLastName] = useState("")
+  const [avatar, setAvatar] = useState<File | null>(null)
   const [otp, setOtp] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -40,25 +46,38 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         if (mode === "login") {
           await login(email, password)
           // Nếu login thành công, đóng modal
+          toast.success(t('auth.loginTitle') + " " + t('common.success').toLowerCase());
           resetAndClose()
+          router.refresh() // QUAN TRỌNG: Làm mới trạng thái server và client
+          router.push("/") // SỬA LỖI: Điều hướng về trang chủ sau khi đăng nhập
         } else { // mode === 'register'
-          if (!name.trim()) {
-            setError(t("auth.errorNameRequired"))
+          if (!username.trim()) {
+            setError(t("auth.errorUsernameRequired"))
             return
           }
-          const response = await register(email, password, name)
+          const response = await register({
+            email,
+            password,
+            username,
+            firstName,
+            lastName,
+            avatar: avatar || undefined,
+          })
           setMessage(response.message || "Mã OTP đã được gửi tới email của bạn.")
           setView("otp") // Chuyển sang view nhập OTP
         }
       } else { // view === 'otp'
         await verifyOtp(email, otp)
-        setMessage("Xác thực thành công! Vui lòng đăng nhập.")
+        setMessage(t('auth.otpSuccess'))
         setView("form")
         onSwitchMode("login") // Tự động chuyển sang tab login
       }
     } catch (err: any) {
       // Handle specific API errors or show a general message
-      setError(err.message || t("auth.errorGeneral"))
+      // SỬA ĐỔI: Sử dụng toast để hiển thị lỗi thay vì state
+      toast.error(t('auth.loginTitle') + " " + t('common.failed').toLowerCase(), {
+        description: err.message || t("auth.errorGeneral"),
+      });
     } finally {
       setIsLoading(false)
     }
@@ -67,7 +86,10 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   const resetAndClose = () => {
     setEmail("")
     setPassword("")
-    setName("")
+    setUsername("")
+    setFirstName("")
+    setLastName("")
+    setAvatar(null)
     setOtp("")
     setError("")
     setMessage("")
@@ -76,7 +98,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   }
 
   return (
-    <Dialog open={isOpen} onOpencha-hiddenge={resetAndClose}>
+    <Dialog open={isOpen} onOpenChange={resetAndClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</DialogTitle>
@@ -86,19 +108,45 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         </DialogHeader>
 
         {view === "form" ? (
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
             {mode === "register" && (
-              <div className="space-y-2">
-                <Label htmlFor="name">{t("auth.name")}</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t("auth.namePlaceholder")}
-                  required
-                />
-              </div>
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="firstName">{t("auth.firstName")} ({t('auth.optional')})</Label>
+                    <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Văn" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="lastName">{t("auth.lastName")} ({t('auth.optional')})</Label>
+                    <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="A" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="username">{t("auth.username")}</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder={t("auth.usernamePlaceholder")}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="avatar">{t("auth.avatar")}</Label>
+                  <Input
+                    id="avatar"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        setAvatar(e.target.files[0])
+                      }
+                    }}
+                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                  />
+                </div>
+              </>
             )}
             <div className="space-y-2">
               <Label htmlFor="email">{t("auth.email")}</Label>
@@ -126,8 +174,8 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             </div>
           </form>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-4 flex flex-col items-center">
-            <Label htmlFor="otp">Nhập mã OTP</Label>
+          <form id="otp-form" onSubmit={handleSubmit} className="space-y-4 flex flex-col items-center">
+            <Label htmlFor="otp">{t('auth.enterOtp')}</Label>
             <InputOTP maxLength={6} value={otp} onChange={setOtp}>
               <InputOTPGroup>
                 <InputOTPSlot index={0} />
@@ -145,11 +193,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
         {message && !error && <p className="text-sm text-green-600 text-center">{message}</p>}
 
-        <Button type="submit" form="auth-form" className="w-full" disabled={isLoading} onClick={handleSubmit}>
+        <Button type="submit" form={view === 'form' ? 'auth-form' : 'otp-form'} className="w-full" disabled={isLoading}>
           {isLoading
             ? t("auth.processing")
             : view === "otp"
-            ? "Xác thực"
+            ? t("auth.verify")
             : mode === "login"
             ? t("auth.loginButton")
             : t("auth.registerButton")}

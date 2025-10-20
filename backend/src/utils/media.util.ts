@@ -21,13 +21,18 @@ const transformPaths = (data: any, baseUrl: string): any => {
     }
 
     if (typeof obj.mediaPath === 'string') {
-        obj.mediaUrl = createUrl(obj.mediaPath);
+        obj.mediaUrl = createUrl(obj.mediaPath); // Đổi thành mediaUrl cho mục đích chung
         delete obj.mediaPath;
     }
 
     if (typeof obj.imagePath === 'string') {
         obj.imageUrl = createUrl(obj.imagePath);
         delete obj.imagePath;
+    }
+
+    if (typeof obj.avatarPath === 'string') {
+        obj.avatarUrl = createUrl(obj.avatarPath);
+        delete obj.avatarPath;
     }
 
     if (typeof obj.processedMediaPath === 'string') {

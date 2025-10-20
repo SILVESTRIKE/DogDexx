@@ -2,7 +2,7 @@ import { DogBreedWikiModel, DogBreedWikiDoc } from '../models/dogs_wiki.model';
 import { ConflictError, NotFoundError } from '../errors';
 
 // Các tùy chọn cho việc lấy danh sách
-interface QueryOptions {
+export interface QueryOptions {
   page: number;
   limit: number;
   search?: string;
@@ -12,6 +12,8 @@ interface QueryOptions {
   shedding_level?: number;
   suitable_for?: string;
   sort?: string;
+  ids?: string[]; // Dùng để lọc các ID cụ thể
+  excludeIds?: string[]; // Dùng để loại trừ các ID
 }
 
 export const wikiService = {
@@ -57,6 +59,7 @@ export const wikiService = {
       slug: { $in: slugs },
       isDeleted: false,
     });
+
     return breeds;
   },
 
@@ -64,11 +67,22 @@ export const wikiService = {
    * READ (Multiple): Lấy danh sách tất cả các giống chó (có phân trang và tìm kiếm)
    */
   async getAllBreeds(options: QueryOptions) {
-    const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for } = options;
+    const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for, ids, excludeIds } = options;
     const skip = (page - 1) * limit;
 
-    const allowedSortFields = ['breed', 'energy_level', 'trainability', 'shedding_level', 'maintenance_difficulty'];
-    const sortField = allowedSortFields.includes(options.sort || '') ? options.sort : 'breed';
+    // Logic sắp xếp linh hoạt hơn
+    const allowedSortFields = ['breed', 'energy_level', 'trainability', 'shedding_level', 'maintenance_difficulty', 'rarity_level'];
+    let sortOption: { [key: string]: 1 | -1 } = { breed: 1 }; // Mặc định sắp xếp theo tên A-Z
+
+    if (options.sort) {
+      const [field, direction] = options.sort.split('-');
+      // const field = `breed.${lang}`; // Sắp xếp theo ngôn ngữ
+      if (field === 'name' && allowedSortFields.includes('breed')) {
+        sortOption = { breed: direction === 'desc' ? -1 : 1 };
+      } else if (allowedSortFields.includes(field)) {
+        sortOption = { [field]: direction === 'desc' ? -1 : 1 };
+      }
+    }
 
     // Lấy tất cả breed nếu isDeleted không phải là true
     const query: any = { isDeleted: { $ne: true } };
@@ -87,23 +101,30 @@ export const wikiService = {
     if (shedding_level) query.shedding_level = shedding_level;
     if (suitable_for) query.suitable_for = suitable_for;
 
+    // SỬA LỖI: Sử dụng `ids` và `excludeIds` đã được controller chuẩn bị
+    if (ids) {
+      query._id = { $in: ids };
+    } else if (excludeIds) {
+      query._id = { $nin: excludeIds };
+    }
+
     // Thực hiện 2 truy vấn song song để tối ưu
     const [breeds, total] = await Promise.all([
       DogBreedWikiModel.find(query)
-        // Sắp xếp theo trường được chỉ định hoặc mặc định là display_name
-        .sort({ [sortField!]: 1 })
+        .sort(sortOption)
         .skip(skip)
-        .limit(limit)
-        .lean(), // Sử dụng .lean() để tăng hiệu năng, trả về plain JS object
+        .limit(limit),
       DogBreedWikiModel.countDocuments(query)
     ]);
     
     return {
       data: breeds,
-      total,
-      page,
-      limit,
-      totalPages: Math.ceil(total / limit),
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      }
     };
   },
 

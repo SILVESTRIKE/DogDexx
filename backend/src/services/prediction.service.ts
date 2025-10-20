@@ -20,8 +20,7 @@ interface StreamResultPayload {
   media_type: string;
   detections: IYoloPrediction[];
 }
-
-import { BatchProcessor } from '../utils/BatchProcessor';
+import { BatchProcessor } from '../utils/BatchProcessor.util';
 
 const batchProcessor = new BatchProcessor(8, 200);
 
@@ -100,6 +99,7 @@ export const predictionService = {
           predictions: result.predictions,
           processedMediaPath: publicUrl,
           modelUsed: 'YOLOv8_image_batch',
+          source: 'image_upload',
         });
 
         const populatedPrediction = await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([
@@ -147,29 +147,39 @@ export const predictionService = {
       directory_id = user.directory_id;
     }
 
-        // Chuyển đổi đường dẫn vật lý thành URL có thể truy cập
-        const relativePath = path.relative(path.join(__dirname, '../../public'), physicalPath).replace(/\\/g, '/');
-        const mediaUrl = `/public/${relativePath}`;
+    // SỬA LỖI: Chuyển đổi đường dẫn vật lý thành URL có thể truy cập
+    // physicalPath có dạng 'uploads\image\2024\05\filename.jpg'
+    // SỬA LỖI: Chỉ lưu đường dẫn tương đối (bắt đầu từ 'uploads'), không bao gồm '/public'.
+    const mediaUrl = physicalPath.replace(/\\/g, '/');
 
-        const newMedia = new MediaModel({
-          name: originalFilename, mediaPath: mediaUrl, creator_id: userId, directory_id, type,
-        });
-        
-        const formData = new FormData();
-        formData.append("file", fs.createReadStream(physicalPath), { filename: originalFilename });
+    const newMedia = new MediaModel({
+      name: originalFilename, mediaPath: mediaUrl, creator_id: userId, directory_id, type,
+    });
+    await newMedia.save();
 
-        const endpoint = type === "image" ? "/predict/image" : "/predict/video";
-        const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
-          headers: { ...formData.getHeaders() },
-          timeout: type === 'video' ? 300000 : 180000, // Tăng timeout ảnh lên 3 phút (180s)
-        }).catch(error => {
-            console.error("Lỗi khi gọi AI Service:", error.response?.data || error.message);
-            throw new BadRequestError("Không thể kết nối đến dịch vụ AI. Vui lòng thử lại sau.");
-        });
-        
-        await newMedia.save();
+    let predictionResult;
 
-        const predictionResult = response.data;
+    // *** THAY ĐỔI QUAN TRỌNG: SỬ DỤNG BATCH PROCESSOR CHO ẢNH ***
+    if (type === 'image') {
+      const predictionId = uuidv4(); // Tạo ID tạm thời để theo dõi
+      predictionResult = await batchProcessor.add({
+        id: predictionId,
+        userId,
+        file,
+        mediaType: 'image',
+        resolve: () => {}, // Sẽ được BatchProcessor ghi đè
+        reject: () => {},  // Sẽ được BatchProcessor ghi đè
+      });
+    } else { // Giữ nguyên logic cũ cho video
+      const formData = new FormData();
+      formData.append("file", fs.createReadStream(physicalPath), { filename: originalFilename });
+      const response = await axios.post(`${AI_SERVICE_URL}/predict/video`, formData, {
+        headers: { ...formData.getHeaders() },
+        timeout: 300000,
+      });
+      predictionResult = response.data;
+    }
+
         if (!predictionResult?.predictions || !predictionResult?.processed_media_base64) {
           throw new Error("Kết quả từ AI service không hợp lệ.");
         }
@@ -203,6 +213,7 @@ export const predictionService = {
           predictions: predictionResult.predictions,
           processedMediaPath: publicUrl,
           modelUsed: `YOLOv8_${type}_upload`,
+          source: `${type}_upload` as 'image_upload' | 'video_upload',
         });
 
         if (userId) {
@@ -266,6 +277,7 @@ export const predictionService = {
       predictions: payload.detections,
       processedMediaPath: publicUrl,
       modelUsed: `YOLOv8_stream`,
+      source: 'stream_capture',
     });
 
     if (userId) {

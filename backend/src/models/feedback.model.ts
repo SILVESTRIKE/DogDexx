@@ -18,8 +18,8 @@ const feedbackSchema = new Schema<FeedbackDoc>(
       ref: "PredictionHistory",
       required: true,
       unique: true,
-    },
-    user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    }, // Cho phép guest gửi feedback
+    user_id: { type: Schema.Types.ObjectId, ref: "User", required: false },
     user_submitted_label: { type: String, trim: true },
     notes: { type: String, trim: true },
     status: {

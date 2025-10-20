@@ -24,7 +24,6 @@ import bffPredictionRoutes from './routes/bff_prediction.route';
 import bffCollectionRoutes from './routes/bff_collection.route';
 import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
-import bffRealtimeRoutes from './routes/bff_realtime.route';
 import achievementRoute from './routes/achievement.route';
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
@@ -40,9 +39,7 @@ const allowedOrigins = [
 ];
 
 const corsOptions = {
-  // Sử dụng một function cho origin để xử lý linh hoạt hơn
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Cho phép các request không có origin (ví dụ: từ Postman, curl, hoặc same-origin requests)
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -60,38 +57,35 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
 app.use(Fingerprint());
 
-// Cấu hình thư mục public để phục vụ các file tĩnh (ảnh, video,...)
-const publicDirectory = path.join(__dirname, "..", "public");
-app.use('/public', express.static(publicDirectory));
-
 // --- Swagger Routes ---
-// This route serves the generated swagger.json file
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
 
-// This route serves the Swagger UI, pointing it to the .json file
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(undefined, {
-  swaggerUrl: '/api-docs.json', // Tell UI where to find the spec
+  swaggerUrl: '/api-docs.json',
   swaggerOptions: { tryItOutEnabled: true }
 }));
 
 app.get("/test", (req, res) => {
-  // Di chuyển configureViewEngine xuống đây để nó không ảnh hưởng đến các route khác
   configureViewEngine(app);
   res.render("test");
 });
 
-// BFF Routes
+// 1. Middleware phục vụ file tĩnh
+const publicDirectory = path.join(__dirname, "..", "public");
+app.use('/public', express.static(publicDirectory));
+
+// 2. BFF (Backend-for-Frontend) Routes
 app.use('/bff/user', bffUserRoutes);
 app.use('/bff/predict', bffPredictionRoutes);
 app.use('/bff/collection', bffCollectionRoutes);
 app.use('/bff/content', bffContentRoutes);
 app.use('/bff/admin', bffAdminRoutes);
-app.use('/bff/live', bffRealtimeRoutes);
-
-// Core API Routes (Legacy or for other purposes)
+ 
+// 3. Core API Routes
+app.use(analyticsRoutes);
 app.use(authRoutes);
 app.use(achievementRoute);
 app.use(userRoutes);
@@ -100,10 +94,10 @@ app.use(mediasRouter);
 app.use(wikiRoutes);
 app.use(collectionRoutes);
 app.use(adminFeedbackRouter);
-app.use(analyticsRoutes);
 app.use(aiModelsRoutes);
 app.use(predictionHistoryRouter);
 app.use(adminPredictionHistoryRouter);
 
+// 4. Middleware xử lý lỗi cuối cùng
 app.use(errorHandlerMiddleware);
 export default app;

@@ -4,7 +4,7 @@ export type UserRole = "user" | "premium" | "admin";
 
 // Cấu trúc cho một thành tích đã mở khóa được nhúng vào User
 export interface UnlockedAchievement {
-  key: string; 
+  key: string;
   unlockedAt: Date;
 }
 
@@ -18,7 +18,7 @@ export type UserDoc = Document & {
   // Thông tin cá nhân
   firstName?: string;
   lastName?: string;
-  avatarUrl?: string;
+  avatarPath?: string;
 
   //bao Mat
   verify: boolean;
@@ -41,87 +41,65 @@ export type UserDoc = Document & {
 
 const userSchema = new Schema<UserDoc>(
   {
-    username: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    username: { type: String, required: true, unique: true, trim: true },
     email: {
       type: String,
       required: true,
       unique: true,
       trim: true,
-      lowercase: true
+      lowercase: true,
     },
-    password: {
-      type: String,
-      required: true,
-      select: false,
-    },
+    password: { type: String, required: true, select: false },
     role: {
       type: String,
       enum: ["user", "premium", "admin"],
       default: "user",
       required: true,
     },
-
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
-    avatarUrl: { type: String, trim: true },
-    
-    directory_id: {
-      type: Schema.Types.ObjectId,
-      ref: "Directory",
-    },
-    verify: {
-      type: Boolean,
-      default: false,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-      select: false,
-    },
-
-    photoUploadsThisWeek: {
-      type: Number,
-      default: 0,
-    },
-    videoUploadsThisWeek: {
-      type: Number,
-      default: 0,
-    },
-    lastUsageResetAt: {
-      type: Date,
-      default: () => new Date(),
-    },
-
-    achievements: [{
-      _id: false, // Không cần _id cho sub-document
-      key: { type: String, required: true },
-      unlockedAt: { type: Date, required: true, default: Date.now }
-    }]
+    avatarPath: { type: String, trim: true },
+    directory_id: { type: Schema.Types.ObjectId, ref: "Directory" },
+    verify: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false, select: false },
+    photoUploadsThisWeek: { type: Number, default: 0 },
+    videoUploadsThisWeek: { type: Number, default: 0 },
+    lastUsageResetAt: { type: Date, default: () => new Date() },
+    achievements: [
+      {
+        _id: false,
+        key: { type: String, required: true },
+        unlockedAt: { type: Date, required: true, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "users",
     toJSON: {
+      virtuals: true,
       transform: (doc: any, ret: any) => {
-        ret.id = ret._id.toString();
-        delete ret._id;
+        ret.id = ret._id.toString(); 
+        ret._id = ret._id.toString(); 
+        
+        if (ret.directory_id) {
+            ret.directory_id = ret.directory_id.toString();
+        }
+        
         delete ret.__v;
         delete ret.password;
         delete ret.isDeleted;
       },
     },
     toObject: {
-      virtuals: true,
       transform(doc: any, ret: any) {
         ret.id = ret._id.toString();
-        if (ret.directory_id instanceof Types.ObjectId) {
-          ret.directory_id = ret.directory_id.toString();
+        ret._id = ret._id.toString();
+
+        if (ret.directory_id) {
+            ret.directory_id = ret.directory_id.toString();
         }
-        delete ret._id;
+
         delete ret.__v;
         delete ret.password;
         delete ret.isDeleted;

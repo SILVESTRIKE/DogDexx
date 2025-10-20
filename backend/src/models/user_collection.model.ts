@@ -1,20 +1,62 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
-export interface UserCollectionDoc extends Document {
-  user_id: Types.ObjectId; // Liên kết tới User
+/**
+ * Đại diện cho một giống chó đã được sưu tầm, được nhúng trong Pokedex.
+ */
+export interface CollectedBreed {
   breed_id: Types.ObjectId; // Liên kết tới DogBreedWiki
-  first_collected_at: Date;
+  first_prediction_id: Types.ObjectId; // Tham chiếu đến lần dự đoán đầu tiên
   collection_count: number;
 }
 
-const userCollectionSchema = new Schema<UserCollectionDoc>({
-  user_id: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  breed_id: { type: Schema.Types.ObjectId, ref: 'DogBreedWiki', required: true },
-  first_collected_at: { type: Date, default: Date.now },
-  collection_count: { type: Number, default: 1 },
-}, { timestamps: true, collection: 'user_collections' });
+/**
+ * Đại diện cho toàn bộ Pokedex của một người dùng.
+ * Mỗi người dùng chỉ có MỘT document trong collection này.
+ */
+export interface UserCollectionDoc extends Document {
+  user_id: Types.ObjectId; // Liên kết tới User, là duy nhất
+  collectedBreeds: CollectedBreed[];
+  isDeleted: boolean;
+}
 
-// Rất quan trọng: Đảm bảo một user chỉ có một bản ghi duy nhất cho mỗi giống chó
-userCollectionSchema.index({ user_id: 1, breed_id: 1 }, { unique: true });
+const collectedBreedSchema = new Schema<CollectedBreed>({
+  breed_id: { type: Schema.Types.ObjectId, ref: 'DogBreedWiki', required: true },
+  first_prediction_id: { type: Schema.Types.ObjectId, ref: 'PredictionHistory', required: true },
+  collection_count: { type: Number, default: 1 },
+}, { _id: false });
+
+const userCollectionSchema = new Schema<UserCollectionDoc>({
+  user_id: { 
+    type: Schema.Types.ObjectId, 
+    ref: 'User', 
+    required: true, 
+    unique: true, // Đảm bảo mỗi user chỉ có 1 Pokedex
+    index: true 
+  },
+  collectedBreeds: [collectedBreedSchema],
+  isDeleted: { type: Boolean, default: false, select: false },
+}, { 
+  timestamps: true, 
+  collection: 'user_collections', // Đổi tên collection cho nhất quán
+  toJSON: {
+    virtuals: true,
+    transform: (doc: any, ret: any) => {
+      ret.id = ret._id.toString();
+      delete ret._id;
+      delete ret.__v;
+      delete ret.isDeleted;
+    },
+  },
+  toObject: {
+    virtuals: true,
+    transform: (doc: any, ret: any) => {
+      ret.id = ret._id.toString();
+      delete ret._id;
+    },
+  },
+});
+
+// Index trên mảng con để tối ưu truy vấn
+userCollectionSchema.index({ 'collectedBreeds.breed_id': 1 });
 
 export const UserCollectionModel = mongoose.model<UserCollectionDoc>('UserCollection', userCollectionSchema);

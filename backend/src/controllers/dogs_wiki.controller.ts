@@ -1,11 +1,12 @@
 import { Request, Response } from 'express';
-import { wikiService } from '../services/dogs_wiki.service';
+import { wikiService, QueryOptions } from '../services/dogs_wiki.service';
+import { transformMediaURLs } from '../utils/media.util';
 
 export const wikiController = {
   // === PUBLIC ROUTES ===
   async getBySlug(req: Request, res: Response) {
     const data = await wikiService.getBreedBySlug(req.params.slug);
-    res.status(200).json({ data });
+    res.status(200).json({ data: transformMediaURLs(req, data) });
   },
   
   async getAll(req: Request, res: Response) {
@@ -17,11 +18,15 @@ export const wikiController = {
       group: req.query.group as string | undefined,
       energy_level: req.query.energy_level ? parseInt(req.query.energy_level as string, 10) : undefined,
       trainability: req.query.trainability ? parseInt(req.query.trainability as string, 10) : undefined,
-    };
+      shedding_level: req.query.shedding_level ? parseInt(req.query.shedding_level as string, 10) : undefined,
+      suitable_for: req.query.suitable_for as string | undefined,
+    } as QueryOptions;
     // Xóa các key có giá trị undefined để không gửi chúng đến service
     Object.keys(options).forEach(key => options[key as keyof typeof options] === undefined && delete options[key as keyof typeof options]);
-    const result = await wikiService.getAllBreeds(options);
-    res.status(200).json(result);
+    const paginatedResult = await wikiService.getAllBreeds(options);
+    // Chuyển đổi URL cho mảng data
+    paginatedResult.data = transformMediaURLs(req, paginatedResult.data);
+    res.status(200).json(paginatedResult);
   },
 
   // === ADMIN ROUTES ===

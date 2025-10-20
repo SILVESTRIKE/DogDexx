@@ -3,133 +3,116 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from "react"
 import { apiClient } from "./api-client"
 import { useAuth } from "./auth-context"
-import type { Achievement, CollectionStats } from "./types"
+import type { Achievement, CollectionSource } from "./types"
 import { toast } from "sonner"
+import { useI18n } from "./i18n-context"
 
 interface CollectionContextType {
-  collectedDogs: Set<string>
+  collectedDogs: Map<string, { collectedAt: string | null; source: CollectionSource | null; }>
   toggleCollected: (dogSlug: string) => Promise<void>
-  setInitialCollection: (breeds: any[], stats: CollectionStats) => void
   isCollected: (dogSlug: string) => boolean
-  collectionCount: number
   unlockedAchievements: Achievement[]
-  collectionStats: CollectionStats | null
+  collectionStats: {
+    totalBreeds: number;
+    collectedBreeds: number;
+    progress: number;
+  } | null
+  achievementStats: {
+    totalAchievements: number;
+    unlockedAchievements: number;
+    totalCollected: number;
+  } | null
   refreshCollection: () => Promise<void>
 }
 
 const CollectionContext = createContext<CollectionContextType | undefined>(undefined)
 
 export function CollectionProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  const [collectedDogs, setCollectedDogs] = useState<Set<string>>(new Set())
-  const [unlockedAchievements, setUnlockedAchievements] = useState<Achievement[]>([])
-  const [collectionStats, setCollectionStats] = useState<CollectionStats | null>(null)
-  const [isLoaded, setIsLoaded] = useState(false)
+  const { user } = useAuth() // Dùng user từ auth context
+  const { locale } = useI18n()
+  const [collectedDogs, setCollectedDogs] = useState<Map<string, { collectedAt: string | null; source: CollectionSource | null; }>>(new Map())
+  const [unlockedAchievements, setUnlockedAchievements] = useState<Achievement[]>([]) // Giữ lại để có thể dùng ở đâu đó khác
+  const [collectionStats, setCollectionStats] = useState<CollectionContextType['collectionStats']>(null)
+  const [achievementStats, setAchievementStats] = useState<CollectionContextType['achievementStats']>(null)
 
-  // Hàm này sẽ được gọi từ PokedexPage để khởi tạo dữ liệu
-  const setInitialCollection = useCallback((breeds: any[], stats: CollectionStats) => {
-    const collectedSlugs = new Set<string>(
-      breeds.filter((breed: { isCollected: boolean }) => breed.isCollected).map((breed: { slug: string }) => breed.slug)
-    )
-    setCollectedDogs(collectedSlugs)
-    setCollectionStats(stats)
-    setIsLoaded(true)
-  }, [])
-
-  useEffect(() => {
-    const loadCollection = async () => {
-      if (!user) { // Chỉ xử lý cho guest
-        const stored = localStorage.getItem("dogdex-collection")
-        if (stored) {
-          try {
-            const parsedData: unknown = JSON.parse(stored)
-            // Ensure parsedData is an array of strings before creating a Set.
-            if (Array.isArray(parsedData) && parsedData.every(item => typeof item === 'string')) {
-              setCollectedDogs(new Set(parsedData as string[]))
-            }
-          } catch (e) {
-            console.error("[v0] Failed to parse collection data", e)
-          }
-        }
-        setIsLoaded(true)
-      }
-    }
-
-    loadCollection()
-  }, [user])
-
-  useEffect(() => {
-    if (isLoaded && !user) {
-      localStorage.setItem("dogdex-collection", JSON.stringify(Array.from(collectedDogs)))
-    }
-  }, [collectedDogs, isLoaded, user])
-
-  const toggleCollected = async (dogSlug: string) => {
+  // Hàm tải dữ liệu có thể tái sử dụng
+  const loadCollectionData = useCallback(async () => {
     if (user) {
       try {
-        const isCurrentlyCollected = collectedDogs.has(dogSlug)
+        // Sử dụng Promise.all để tải song song
+        const [pokedexResponse, achievementsResponse] = await Promise.all([
+          apiClient.getPokedex({ limit: 9999, isCollected: 'true' }),
+          apiClient.getAchievements(locale)
+        ]);
 
+        // Xử lý Pokedex
+        const collectedMap = new Map<string, { collectedAt: string | null; source: CollectionSource | null; }>();
+        pokedexResponse.breeds.forEach((b: any) => {
+          collectedMap.set(b.slug, { collectedAt: b.collectedAt, source: b.source });
+        });
+        setCollectedDogs(collectedMap);
+        setCollectionStats(pokedexResponse.stats);
+
+        // Xử lý Achievements
+        setUnlockedAchievements(achievementsResponse.achievements || []);
+        setAchievementStats(achievementsResponse.stats);
+
+      } catch (error) {
+        console.error("[v0] Failed to load user collection:", error);
+      }
+    } else { // Guest
+      // Guest logic can be simplified or removed if not needed
+      setCollectedDogs(new Map());
+      setCollectionStats(null);
+      setAchievementStats(null);
+    }
+  }, [user, locale]);
+
+  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất)
+  useEffect(() => {
+    loadCollectionData();
+  }, [loadCollectionData, user]);
+
+  const toggleCollected = async (dogSlug: string) => {
+    // Logic này về cơ bản đã đúng, chỉ cần đảm bảo nó cập nhật state một cách nhất quán
+    const isCurrentlyCollected = collectedDogs.has(dogSlug);
+
+    if (user) {
+      try {
         if (!isCurrentlyCollected) {
-          await apiClient.addToCollection(dogSlug)
-          toast.success("Breed added to your collection!")
-          setCollectedDogs((prev) => {
-            const newSet = new Set(prev)
-            newSet.add(dogSlug)
-            return newSet
-          })
-          // Tăng số lượng đã sưu tầm trong stats
-          setCollectionStats(prev => prev ? { ...prev, collectedBreeds: (prev.collectedBreeds || 0) + 1 } : null)
+          await apiClient.addToCollection(dogSlug);
+          toast.success("Breed added to your collection!");
+          // Refresh data to get the latest state from the server
+          await refreshCollection();
+          setCollectionStats(prev => prev ? { ...prev, collectedBreeds: prev.collectedBreeds + 1 } : null);
         } else {
-          // TODO: Implement API để xóa khỏi collection
-          toast.warning("Removing from collection is not yet supported.")
-          // setCollectedDogs((prev) => {
-          //   const newSet = new Set(prev)
-          //   newSet.delete(dogSlug)
-          //   return newSet
-          // })
-          // setCollectionStats(prev => prev ? { ...prev, collectedBreeds: (prev.collectedBreeds || 1) - 1 } : null)
+          // Logic để xóa (khi API được implement)
+          toast.warning("Removing from collection is not yet supported.");
         }
       } catch (error) {
-        console.error("[v0] Failed to toggle collection:", error)
+        toast.error("Failed to update collection.");
+        console.error("[v0] Failed to toggle collection:", error);
       }
-    } else {
-      setCollectedDogs((prev) => {
-        const newSet = new Set(prev)
-        if (newSet.has(dogSlug)) {
-          newSet.delete(dogSlug)
-        } else {
-          newSet.add(dogSlug)
-        }
-        return newSet
-      })
+    } else { // Guest user
+      toast.info("Please log in to manage your collection.");
     }
-  }
-
-  const isCollected = (dogSlug: string) => {
-    return collectedDogs.has(dogSlug)
-  }
-
-  const refreshCollection = async () => {
-    // Hàm này giờ chỉ cần để tải lại achievements nếu cần
-    if (!user) return;
-    try {
-      const achievementsResponse = await apiClient.getAchievements();
-      setUnlockedAchievements(achievementsResponse.achievements || []);
-    } catch (error) {
-      console.error("[v0] Failed to refresh achievements:", error);
-    }
-  }
+  };
+  
+  const isCollected = (dogSlug: string) => collectedDogs.has(dogSlug);
+  
+  const refreshCollection = useCallback(async () => {
+    await loadCollectionData();
+  }, [loadCollectionData]);
 
   return (
     <CollectionContext.Provider
       value={{
         collectedDogs,
         toggleCollected,
-        setInitialCollection,
         isCollected,
-        collectionCount: collectionStats?.collectedBreeds ?? collectedDogs.size,
         unlockedAchievements,
         collectionStats,
+        achievementStats,
         refreshCollection,
       }}
     >

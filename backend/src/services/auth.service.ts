@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { userService } from "./user.service";
+import { userService, PlainUser } from "./user.service";
 import { UserModel } from "../models/user.model";
 import { tokenService } from "./token.service";
 import { RefreshTokenModel } from "../models/refreshToken.model";
@@ -29,19 +29,26 @@ async function sendOtpEmail(
 }
 
 export const authService = {
-  async login(email: string, password: string) {
-    const user = await userService.getByEmail(email, true);
-    if (!user || !user.password) {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{
+    user: PlainUser;
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    const userDoc = await userService.getByEmail(email, true);
+    if (!userDoc || !userDoc.password) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, userDoc.password);
     if (!isMatch) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
 
-    if (!user.verify) {
-      await this.resendVerificationOtp(user.email).catch((err) =>
+    if (!userDoc.verify) {
+      await this.resendVerificationOtp(userDoc.email).catch((err) =>
         console.log(err.message)
       );
       throw new BadRequestError(
@@ -49,9 +56,12 @@ export const authService = {
       );
     }
 
-    const tokens = await tokenService.createTokens(user);
-    const { password: _, ...userWithoutPassword } = user;
-    return { user: userWithoutPassword, ...tokens };
+    const tokens = await tokenService.createTokens(userDoc);
+
+    // Bây giờ userDoc.toObject() đã hoạt động đúng và an toàn
+    const userObject = userDoc.toObject();
+
+    return { user: userObject, ...tokens };
   },
 
   async logout(refreshToken: string): Promise<void> {

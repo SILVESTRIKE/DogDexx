@@ -21,17 +21,18 @@ export const getBreedDetail = async (req: Request, res: Response, next: NextFunc
   // 2. Format the response
   const collectionStatus = {
     isCollected: !!userCollection,
-    collectedAt: userCollection?.first_collected_at || null,
+    // Lấy createdAt từ first_prediction_id đã được populate
+    collectedAt: (userCollection?.first_prediction_id as any)?.createdAt || null,
   };
 
-  const transformedMedia = relatedMedia.map(m => ({
-    // transformMediaURLs cần một object đầy đủ, nên ta tạo một object tạm
-    url: transformMediaURLs(req, { processedMediaPath: m.processedMediaPath } as any).processedMediaPath,
-    type: 'image' // Giả định tất cả đều là ảnh
+  // Correctly transform the array of related media objects
+  const transformedMedia = transformMediaURLs(req, relatedMedia).map((m: any) => ({
+    url: m.processedMediaUrl, // Use the correct transformed property name
+    type: 'image'
   }));
 
   res.status(200).json({
-    breed: breed.toObject(), // toObject() to get a plain JS object
+    breed: transformMediaURLs(req, breed.toObject()), // Chuyển đổi URL cho breed chính
     collectionStatus,
     media: transformedMedia,
   });

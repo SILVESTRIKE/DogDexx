@@ -7,8 +7,8 @@ import { AuthProvider } from "@/lib/auth-context"
 import { AnalyticsProvider } from "@/lib/analytics-context"
 import { I18nProvider } from "@/lib/i18n-context"
 import { ThemeProvider } from "@/components/theme-provider"
-import { Navbar } from "@/components/navbar"
 import { Suspense } from "react"
+import { AppLayout } from "@/components/app-layout"
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,16 +40,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} suppressHydrationWarning>
-      <body className="antialiased">
+      <body className="antialiased" style={{ '--navbar-height': '69px' } as React.CSSProperties}>
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
           <I18nProvider>
             <AuthProvider>
               <AnalyticsProvider>
                 <CollectionProvider>
-                  <Suspense fallback={<div>Loading...</div>}>
-                    <Navbar />
-                    {children}
-                  </Suspense>
+                  <AppLayout>{children}</AppLayout>
                 </CollectionProvider>
               </AnalyticsProvider>
             </AuthProvider>

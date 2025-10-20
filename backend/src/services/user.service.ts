@@ -4,8 +4,9 @@ import { OtpModel, OtpType } from "../models/otp.model";
 import { sendEmail } from "./email.service";
 import { RegisterType } from "../types/zod/user.zod";
 import mongoose, { Types, ClientSession } from "mongoose";
-import { BadRequestError, ConflictError } from "../errors";
+import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { DirectoryModel } from "../models/directory.model";
+import { MediaModel } from "../models/medias.model";
 
 export type PlainUser = {
   _id: Types.ObjectId;
@@ -14,7 +15,7 @@ export type PlainUser = {
   role: UserRole;
   firstName?: string;
   lastName?: string;
-  avatarUrl?: string;
+  avatarPath?: string;
   verify: boolean;
   directory_id: Types.ObjectId;
   isGuest?: boolean;
@@ -62,7 +63,9 @@ export const userService = {
   },
 
   async getById(id: string): Promise<PlainUser | null> {
-    return UserModel.findOne({ _id: id, isDeleted: false }).select("-password");
+    return UserModel.findOne({ _id: id, isDeleted: false })
+      .select("-password")
+      .lean() as Promise<PlainUser | null>; // Không cần populate nữa
   },
 
   async getByEmail(
@@ -73,24 +76,47 @@ export const userService = {
     return selectPassword ? query.select("+password") : query;
   },
 
-  async createUser(data: RegisterType): Promise<PlainUser> {
+  async createUser(data: RegisterType, avatarFile?: Express.Multer.File): Promise<PlainUser> {
     try {
-      const existed = await UserModel.findOne({ email: data.email });
-      if (existed) {
+      const [existedEmail, existedUsername] = await Promise.all([
+        UserModel.findOne({ email: data.email }),
+        UserModel.findOne({ username: data.username })
+      ]);
+
+      if (existedEmail) {
         throw new BadRequestError("Email đã tồn tại.");
+      }
+      if (existedUsername) {
+        throw new BadRequestError("Tên người dùng đã tồn tại.");
       }
 
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
       const user = new UserModel({ ...data, password: hashedPassword });
-      await user.save();
 
-      // Create a directory for the user
+      // Nếu có avatar, tạo bản ghi Media và lưu đường dẫn vào user
+      if (avatarFile) {
+        const avatarMedia = new MediaModel({
+          name: `avatar-${user.username}`,
+          mediaPath: avatarFile.path.replace(/\\/g, '/'),
+          creator_id: user._id,
+          type: 'image/avatar', // Đánh dấu đây là avatar
+        });
+        await avatarMedia.save();
+        user.avatarPath = avatarMedia.mediaPath;
+      }
+
+      // Tạo thư mục cho người dùng
       const directory = new DirectoryModel({
         name: user.username,
         creator_id: user._id,
       });
-      await directory.save();
+
+      // Lưu user và directory
+      await Promise.all([
+        user.save(),
+        directory.save()
+      ]);
 
       // Update the user with the directoryId
       user.directory_id = directory._id;
@@ -134,13 +160,60 @@ export const userService = {
     return { message: "OTP đã được gửi đến email của bạn" };
   },
 
+  async updateAvatar(userId: string, avatarFile: Express.Multer.File): Promise<UserDoc> {
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new NotFoundError("Không tìm thấy người dùng.");
+    }
+
+    // 1. Tìm và đánh dấu avatar cũ là isDeleted (nếu có)
+    if (user.avatarPath) {
+      await MediaModel.findOneAndUpdate({ mediaPath: user.avatarPath }, { isDeleted: true });
+    }
+
+    // 2. Tạo bản ghi Media mới cho avatar mới
+    const newAvatarMedia = new MediaModel({
+      name: `avatar-${user.username}-${Date.now()}`,
+      mediaPath: avatarFile.path.replace(/\\/g, '/'),
+      creator_id: user._id,
+      type: 'image/avatar',
+    });
+    await newAvatarMedia.save();
+
+    // 3. Cập nhật user với đường dẫn của avatar mới
+    user.avatarPath = newAvatarMedia.mediaPath;
+    await user.save();
+
+    // 4. Trả về user đã được cập nhật
+    const updatedUser = await UserModel.findById(userId).select('-password');
+    if (!updatedUser) throw new NotFoundError("Lỗi khi lấy thông tin người dùng sau khi cập nhật avatar.");
+    return updatedUser;
+  },
+
   async updateUser(
     id: string,
-    data: Partial<UserDoc>
+    data: Partial<UserDoc>,
+    avatarFile?: Express.Multer.File
   ): Promise<UserDoc | null> { // <-- Sửa lại kiểu trả về thành UserDoc
     if (data.password) {
       data.password = await bcrypt.hash(data.password, 10);
     }
+
+    const user = await UserModel.findById(id);
+    if (!user) {
+      throw new NotFoundError("Không tìm thấy người dùng.");
+    }
+
+    // Xử lý avatar nếu có file mới
+    if (avatarFile) {
+      // Đánh dấu avatar cũ là đã xóa (nếu có)
+      if (user.avatarPath) {
+        await MediaModel.findOneAndUpdate({ mediaPath: user.avatarPath }, { isDeleted: true });
+      }
+      // Cập nhật đường dẫn avatar mới
+      data.avatarPath = avatarFile.path.replace(/\\/g, '/');
+    }
+
     const updatedUser = await UserModel.findOneAndUpdate(
       { _id: id, isDeleted: false },
       data,

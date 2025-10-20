@@ -1,4 +1,3 @@
-// bff prediction_controller.ts
 import { Request, Response, NextFunction } from "express";
 import WebSocket from "ws";
 import { Types } from "mongoose";
@@ -9,12 +8,13 @@ import { transformMediaURLs } from "../utils/media.util";
 import { feedbackService } from "../services/feedback.service";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PredictionHistoryDoc } from "../models/prediction_history.model";
-import { UserModel, UnlockedAchievement } from "../models/user.model"; // THÊM IMPORT
+import { UserModel, UnlockedAchievement } from "../models/user.model";
 import { collectionService } from "../services/user_collections.service";
 import { achievementService } from "../services/achievement.service";
-import { userService } from "../services/user.service"; // THÊM IMPORT
-import { predictionHistoryController } from "./prediction_history.controller";
-import { logger } from "../utils/logger";
+import { userService } from "../services/user.service";
+import { logger } from "../utils/logger.util";
+import { predictionHistoryService } from "../services/prediction_history.service";
+import { incrementUsage } from "../middlewares/usageLimiter.middleware";
 
 /**
  * Hàm phụ trợ để tạo đối tượng breedInfo được làm giàu và chọn lọc.
@@ -25,7 +25,7 @@ function createEnrichedBreedInfo(breedInfoDoc: DogBreedWikiDoc | null | undefine
   if (!breedInfoDoc) return null;
   return {
     // Core Info
-    breed: breedInfoDoc.breed, // Sửa từ display_name
+    breed: breedInfoDoc.breed,
     slug: breedInfoDoc.slug,
     group: breedInfoDoc.group,
     description: breedInfoDoc.description,
@@ -43,11 +43,55 @@ function createEnrichedBreedInfo(breedInfoDoc: DogBreedWikiDoc | null | undefine
     suitable_for: breedInfoDoc.suitable_for,
   };
 }
+
+/**
+ * [HELPER] Cập nhật bộ sưu tập và thành tích của người dùng sau một dự đoán.
+ * @param userId ID của người dùng
+ * @param breedSlugs Các slug giống chó được phát hiện
+ * @param predictionId ID của bản ghi lịch sử dự đoán
+ * @param req Request object để lấy ngôn ngữ
+ * @returns Trạng thái collection hoặc null
+ */
+async function updateUserCollectionAndAchievements(userId: string, breedSlugs: string[], predictionId: Types.ObjectId, req: Request) {
+  if (!userId || breedSlugs.length === 0) {
+    return null;
+  }
+
+  const userObjectId = new Types.ObjectId(userId);
+  const [userBeforeUpdate, oldCollections] = await Promise.all([
+    userService.getById(userId),
+    collectionService.getUserCollection(userObjectId)
+  ]);
+
+  if (!userBeforeUpdate) throw new BadRequestError("User not found before update.");
+
+  await collectionService.addOrUpdateManyCollections(userObjectId, breedSlugs, predictionId);
+
+  const [userAfterUpdate, newCollections] = await Promise.all([
+    userService.getById(userId),
+    collectionService.getUserCollection(userObjectId)
+  ]);
+
+  if (!userAfterUpdate) throw new BadRequestError("User not found after update.");
+
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+  const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections, lang);
+  
+  // *** SỬA LỖI TẠI ĐÂY ***
+  // Thêm `|| []` để phòng trường hợp userBeforeUpdate.achievements là undefined
+  const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !(userBeforeUpdate.achievements || []).some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
+
+  return {
+    isNewBreed: newCollections.length > oldCollections.length,
+    totalCollected: newCollections.length,
+    achievementsUnlocked: unlockedAchievements.map(ach => ach.key)
+  };
+}
 /**
  * Hàm phụ trợ để xử lý logic chung cho việc dự đoán và làm giàu dữ liệu.
  * PHIÊN BẢN NÂNG CẤP: Xử lý TẤT CẢ các dự đoán, không chỉ cái chính.
  */
-async function handlePredictionAndEnrichment(req: Request, predictionPromise: Promise<PredictionHistoryDoc>, userId?: string) {
+async function handlePredictionAndEnrichment(req: Request, predictionPromise: Promise<PredictionHistoryDoc>, source: 'image_upload' | 'video_upload' | 'stream_capture', userId?: string) {
   // 1. Await the raw prediction result from the core service
   const predictionResult = await predictionPromise;
 
@@ -62,39 +106,11 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
   }
 
   // 3. If user is logged in, update collection and check for achievements
-  let collectionStatus: any = null;
-  if (userId && breedSlugs.length > 0) {
-    const userObjectId = new Types.ObjectId(userId);
-    // Lấy thông tin user và số lượng collection cũ CÙNG LÚC
-    const [userBeforeUpdate, oldCollections] = await Promise.all([
-      userService.getById(userId),
-      collectionService.getUserCollection(userObjectId)
-    ]);
-    if (!userBeforeUpdate) throw new BadRequestError("User not found before update.");
-    const oldCollectionCount = oldCollections.length;
-
-    // Thêm tất cả giống chó mới phát hiện vào bộ sưu tập
-    await collectionService.addOrUpdateManyCollections(userObjectId, breedSlugs);
-
-    // Lấy lại thông tin user và collection mới sau khi cập nhật
-    const [userAfterUpdate, newCollections] = await Promise.all([
-      userService.getById(userId),
-      collectionService.getUserCollection(userObjectId)
-    ]);
-    if (!userAfterUpdate) throw new BadRequestError("User not found after update.");
-
-    const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections);
-    const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !userBeforeUpdate?.achievements.some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
-
-    collectionStatus = {
-      isNewBreed: newCollections.length > oldCollectionCount, // So sánh với số lượng collection cũ đã lưu
-      totalCollected: newCollections.length,
-      achievementsUnlocked: unlockedAchievements.map(ach => ach.key)
-    };
-  }
+  const collectionStatus = await updateUserCollectionAndAchievements(userId!, breedSlugs, predictionResult._id as Types.ObjectId, req);
 
   // 4. Chuyển đổi URL media trong kết quả
-  const transformedPrediction = transformMediaURLs(req, predictionResult.toObject());
+  const predictionObject = predictionResult.toObject();
+  const transformedPrediction = transformMediaURLs(req, predictionObject);
 
   const detections = transformedPrediction.predictions.map((p: any) => {
     const slug = p.class.toLowerCase().replace(/\s+/g, '-');
@@ -109,7 +125,6 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
         width: p.box[2] - p.box[0],
         height: p.box[3] - p.box[1],
       },
-      // Làm giàu thông tin chi tiết cho từng con chó
       breedInfo: createEnrichedBreedInfo(breedInfoDoc),
     };
   });
@@ -117,8 +132,8 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
   // 6. Xây dựng response cuối cùng theo cấu trúc mới
   const finalResponse = {
     predictionId: transformedPrediction.id,
-    processedMediaUrl: transformedPrediction.processedMediaUrl, // Đã là URL tuyệt đối từ transformMediaURLs
-    detections: detections, // Trả về mảng các dự đoán đã xử lý
+    processedMediaUrl: transformedPrediction.processedMediaUrl,
+    detections: detections,
     collectionStatus: collectionStatus,
   };
 
@@ -126,14 +141,14 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
 }
 
 export const bffPredictionController = {
-  // `predictImage` và `predictVideo` không cần thay đổi vì logic đã nằm trong hàm helper
   predictImage: async (req: Request, res: Response) => {
     const userId = req.user?._id;
     const file = req.file;
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
     const predictionPromise = predictionService.makePrediction(userId, file, "image", req);
-    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString()); // Giữ nguyên userId string cho logic hiện tại
+    const data = await handlePredictionAndEnrichment(req, predictionPromise, 'image_upload', userId?.toString());
+    await incrementUsage(req);
     res.status(200).json(data);
   },
 
@@ -143,11 +158,11 @@ export const bffPredictionController = {
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
     const predictionPromise = predictionService.makePrediction(userId, file, "video", req);
-    const data = await handlePredictionAndEnrichment(req, predictionPromise, userId?.toString()); // Giữ nguyên userId string cho logic hiện tại
+    const data = await handlePredictionAndEnrichment(req, predictionPromise, 'video_upload', userId?.toString());
+    await incrementUsage(req);
     res.status(200).json(data);
   },
 
-  // `predictBatch` được cập nhật để có cấu trúc output nhất quán
   predictBatch: async (req: Request, res: Response) => {
     const userId = req.user?._id;
     const files = req.files as Express.Multer.File[];
@@ -155,16 +170,12 @@ export const bffPredictionController = {
       throw new BadRequestError("Không có file nào được cung cấp.");
     }
 
-    // 1. Gọi service lõi để dự đoán hàng loạt
     const batchPredictionResults = await predictionService.makeBatchPredictions(userId, files, req);
-
-    // 2. Thu thập TẤT CẢ các slug duy nhất từ TẤT CẢ các ảnh để làm giàu một lần duy nhất
     const allSlugs = batchPredictionResults.flatMap(result => result.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-')));
     const uniqueSlugs: string[] = [...new Set(allSlugs)];
 
-    // 3. Làm giàu dữ liệu song song để tối ưu hiệu suất
     let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
-    let collectionStatus: any = null; // Collection status được tính chung cho cả batch
+    let collectionStatus: any = null;
 
     const enrichmentPromises: Promise<any>[] = [
       wikiService.getBreedsBySlugs(uniqueSlugs).then(breeds => {
@@ -181,20 +192,18 @@ export const bffPredictionController = {
             collectionService.getUserCollection(userObjectId)
           ]);
           if (!userBeforeUpdate) return;
-          const oldCollectionCount = oldCollections.length;
-
-          await collectionService.addOrUpdateManyCollections(userObjectId, uniqueSlugs);
-
+          await collectionService.addOrUpdateFromPredictionResults(userObjectId, batchPredictionResults);
           const [userAfterUpdate, newCollections] = await Promise.all([
             userService.getById(userObjectId.toString()),
             collectionService.getUserCollection(userObjectId)
           ]);
           if (!userAfterUpdate) return;
 
-          const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections); // userAfterUpdate đã là PlainUser
-          const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !userBeforeUpdate.achievements.some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
+          const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+          const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections, lang);
+          const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !(userBeforeUpdate.achievements || []).some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
           collectionStatus = {
-            isNewBreed: newCollections.length > oldCollectionCount, // So sánh với số lượng collection cũ đã lưu
+            isNewBreed: newCollections.length > oldCollections.length,
             totalCollected: newCollections.length,
             achievementsUnlocked: unlockedAchievements.map(ach => ach.key)
           };
@@ -204,10 +213,8 @@ export const bffPredictionController = {
 
     await Promise.all(enrichmentPromises);
 
-    // 4. Xây dựng kết quả cuối cùng cho từng ảnh trong batch
     const results = batchPredictionResults.map(predictionResult => {
       const transformedPrediction = transformMediaURLs(req, predictionResult.toObject());
-
       const detections = transformedPrediction.predictions.map((p: any) => {
           const slug = p.class.toLowerCase().replace(/\s+/g, '-');
           const breedInfoDoc = wikiInfoMap.get(slug);
@@ -222,52 +229,105 @@ export const bffPredictionController = {
       return {
         predictionId: transformedPrediction.id,
         originalFilename: (transformedPrediction.media as any)?.name || 'unknown',
-        processedMediaUrl: transformedPrediction.processedMediaUrl, // Already an absolute URL
+        processedMediaUrl: transformedPrediction.processedMediaUrl,
         detections: detections,
-        collectionStatus: collectionStatus // Status chung cho cả batch
+        collectionStatus: collectionStatus
       };
     });
 
+    await incrementUsage(req);
     res.status(200).json(results);
   },
 
   submitFeedback: async (req: Request, res: Response) => {
-    const userId = req.user?._id; // Can be optional
+    const userId = req.user?._id;
     const { id: predictionId } = req.params;
     const { isCorrect, submittedLabel, notes } = req.body;
 
     const result = await feedbackService.submitFeedback(userId, { predictionId, isCorrect, submittedLabel, notes });
-
-    // Logic to check if this is a new breed alert can be added here or in the service
-    const newBreedAlert = !isCorrect && submittedLabel; // Simplified logic
+    const newBreedAlert = !isCorrect && submittedLabel;
 
     res.status(201).json({ feedbackId: (result as any)._id, message: 'Feedback submitted successfully', newBreedAlert });
   },
 
-  getPredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
-    // This endpoint is now less critical as profile endpoint can aggregate this.
-    // However, if a dedicated history page is needed, we can implement it here.
-    // For now, we can point to the existing core service.
-    // Note: Using require() inside a function is not a good practice.
-    // It's better to import at the top level.
-    // For now, let's just forward the request.
-    return predictionHistoryController.getHistoryForCurrentUser(req, res);
+  /**
+   * @desc [User] Xóa một bản ghi lịch sử dự đoán của chính họ.
+   * @route DELETE /bff/predict/history/:id
+   * @access Private
+   */
+  deletePredictionHistory: async (req: Request, res: Response) => {
+    const userId = req.user!._id;
+    const { id: historyId } = req.params;
+    const result = await predictionHistoryService.deleteHistoryForUser(userId, historyId);
+    res.status(200).json(result);
   },
 
-  /**
-   * Xử lý kết nối WebSocket cho dự đoán stream.
-   * Thay vì proxy trực tiếp, BFF sẽ làm trung gian để làm giàu dữ liệu.
-   */
+  getPredictionHistory: async (req: Request, res: Response) => {
+    const userId = req.user!._id;
+    const { page = 1, limit = 10 } = req.query;
+
+    const historyResult = await predictionHistoryService.getHistoryForUser(userId, {
+      page: Number(page),
+      limit: Number(limit),
+    });
+
+    // 1. Thu thập tất cả các slug duy nhất từ toàn bộ lịch sử
+    const allSlugs = [...new Set(historyResult.histories.flatMap(h => h.predictions.map(p => p.class.toLowerCase().replace(/\s+/g, '-'))))];
+
+    // 2. Tạo một map để tra cứu thông tin breed hiệu quả
+    const wikiInfoMap = new Map<string, { breed: string }>();
+    if (allSlugs.length > 0) {
+      const breeds = await wikiService.getBreedsBySlugs(allSlugs);
+      breeds.forEach(breed => wikiInfoMap.set(breed.slug, { breed: breed.breed }));
+    }
+
+    // 3. Làm giàu dữ liệu trả về
+    const enrichedData = historyResult.histories.map(historyItem => {
+      const item = transformMediaURLs(req, historyItem.toObject());
+      const detections = (item.predictions || []).map((p: any) => {
+        const slug = p.class.toLowerCase().replace(/\s+/g, '-');
+        const breedInfo = wikiInfoMap.get(slug);
+        return {
+          detectedBreed: slug,
+          breedName: breedInfo?.breed || slug, // Thêm breedName
+          confidence: p.confidence,
+        };
+      });
+
+      return {
+        id: item.id,
+        processedMediaUrl: item.processedMediaUrl,
+        modelUsed: item.modelUsed,
+        isCorrect: item.isCorrect,
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+        detections: detections,
+        media: {
+          name: item.media.name,
+          mediaUrl: item.media.mediaUrl,
+          type: item.media.type,
+        },
+        source: item.source, // Đảm bảo source được trả về
+      };
+    });
+
+    res.status(200).json({
+      histories: enrichedData,
+      total: historyResult.total,
+      page: historyResult.page,
+      limit: historyResult.limit,
+      totalPages: historyResult.totalPages,
+    });
+  },
+
   handleStreamPrediction: async (ws: WebSocket, req: Request) => {
-    const userId = req.user?._id?.toString(); // Sử dụng optional chaining an toàn
+    const userId = req.user?._id?.toString();
     const aiServiceUrl = (process.env.AI_SERVICE_URL || "http://localhost:8000").replace(/^http/, 'ws');
     const aiServiceWs = new WebSocket(`${aiServiceUrl}/predict-stream`);
 
-    // Cache thông tin wiki để giảm truy vấn DB
     const wikiCache = new Map<string, any>();
-    let finalResultSent = false; // Cờ để theo dõi xem kết quả cuối cùng đã được gửi chưa
+    let finalResultSent = false;
 
-    // --- FIX/Tối ưu hóa: Hàm phụ trợ để tạo Request Mock cho handlePredictionAndEnrichment ---
     const createMockRequest = () => {
         const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
         const host = (req.headers['x-forwarded-host'] as string) || (req.headers.host as string);
@@ -278,113 +338,91 @@ export const bffPredictionController = {
                 if (header.toLowerCase() === 'host') return host;
                 return req.headers[header.toLowerCase()]; 
             },
-            // Thêm các trường cần thiết khác nếu có
+            headers: req.headers,
+            ip: req.ip,
+            fingerprint: (req as any).fingerprint,
         } as unknown as Request;
     }
-    // ------------------------------------------------------------------------------------------
 
-    // 1. Xử lý khi có kết nối thành công đến AI service
     aiServiceWs.on('open', () => {
       logger.info(`[BFF-WS] Established WebSocket connection to AI Service for user: ${userId || 'guest'}`);
-      // Gửi một tin nhắn "ping" để giữ kết nối sống và phá vỡ trạng thái chờ đợi ban đầu.
       if (aiServiceWs.readyState === WebSocket.OPEN) aiServiceWs.send(JSON.stringify({ type: 'ping' }));
     });
 
-    // 2. Lắng nghe message từ AI Service (kết quả dự đoán thô)
     aiServiceWs.on('message', async (message: WebSocket.Data) => {
+      const messageString = message.toString();
+      let data;
+
       try {
-        const data = JSON.parse(message.toString());
-        
-        // FIX: Chỉ sử dụng 'detections', loại bỏ '|| data.predictions'
-        const detectionsList = data.detections; 
+        data = JSON.parse(messageString);
+      } catch (e) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(messageString);
+        }
+        return;
+      }
 
-        if (data && Array.isArray(detectionsList)) {
-          // Trích xuất các slug chưa có trong cache
-          const slugsToFetch = [...new Set(
-            detectionsList
-              .map((p: any) => p.class.toLowerCase().replace(/\s+/g, '-'))
-              .filter((slug: string) => !wikiCache.has(slug))
-          )] as string[];
+      try {
+        if (data && Array.isArray(data.detections)) {
+          const slugsToFetch = [...new Set(data.detections.map((p: any) => p.class.toLowerCase().replace(/\s+/g, '-')).filter((slug: string) => !wikiCache.has(slug)))] as string[];
 
-          // Nếu có slug mới, truy vấn và cập nhật cache
           if (slugsToFetch.length > 0) {
             const breeds = await wikiService.getBreedsBySlugs(slugsToFetch);
             breeds.forEach(breed => wikiCache.set(breed.slug, breed.toObject()));
           }
-
-          // --- THAY ĐỔI LOGIC: Xử lý "captured" và "detections" khác nhau ---
           if (data.status === 'captured') {
-            // 1. Nếu là kết quả "captured", gọi service để lưu nó vào DB
             logger.info(`[BFF-WS] Received 'captured' result. Saving to database...`);
-
             const mockReq = createMockRequest();
-
-            const predictionPromise = predictionService.saveStreamPrediction(
-              userId ? new Types.ObjectId(userId) : undefined, 
-              data, // Data đã bao gồm processed_media_base64
-              mockReq
-            );
+            const predictionPromise = predictionService.saveStreamPrediction(userId ? new Types.ObjectId(userId) : undefined, data, mockReq);
+            const finalResponse = await handlePredictionAndEnrichment(mockReq, predictionPromise, 'stream_capture', userId);
             
-            // 2. Dùng hàm helper để làm giàu dữ liệu và gửi kết quả cuối cùng
-            const finalResponse = await handlePredictionAndEnrichment(mockReq, predictionPromise, userId);
-            
-            // 3. Gửi gói dữ liệu cuối cùng với cấu trúc rõ ràng để client xử lý chuyển trang
             ws.send(JSON.stringify({ status: 'redirect', payload: finalResponse }));
-            finalResultSent = true; // Đánh dấu đã gửi kết quả cuối cùng
+            finalResultSent = true;
 
-            // Đóng kết nối AI service sau khi gửi kết quả cuối cùng
             if (aiServiceWs.readyState === WebSocket.OPEN) {
-                aiServiceWs.close(1000, "Final result sent to client");
+              aiServiceWs.close(1000, "Final result sent to client");
             }
-            
           } else {
-            // Nếu là tin nhắn dự đoán thông thường, chỉ làm giàu và gửi đi
-            const enrichedDetections = detectionsList.map((p: any) => {
+            const enrichedDetections = data.detections.map((p: any) => {
               const slug = p.class.toLowerCase().replace(/\s+/g, '-');
               const breedInfoDoc = wikiCache.get(slug);
-              // Lưu ý: Dữ liệu boundingBox đã được định dạng chuẩn trong AI service
               return { 
                 detectedBreed: slug, 
                 confidence: p.confidence, 
-                boundingBox: { 
-                  x: p.box[0], 
-                  y: p.box[1], 
-                  width: p.box[2] - p.box[0], 
-                  height: p.box[3] - p.box[1] 
-                }, 
+                boundingBox: { x: p.box[0], y: p.box[1], width: p.box[2] - p.box[0], height: p.box[3] - p.box[1] }, 
                 breedInfo: createEnrichedBreedInfo(breedInfoDoc) 
               };
             });
             ws.send(JSON.stringify({ detections: enrichedDetections }));
           }
         } else {
-          // Nếu không phải định dạng dự đoán (ví dụ: tin nhắn 'status: waiting'), gửi thẳng về client
-          ws.send(message.toString());
+          ws.send(messageString);
         }
       } catch (error) {
         logger.error('[BFF-WS] Error processing message from AI service:', error);
         ws.send(JSON.stringify({ error: 'Failed to process prediction data.' }));
-        // Đóng kết nối nếu có lỗi nghiêm trọng
         if (aiServiceWs.readyState === WebSocket.OPEN) aiServiceWs.close(1001, "BFF internal error");
       }
     });
 
-    // 3. Chuyển tiếp message từ Client (khung hình) đến AI Service
     ws.on('message', (message: WebSocket.Data) => {
       if (aiServiceWs.readyState === WebSocket.OPEN) {
-        // Chuyển tiếp message (Buffer) thành string trước khi gửi đi.
         aiServiceWs.send(message.toString());
       }
     });
 
-    // 4. Xử lý khi một trong hai kết nối bị đóng
     ws.on('close', () => {
       logger.info(`[BFF-WS] Client connection closed. Closing connection to AI Service.`);
-      // Đóng kết nối AI Service nếu nó còn mở, trừ khi kết quả cuối cùng đã được gửi
-      if (aiServiceWs.readyState === WebSocket.OPEN && !finalResultSent) aiServiceWs.close(1000, "Client closed BFF connection");
+      if (aiServiceWs.readyState === WebSocket.OPEN && !finalResultSent) {
+        aiServiceWs.close(1000, "Client closed BFF connection");
+      }
+
+      if (req.user) {
+        (req as any).mediaType = 'video'; 
+        incrementUsage(req).catch(err => logger.error('[BFF-WS] Failed to increment usage on stream close:', err));
+      }
     });
     aiServiceWs.on('close', (code, reason) => {
-      // Chỉ đóng kết nối với client nếu kết quả cuối cùng CHƯA được gửi.
       if (!finalResultSent) {
         logger.info(`[BFF-WS] AI Service connection closed. Closing connection to client. Reason: ${reason.toString()}`);
         if (ws.readyState === WebSocket.OPEN) {

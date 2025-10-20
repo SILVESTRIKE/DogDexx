@@ -1,5 +1,5 @@
 import Achievement, { IAchievement } from '../models/achievement.model';
-import { UserCollectionDoc } from '../models/user_collection.model';
+import { CollectedBreed } from '../models/user_collection.model';
 import { DogBreedWikiModel } from '../models/dogs_wiki.model';
 import { UserModel } from '../models/user.model';
 import { PlainUser } from './user.service';
@@ -8,8 +8,9 @@ let cachedAchievements: IAchievement[] | null = null;
 let totalBreedsInDB: number | null = null;
 
 export const achievementService = {
-  async processUserAchievements(user: PlainUser, userCollections: UserCollectionDoc[]) {
-    const allAchievements = await this.getAllAchievementDefinitions();
+  async processUserAchievements(user: PlainUser, userCollections: any[], lang: 'vi' | 'en' = 'vi') {
+    // Lấy định nghĩa gốc (chưa flatten)
+    const allAchievementDefinitions = await this.getAllAchievementDefinitions();
     
     // Lấy các key thành tích đã mở khóa từ chính document user
     const unlockedKeys = new Set(user.achievements.map(ach => ach.key));
@@ -28,10 +29,23 @@ export const achievementService = {
     const collectionCount = userCollections.length;
 
     // Tính toán trạng thái unlock cho từng achievement
-    const achievementsWithStatus = allAchievements.map(ach => {
-      // Một thành tích được coi là đã mở khóa nếu nó có trong danh sách của user HOẶC nó thỏa mãn điều kiện hiện tại
-      const isUnlockedNow = this.isAchievementConditionMet(ach, collectionCount, collectedBreedSlugs, totalBreedsInDB);
-      return { ...ach, unlocked: unlockedKeys.has(ach.key) || isUnlockedNow };
+    const achievementsWithStatus = allAchievementDefinitions.map(ach => {
+      // "Phẳng hóa" (flatten) dữ liệu ngôn ngữ tại đây
+      const flattenedAch = {
+        ...ach,
+        name: ach.name[lang],
+        description: ach.description[lang],
+      };
+
+      const isAlreadyUnlocked = unlockedKeys.has(ach.key);
+      if (isAlreadyUnlocked) {
+        return { ...flattenedAch, unlocked: true };
+      }
+
+      // Chỉ kiểm tra điều kiện cho những thành tích chưa được mở khóa
+      // Sử dụng `ach` (bản gốc) để kiểm tra điều kiện, vì `flattenedAch` đã thay đổi cấu trúc
+      const isNewlyUnlocked = this.isAchievementConditionMet(ach, collectionCount, collectedBreedSlugs, totalBreedsInDB!);
+      return { ...flattenedAch, unlocked: isNewlyUnlocked };
     });
 
     // Tìm các thành tích MỚI được mở khóa và ghi vào DB
