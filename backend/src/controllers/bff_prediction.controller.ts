@@ -326,10 +326,10 @@ export const bffPredictionController = {
    * @access Private
    */
   getPredictionHistoryById: async (req: Request, res: Response) => {
-    const userId = req.user!._id;
+    const userId = req.user?._id; // Cho phép userId là undefined cho người dùng khách
     const { id: historyId } = req.params;
 
-    const historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
+    const historyItem = await predictionHistoryService.getHistoryById(historyId); // Gọi hàm service mới/cập nhật
     if (!historyItem) {
       throw new NotFoundError("Prediction history not found.");
     }

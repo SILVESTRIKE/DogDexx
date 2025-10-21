@@ -30,8 +30,7 @@ const userCollectionSchema = new Schema<UserCollectionDoc>({
     type: Schema.Types.ObjectId, 
     ref: 'User', 
     required: true, 
-    unique: true, // Đảm bảo mỗi user chỉ có 1 Pokedex
-    index: true 
+    unique: true
   },
   collectedBreeds: [collectedBreedSchema],
   isDeleted: { type: Boolean, default: false, select: false },

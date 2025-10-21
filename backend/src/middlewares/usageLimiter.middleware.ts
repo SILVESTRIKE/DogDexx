@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { UserModel } from "../models/user.model";
 import { BadRequestError, TooMuchReqError } from "../errors";
 
@@ -20,7 +20,7 @@ const guestLimiter = rateLimit({
     // SỬA LỖI: Ưu tiên fingerprint, nếu không có thì dùng req.ip.
     // express-rate-limit sẽ tự động xử lý IPv6 một cách an toàn khi key là địa chỉ IP.
     // Thêm fallback 'unknown' để đảm bảo hàm luôn trả về một string.
-    return req.fingerprint?.hash || req.ip || 'unknown';
+    return req.fingerprint?.hash || (req.ip ? ipKeyGenerator(req.ip) : 'unknown');
   },
   standardHeaders: true,
   legacyHeaders: false,

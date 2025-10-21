@@ -576,7 +576,7 @@ class ApiClient {
         {
             method: 'GET',
         },
-        true // Yêu cầu xác thực để xem lịch sử
+        false // Yêu cầu xác thực để xem lịch sử
     );
   }
   // --------------------------------------------------

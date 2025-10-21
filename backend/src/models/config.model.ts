@@ -15,7 +15,6 @@ const ConfigurationSchema: Schema = new Schema(
       type: String,
       required: true,
       unique: true,
-      index: true,
     },
     image_conf: { type: Number, default: 0.25 },
     video_conf: { type: Number, default: 0.5 },

@@ -187,4 +187,4 @@ router.get("/history", authMiddleware, bffPredictionController.getPredictionHist
  *       200:
  *         description: Lấy chi tiết lịch sử thành công.
  */
-router.get("/history/:id", authMiddleware, bffPredictionController.getPredictionHistoryById);
+router.get("/history/:id", optionalAuthMiddleware, bffPredictionController.getPredictionHistoryById);

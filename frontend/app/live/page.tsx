@@ -48,15 +48,13 @@ export default function LiveDetectionPage() {
 
             // 1. Dừng camera và websocket
             stopCamera("Redirecting");
-
-            // 2. Lưu kết quả vào sessionStorage (CHỈ LƯU payload)
-            sessionStorage.setItem(
-              "detection-result",
-              JSON.stringify(data.payload)
-            );
-
-            // 3. Chuyển hướng đến trang kết quả
-            router.push("/results");
+            if (data.payload?.predictionId) {
+              router.push(`/results?id=${data.payload.predictionId}`);
+            } else {
+              console.error("[BFF-WS] Redirect payload missing predictionId:", data.payload);
+              toast.error(t("live.redirectError") || "Failed to get prediction ID for redirect.");
+              router.push("/"); // Fallback to home
+            }
 
             // Sửa đổi nhẹ ở đây để tương thích với cấu trúc mới của BFF
           } else if (
