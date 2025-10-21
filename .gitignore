@@ -3,8 +3,10 @@ backend/ai_service/__pycache__/main.cpython-313.pyc
 node_modules
 .env
 .venv/
+/.next/
 __pycache__/
 *.pyc
 public/
 uploads/
 backend/ai_service/models
+.next/
