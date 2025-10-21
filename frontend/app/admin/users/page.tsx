@@ -15,6 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Pagination, PaginationContent, PaginationItem, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { AddUserDialog } from "./add-user-dialog"
 import { EditUserDialog } from "./edit-user-dialog"
+import { useI18n } from "@/lib/i18n-context"
 
 const initialData: PaginatedUsersResponse = {
   pagination: { total: 0, page: 1, limit: 10, totalPages: 1 },
@@ -22,6 +23,7 @@ const initialData: PaginatedUsersResponse = {
 }
 
 export default function UsersPage() {
+  const { t } = useI18n()
   const [data, setData] = useState<PaginatedUsersResponse>(initialData)
   const [searchQuery, setSearchQuery] = useState("")
   const [loading, setLoading] = useState(true)
@@ -71,23 +73,23 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Quản lý người dùng</h2>
-          <p className="text-muted-foreground">Quản lý và theo dõi người dùng đã đăng ký</p>
+          <h2 className="text-3xl font-bold tracking-tight">{t("admin.userManagement.title")}</h2>
+          <p className="text-muted-foreground">{t("admin.userManagement.description")}</p>
         </div>
         <AddUserDialog onUserAdded={() => fetchUsers(page, debouncedSearch)} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Tất cả người dùng</CardTitle>
-          <CardDescription>Danh sách tất cả người dùng đã đăng ký trong hệ thống</CardDescription>
+          <CardTitle>{t("admin.allUsers")}</CardTitle>
+          <CardDescription>{t("admin.allUsersDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Tìm kiếm người dùng theo tên hoặc email..."
+                placeholder={t("admin.searchUserPlaceholder")}
                 className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -117,7 +119,7 @@ export default function UsersPage() {
               ) : data.users.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Không tìm thấy người dùng nào
+                    {t("admin.userManagement.errors.noUsersFound")}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -192,7 +194,7 @@ export default function UsersPage() {
               </PaginationItem>
               <PaginationItem>
                 <span className="px-4 py-2 text-sm">
-                  Page {data.pagination.page} of {data.pagination.totalPages}
+                  {t("admin.userPageIndicator", { page: data.pagination.page, totalPages: data.pagination.totalPages })}
                 </span>
               </PaginationItem>
               <PaginationItem>

@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import "tw-animate-css";
 
 @custom-variant dark (&:is(.dark *));
@@ -13,9 +17,9 @@
   --popover-foreground: #000000;
   --primary: #7033ff; /* Blue for buttons/accents */
   --primary-foreground: #ffffff;
-  --secondary: #edf0f4; /* Very light gray */
-  --secondary-foreground: #080808;
-  --muted: #f5f5f5; /* Light gray */
+  --secondary: #000000; /* Very light gray */
+  --secondary-foreground: #eeede6;
+  --muted: #ababab; /* Light gray */
   --muted-foreground: #525252; /* Medium gray */
   --accent: #e2ebff; /* Accent blue */
   --accent-foreground: #1e69dc;

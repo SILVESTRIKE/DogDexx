@@ -167,3 +167,24 @@ router.post("/:id/feedback", bffPredictionController.submitFeedback);
  *         description: Lấy lịch sử thành công.
  */
 router.get("/history", authMiddleware, bffPredictionController.getPredictionHistory);
+
+/**
+ * @swagger
+ * /bff/predict/history/{id}:
+ *   get:
+ *     summary: (BFF) Lấy chi tiết một lịch sử dự đoán
+ *     tags: [BFF-Prediction]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của lịch sử dự đoán.
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết lịch sử thành công.
+ */
+router.get("/history/:id", authMiddleware, bffPredictionController.getPredictionHistoryById);

@@ -1,55 +1,48 @@
-// result/page.tsx
 "use client"
-import { useEffect, useState, useRef } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import type {BffPredictionResponse, Detection } from "@/lib/types"
+
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import type { BffPredictionResponse, Detection } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, User } from "lucide-react"
+import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
-import { useMounted } from "@/hooks/use-mounted"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
 
-export default function ResultsPage() {
+/**
+ * Component con chứa logic chính để có thể sử dụng hook `useSearchParams`
+ * một cách an toàn trong Next.js App Router.
+ */
+function ResultsContent() {
   const router = useRouter()
-  const mounted = useMounted()
+  const searchParams = useSearchParams()
+  const { t } = useI18n()
+  const { user } = useAuth();
   
-  const [allDetections, setAllDetections] = useState<Detection[]>([])
-  const [primaryDetection, setPrimaryDetection] = useState<Detection | null>(null)
+  // State mới cho loading và error
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // State cũ của bạn
+  const [allDetections, setAllDetections] = useState<Detection[]>([]) 
   const [predictionId, setPredictionId] = useState<string | null>(null)
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
-  const { t } = useI18n()
-  const { user } = useAuth();
 
   useEffect(() => {
-    const resultData = sessionStorage.getItem("detection-result")
+    const historyId = searchParams.get('id');
 
-    if (!resultData) {
-      router.push("/")
-      return
-    }
-
-    try {
-      const result: BffPredictionResponse = JSON.parse(resultData)
-      console.log("Processed Image URL:", result.processedMediaUrl);
+    // Hàm helper để xử lý dữ liệu kết quả và cập nhật state
+    const processResultData = (result: BffPredictionResponse) => {
       setProcessedMediaUrl(result.processedMediaUrl);
       
-      // Only track trial usage for guest users
-      if (!user && result.predictionId) {
-        apiClient.trackEvent('SUCCESSFUL_PREDICTION', { predictionId: result.predictionId })
-          .catch(analyticsError => {
-            console.warn("Guest prediction tracking failed:", analyticsError);
-          });
-      }
-
       if (!result.detections || result.detections.length === 0) {
         setNoDetectionsFound(true);
         return;
@@ -57,19 +50,65 @@ export default function ResultsPage() {
 
       const primary = result.detections.reduce((prev, current) => 
         prev.confidence > current.confidence ? prev : current
-      )
+      );
       
-      setAllDetections(result.detections)
-      setPredictionId(result.predictionId)
-      setPrimaryDetection(primary)
-      setSelectedDetection(primary) // Mặc định chọn con chó chính
+      setAllDetections(result.detections);
+      setPredictionId(result.predictionId);
+      setSelectedDetection(primary);
+    };
+    
+    // Luồng logic mới
+    if (historyId) {
+      // TRƯỜNG HỢP 1: Xem lại từ lịch sử (có ID trên URL)
+      const fetchHistoryById = async () => {
+        setLoading(true);
+        try {
+          const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId);
+          processResultData(result);
+        } catch (err) {
+          console.error("[v0] Failed to fetch prediction history:", err);
+          setError("Failed to load prediction history. It may have been deleted.");
+        } finally {
+          setLoading(false);
+        }
+      };
+      fetchHistoryById();
+    } else {
+      // TRƯỜNG HỢP 2: Xem kết quả mới (không có ID) - Logic cũ
+      const resultData = sessionStorage.getItem("detection-result");
 
-    } catch (error) {
-      console.error("[v0] Failed to parse prediction result:", error)
-      router.push("/")
+      if (!resultData) {
+        setError("No recent detection result found.");
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        const result: BffPredictionResponse = JSON.parse(resultData);
+        processResultData(result);
+        
+        if (!user && result.predictionId) {
+          apiClient.trackEvent('SUCCESSFUL_PREDICTION', { predictionId: result.predictionId })
+            .catch(console.warn);
+        }
+      } catch (err) {
+        console.error("[v0] Failed to parse prediction result:", err);
+        setError("Failed to read the detection result.");
+      } finally {
+        setLoading(false);
+      }
     }
-  }, [router, user])
-  
+
+    // SỬA LỖI: Dọn dẹp sessionStorage khi component unmount (người dùng rời khỏi trang)
+    return () => {
+      sessionStorage.removeItem("detection-result");
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // SỬA LỖI: Chỉ chạy effect này một lần duy nhất khi component được tải.
+          // Điều này ngăn việc xóa sessionStorage một cách không cần thiết khi re-render.
+          // Logic bên trong đã xử lý cả hai trường hợp (có và không có ID) nên việc chạy một lần là an toàn.
+
+
   const handleSelectionChange = (selectionKey: string) => {
     const index = parseInt(selectionKey.split('-').pop() || '0', 10);
     if (allDetections[index]) {
@@ -77,10 +116,32 @@ export default function ResultsPage() {
     }
   };
 
-  if (!mounted) {
-    return null;
+  // ----- GIAO DIỆN CHO CÁC TRẠNG THÁI MỚI -----
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
+          <p className="text-muted-foreground">{t("common.loading")}</p>
+        </div>
+      </main>
+    );
   }
 
+  if (error) {
+     return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md mx-auto p-8 text-center">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-3">{t('common.error')}</h2>
+          <p className="text-muted-foreground mb-6">{error}</p>
+          <Link href="/"><Button>{t('common.back')}</Button></Link>
+        </Card>
+      </main>
+    )
+  }
+  
+  // ----- GIAO DIỆN GỐC CỦA BẠN -----
   if (noDetectionsFound) {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
@@ -105,20 +166,23 @@ export default function ResultsPage() {
     )
   }
 
-  if (!primaryDetection || !primaryDetection.breedInfo) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">{t("common.loading")}</p>
-      </div>
+  if (!selectedDetection || !selectedDetection.breedInfo) {
+    // Trường hợp này có thể coi là một lỗi nếu dữ liệu không nhất quán
+     return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <Card className="max-w-md mx-auto p-8 text-center">
+          <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
+          <h2 className="text-2xl font-bold mb-3">Data Error</h2>
+          <p className="text-muted-foreground mb-6">Could not display details. The result data might be incomplete.</p>
+          <Link href="/"><Button>Go to Homepage</Button></Link>
+        </Card>
+      </main>
     )
   }
-  
-  const primaryBreedInfo = primaryDetection.breedInfo;
-  const primaryDisplayName = (primaryBreedInfo as any).breed;
 
-  const primaryConfidence = Math.round(primaryDetection.confidence * 100);
-  
-  const selectedBreedInfo = selectedDetection?.breedInfo;
+  const selectedBreedInfo = selectedDetection.breedInfo;
+  const selectedDisplayName = selectedBreedInfo.breed;
+  const selectedConfidence = Math.round(selectedDetection.confidence * 100);
 
   return (
     <main className="min-h-screen bg-background">
@@ -130,14 +194,12 @@ export default function ResultsPage() {
           </Link>
         </div>
 
-        {/* === SECTION 1: THẺ KẾT QUẢ CHÍNH === */}
         <Card className="mb-8 border-2 border-primary">
           <CardHeader>
             <CardTitle className="text-2xl">{t("results.title")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-8 items-center">
-              {/* SỬA LỖI: Thay đổi khung ảnh thành 1:1 và thêm hiệu ứng nền blend */}
               <div className="relative rounded-lg overflow-hidden bg-gradient-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
                 {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
                   (
@@ -151,13 +213,11 @@ export default function ResultsPage() {
                     />
                   ) : (
                     <>
-                      {/* Ảnh nền bị làm mờ để tạo hiệu ứng blend */}
                       <img 
                         src={processedMediaUrl} 
                         alt="Background" 
                         className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50" 
                       />
-                      {/* Ảnh chính, hiển thị đầy đủ */}
                       <img 
                         src={processedMediaUrl} 
                         alt="Detection result" 
@@ -166,34 +226,32 @@ export default function ResultsPage() {
                   )
                 )}
               </div>
-
-              {/* Thông tin của con chó có độ tin cậy cao nhất */}
               <div className="space-y-4">
                 <div>
-                  <h2 className="text-3xl font-bold mb-2">{primaryDisplayName}</h2>
+                  <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
                     <Badge variant="default" className="text-sm px-3 py-1">
                       <MapPin className="h-3 w-3 mr-1" />
-                      {primaryBreedInfo.group || t("results.unknownOrigin")}
+                      {selectedBreedInfo.group || t("results.unknownOrigin")}
                     </Badge>
                   </div>
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="font-medium">{t("results.confidence")}</span>
-                    <span className="font-bold text-primary">{primaryConfidence}%</span>
+                    <span className="font-bold text-primary">{selectedConfidence}%</span>
                   </div>
-                  <Progress value={primaryConfidence} className="h-3" />
+                  <Progress value={selectedConfidence} className="h-3" />
                 </div>
                 <Button
-                  onClick={() => router.push(`/pokedex?highlight=${primaryBreedInfo.slug}`)}
+                  onClick={() => router.push(`/pokedex?highlight=${selectedBreedInfo.slug}`)}
                   size="lg"
                   className="w-full gap-2"
                 >
                   <BookOpen className="h-5 w-5" />
                   {t("results.viewInPokedex")}
                 </Button>
-                <Link href={`/dog/${primaryBreedInfo.slug}`}>
+                <Link href={`/dog/${selectedBreedInfo.slug}`}>
                   <Button variant="outline" size="lg" className="w-full bg-transparent">
                     {t("results.viewDetails")}
                   </Button>
@@ -203,7 +261,6 @@ export default function ResultsPage() {
           </CardContent>
         </Card>
 
-        {/* === SECTION 2: KHÁM PHÓ CHI TIẾT (TƯƠNG TÁC) === */}
         <div className="space-y-8">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl font-bold">{t("results.detailsTitle")}</h2>
@@ -231,7 +288,6 @@ export default function ResultsPage() {
 
           {selectedBreedInfo ? (
             <>
-              {/* Các thẻ thông tin chi tiết, dữ liệu lấy từ `selectedBreedInfo` */}
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <Card className="border-2">
                   <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" />{t("results.characteristics")}</CardTitle></CardHeader>
@@ -280,14 +336,19 @@ export default function ResultsPage() {
           )}
         </div>
         <div className="h-4" />
-        {/* === SECTION 3: FORM PHẢN HỒI === */}
         <FeedbackForm
-          detectedBreed={primaryDisplayName}
-          confidence={primaryConfidence}
+          detectedBreed={selectedDisplayName}
+          confidence={selectedConfidence}
           imageUrl={""} 
           predictionId={predictionId}
         />
       </div>
     </main>
   )
+}
+
+
+export default function ResultsPage() {
+  // Bọc ResultsContent để đảm bảo hook `useSearchParams` hoạt động đúng
+  return <ResultsContent />;
 }

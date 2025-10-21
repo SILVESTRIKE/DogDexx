@@ -69,7 +69,7 @@ export class AdminService {
     ] = await Promise.all([
         UserModel.countDocuments({ isDeleted: false }),
         FeedbackModel.countDocuments({ isDeleted: false }),
-        FeedbackModel.countDocuments({ isCorrect: true, isDeleted: false }), // isCorrect đã bị loại bỏ, cần xem lại logic này
+        FeedbackModel.countDocuments({ status: 'approved_for_training', isDeleted: false }),
         AnalyticsEventModel.countDocuments({
             eventName: 'PAGE_VISIT',
             createdAt: { $gte: today },

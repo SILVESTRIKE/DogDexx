@@ -104,7 +104,11 @@ export const updateAvatar = async (req: Request, res: Response) => {
     throw new BadRequestError("Vui lòng cung cấp file ảnh avatar.");
   }
   const updatedUser = await userService.updateAvatar(userId, avatarFile);
-  res.status(200).json({ message: "Cập nhật ảnh đại diện thành công.", data: transformMediaURLs(req, updatedUser) });
+  const transformedUser = transformMediaURLs(req, updatedUser.toObject());
+  res.status(200).json({
+    message: "Cập nhật ảnh đại diện thành công.",
+    data: { user: transformedUser },
+  });
 };
 
 export const logout = async (req: Request, res: Response) => {

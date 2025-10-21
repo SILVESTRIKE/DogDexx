@@ -3,11 +3,11 @@ import WebSocket from "ws";
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
 import { wikiService } from "../services/dogs_wiki.service";
-import { BadRequestError } from "../errors";
+import { BadRequestError, NotFoundError } from "../errors";
 import { transformMediaURLs } from "../utils/media.util";
 import { feedbackService } from "../services/feedback.service";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
-import { PredictionHistoryDoc } from "../models/prediction_history.model";
+import { PredictionHistoryDoc, IYoloPrediction } from "../models/prediction_history.model";
 import { UserModel, UnlockedAchievement } from "../models/user.model";
 import { collectionService } from "../services/user_collections.service";
 import { achievementService } from "../services/achievement.service";
@@ -319,6 +319,36 @@ export const bffPredictionController = {
       totalPages: historyResult.totalPages,
     });
   },
+
+  /**
+   * @desc [User] Lấy một bản ghi lịch sử dự đoán theo ID và làm giàu dữ liệu.
+   * @route GET /bff/predict/history/:id
+   * @access Private
+   */
+  getPredictionHistoryById: async (req: Request, res: Response) => {
+    const userId = req.user!._id;
+    const { id: historyId } = req.params;
+
+    const historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
+    if (!historyItem) {
+      throw new NotFoundError("Prediction history not found.");
+    }
+
+    const breedSlugs: string[] = [...new Set(historyItem.predictions.map((p: IYoloPrediction) => p.class.toLowerCase().replace(/\s+/g, '-')))];
+    const breeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    const wikiInfoMap = new Map<string, DogBreedWikiDoc>(breeds.map(breed => [breed.slug, breed]));
+
+    const transformedPrediction = transformMediaURLs(req, historyItem.toObject());
+
+    const detections = (transformedPrediction.predictions as IYoloPrediction[]).map((p: IYoloPrediction) => {
+      const slug = p.class.toLowerCase().replace(/\s+/g, '-');
+      return { detectedBreed: slug, confidence: p.confidence, boundingBox: { x: p.box[0], y: p.box[1], width: p.box[2] - p.box[0], height: p.box[3] - p.box[1] }, breedInfo: createEnrichedBreedInfo(wikiInfoMap.get(slug)) };
+    });
+
+    const finalResponse = { predictionId: transformedPrediction.id, processedMediaUrl: transformedPrediction.processedMediaUrl, detections: detections, collectionStatus: null };
+    res.status(200).json(finalResponse);
+  },
+
 
   handleStreamPrediction: async (ws: WebSocket, req: Request) => {
     const userId = req.user?._id?.toString();

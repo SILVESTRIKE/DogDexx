@@ -95,10 +95,8 @@ export default function Home() {
           response = await apiClient.predictVideo(selectedFile, onProgress)
         }
 
-        sessionStorage.setItem("detection-result", JSON.stringify(response))
-        sessionStorage.setItem("detection-image", previewUrl)
-
-        router.push("/results")
+        // SỬA LỖI: Điều hướng trực tiếp đến trang kết quả với ID, không dùng sessionStorage
+        router.push(`/results?id=${response.predictionId}`)
 
         toast.success(t("results.title"), { id: detectionToast })
         // Không cần reset ở đây nữa vì sẽ chuyển trang

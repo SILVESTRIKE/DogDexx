@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
 import { getAdminDashboardData, getSystemAlerts, DashboardData, SystemAlert } from "@/lib/admin-api"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useI18n } from "@/lib/i18n-context"
 
 const initialDashboardData: DashboardData = {
   stats: {
@@ -28,6 +29,7 @@ const initialDashboardData: DashboardData = {
 }
 
 export default function AdminDashboard() {
+  const { t } = useI18n()
   const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData)
   const [alerts, setAlerts] = useState<SystemAlert[]>([])
   const [loading, setLoading] = useState(true)
@@ -71,8 +73,8 @@ export default function AdminDashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Tổng quan Dashboard</h2>
-        <p className="text-muted-foreground">Theo dõi hiệu suất và thống kê sử dụng ứng dụng của bạn</p>
+        <h2 className="text-3xl font-bold tracking-tight">{t("admin.dashboardTitle")}</h2>
+        <p className="text-muted-foreground">{t("admin.dashboardDescription")}</p>
       </div>
 
       {alerts.length > 0 && (
@@ -81,14 +83,14 @@ export default function AdminDashboard() {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-orange-600" />
-                <CardTitle className="text-orange-600">Cảnh báo giống chó mới</CardTitle>
+                <CardTitle className="text-orange-600">{t("admin.newBreedAlertTitle")}</CardTitle>
               </div>
               <Badge variant="destructive" className="text-sm">
                 {alerts.length} giống
               </Badge>
             </div>
             <CardDescription>
-              Phát hiện {alerts.length} giống chó có nhiều báo cáo sai - có thể cần thêm vào model
+              {t("admin.newBreedAlertDescription", { count: alerts.length })}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -103,7 +105,7 @@ export default function AdminDashboard() {
               ))}
               <Link href="/admin/feedback">
                 <Button variant="outline" className="w-full bg-transparent">
-                  Xem tất cả phản hồi
+                  {t("admin.viewAllFeedback")}
                 </Button>
               </Link>
             </div>
@@ -115,7 +117,7 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Lượt dùng thử (hôm nay)</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.trialRunsToday")}</CardTitle>
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -124,13 +126,13 @@ export default function AdminDashboard() {
             ) : (
               <div className="text-2xl font-bold">{stats.todayVisits.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Số lượt dự đoán từ khách</p>
+            <p className="text-xs text-muted-foreground">{t("admin.trialRunsDescription")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Dự đoán (hôm nay)</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.predictionsToday")}</CardTitle>
             <Brain className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -139,24 +141,24 @@ export default function AdminDashboard() {
             ) : (
               <div className="text-2xl font-bold">{stats.todayPredictions.toLocaleString()}</div>
             )}
-            <p className="text-xs text-muted-foreground">Số lượt dự đoán từ user</p>
+            <p className="text-xs text-muted-foreground">{t("admin.predictionsDescription")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Tổng người dùng</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.totalUsers")}</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-20" /> : <div className="text-2xl font-bold">{stats.totalUsers}</div>}
-            <p className="text-xs text-muted-foreground">Tổng số tài khoản đã đăng ký</p>
+            <p className="text-xs text-muted-foreground">{t("admin.totalUsersDescription")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Độ chính xác (Feedback)</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.feedbackAccuracy")}</CardTitle>
             <ThumbsUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -165,7 +167,7 @@ export default function AdminDashboard() {
             ) : (
               <div className="text-2xl font-bold">{stats.accuracy}%</div>
             )}
-            <p className="text-xs text-muted-foreground">Dựa trên {stats.totalFeedback} phản hồi</p>
+            <p className="text-xs text-muted-foreground">{t("admin.feedback.errors.approvalRateDescription")}</p>
           </CardContent>
         </Card>
       </div>
@@ -174,8 +176,8 @@ export default function AdminDashboard() {
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Hoạt động trong tuần</CardTitle>
-            <CardDescription>Số lượt dự đoán trong 7 ngày qua</CardDescription>
+            <CardTitle>{t("admin.weeklyActivity")}</CardTitle>
+            <CardDescription>{t("admin.weeklyActivityDescription")}</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
@@ -206,8 +208,8 @@ export default function AdminDashboard() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Các giống chó được dự đoán nhiều nhất</CardTitle>
-            <CardDescription>Top 5 giống chó xuất hiện nhiều nhất trong các dự đoán</CardDescription>
+            <CardTitle>{t("admin.topPredictedBreeds")}</CardTitle>
+            <CardDescription>{t("admin.topPredictedBreedsDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {loading
@@ -217,7 +219,7 @@ export default function AdminDashboard() {
                     <p className="flex-1 capitalize text-sm font-medium">{breed.breed.replace(/_/g, " ")}</p>
                     <div className="flex items-center gap-2">
                       <BarChart className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">{breed.count} lần</span>
+                      <span className="text-sm text-muted-foreground">{t("admin.predictionsCount", { count: breed.count })}</span>
                     </div>
                   </div>
                 ))}

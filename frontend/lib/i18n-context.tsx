@@ -8,7 +8,7 @@ type Locale = "en" | "vi"
 export interface I18nContextType {
   locale: Locale
   setLocale: (locale: Locale) => void
-  t: (key: string) => string
+  t: (key: string, replacements?: Record<string, string | number>) => string
 }
 
 const I18nContext = createContext<I18nContextType | undefined>(undefined)
@@ -49,16 +49,25 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000`
   }
 
-  const t = (key: string): string => {
+  const t = (key: string, replacements?: Record<string, string | number>): string => {
     const keys = key.split(".")
     let value: any = messages[locale]
 
     for (const k of keys) {
       value = value?.[k]
-      if (value === undefined) return key
+      if (value === undefined) {
+        console.warn(`[i18n] Missing translation for key: ${key}`);
+        return key
+      }
     }
-
-    return value || key
+    
+    let result = String(value || key);
+    if (replacements) {
+      Object.keys(replacements).forEach(placeholder => {
+        result = result.replace(`{${placeholder}}`, String(replacements[placeholder]));
+      });
+    }
+    return result;
   }
 
   return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>

@@ -187,6 +187,7 @@ export default function FeedbackManagement() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-20" /> : <div className="text-2xl font-bold">{accuracy}%</div>}
+            <p className="text-xs text-muted-foreground">{t('admin.feedback.errors.approvalRateDescription', { count: totalFeedback })}</p>
           </CardContent>
         </Card>
       </div>
@@ -328,7 +329,7 @@ export default function FeedbackManagement() {
                                 </DialogDescription>
                               </DialogHeader>
                               <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-4 items-center gap-4">
+                                <div className="grid grid-cols-4 items-start gap-4">
                                   <p className="text-right font-semibold">{t('admin.feedback.dialog.originalImage')}:</p>
                                   <div className="col-span-3 flex gap-4">
                                     <a href={f.originalMediaUrl} target="_blank" rel="noopener noreferrer">

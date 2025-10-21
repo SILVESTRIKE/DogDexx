@@ -122,11 +122,7 @@ export default function DogDetailPage() {
             <div className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full text-lg shadow-lg">
               #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
             </div>
-            {collected && (
-              <div className="absolute top-4 right-4 bg-secondary text-secondary-foreground rounded-full p-3 shadow-lg">
-                <CheckCircle className="h-6 w-6" />
-              </div>
-            )}
+            
           </div>
 
           <div className="space-y-6">
@@ -151,7 +147,7 @@ export default function DogDetailPage() {
             <Card className="border-2">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5 text-primary" />
+                  <Sparkles className="h-5 w-5 text-yellow-500" />
                   {t('dogDetails.quickStats')}
                 </CardTitle>
               </CardHeader>
@@ -159,42 +155,42 @@ export default function DogDetailPage() {
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-primary" />
+                      <Activity className="h-4 w-4 text-chart-4" />
                       {t('results.energy')}
                     </span>
                     <span className="text-sm font-bold">{dog.energy_level}/5</span>
                   </div>
-                  <Progress value={(dog.energy_level ?? 0) * 20} className="h-2" />
+                  <Progress value={(dog.energy_level ?? 0) * 20} className="h-2" indicatorClassName="bg-chart-4" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Brain className="h-4 w-4 text-secondary" />
+                      <Brain className="h-4 w-4 text-amber-500" />
                       {t('results.trainability')}
                     </span>
                     <span className="text-sm font-bold">{dog.trainability}/5</span>
                   </div>
-                  <Progress value={(dog.trainability ?? 0) * 20} className="h-2" />
+                  <Progress value={(dog.trainability ?? 0) * 20} className="h-2" indicatorClassName="bg-amber-500" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Wind className="h-4 w-4 text-accent" />
+                      <Wind className="h-4 w-4 text-gray-500" />
                       {t('results.shedding')}
                     </span>
                     <span className="text-sm font-bold">{dog.shedding_level}/5</span>
                   </div>
-                  <Progress value={(dog.shedding_level ?? 0) * 20} className="h-2" />
+                  <Progress value={(dog.shedding_level ?? 0) * 20} className="h-2" indicatorClassName="bg-gray-500" />
                 </div>
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Wrench className="h-4 w-4 text-chart-4" />
+                      <Wrench className="h-4 w-4 text-chart-1" />
                       {t('dogDetails.maintenance')}
                     </span>
                     <span className="text-sm font-bold">{dog.maintenance_difficulty}/5</span>
                   </div>
-                  <Progress value={(dog.maintenance_difficulty ?? 0) * 20} className="h-2" />
+                  <Progress value={(dog.maintenance_difficulty ?? 0) * 20} className="h-2" indicatorClassName="bg-chart-1" />
                 </div>
               </CardContent>
             </Card>
@@ -276,7 +272,7 @@ export default function DogDetailPage() {
                 <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithChildren')}</p>
                 <Badge variant={dog.good_with_children ? "default" : "destructive"}>
                   {dog.good_with_children ? (
-                    <CheckCircle className="h-3 w-3 mr-1" />
+                    <CheckCircle className="h-3 w-3 mr-1 text-chart-1" />
                   ) : (
                     <XCircle className="h-3 w-3 mr-1" />
                   )}
@@ -287,7 +283,7 @@ export default function DogDetailPage() {
                 <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithPets')}</p>
                 <Badge variant={dog.good_with_other_pets ? "default" : "destructive"}>
                   {dog.good_with_other_pets ? (
-                    <CheckCircle className="h-3 w-3 mr-1" />
+                    <CheckCircle className="h-3 w-3 mr-1 text-chart-1" />
                   ) : (
                     <XCircle className="h-3 w-3 mr-1" />
                   )}
@@ -304,7 +300,7 @@ export default function DogDetailPage() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-secondary" />
+                <CheckCircle className="h-5 w-5 text-chart-1" />
                 {t('dogDetails.suitableFor')}
               </CardTitle>
             </CardHeader>
@@ -312,7 +308,7 @@ export default function DogDetailPage() {
               <ul className="space-y-2">
                 {(dog.suitable_for ?? []).map((item) => (
                   <li key={item} className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-secondary flex-shrink-0" />
+                    <CheckCircle className="h-4 w-4 flex-shrink-0 text-chart-1" />
                     <span className="capitalize">{item}</span>
                   </li>
                 ))}
@@ -347,7 +343,7 @@ export default function DogDetailPage() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Utensils className="h-5 w-5 text-primary" />
+                <Utensils className="h-5 w-5 text-amber-500" />
                 {t('dogDetails.favoriteFoods')}
               </CardTitle>
             </CardHeader>
@@ -387,7 +383,7 @@ export default function DogDetailPage() {
         <Card className="border-2 mb-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Award className="h-5 w-5 text-accent" />
+              <Award className="h-5 w-5 text-chart-1" />
               {t('dogDetails.trainableSkills')}
             </CardTitle>
           </CardHeader>
@@ -403,15 +399,15 @@ export default function DogDetailPage() {
         </Card>
 
         {/* Fun Fact */}
-        <Card className="border-2 border-accent bg-accent/5">
+        <Card className="border-2 border-yellow-500 bg-yellow-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-accent" />
+              <Sparkles className="h-5 w-5 text-yellow-500 animate-ping" />
               {t('dogDetails.funFact')}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-lg leading-relaxed">{dog.fun_fact}</p>
+            <p className="text-lg leading-relaxed text-foreground/90">{dog.fun_fact}</p>
           </CardContent>
         </Card>
       </div>

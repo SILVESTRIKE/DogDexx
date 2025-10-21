@@ -116,14 +116,14 @@ export default function UsagePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">{t("admin.usageTracking") || "Usage Tracking"}</h2>
+          <h2 className="text-3xl font-bold tracking-tight">{t("admin.usageTracking")}</h2>
           <p className="text-muted-foreground">
-            {t("admin.usageTrackingDescription") || "Monitor user activity and resource consumption"}
+            {t("admin.usageTrackingDescription")}
           </p>
         </div>
         <Button onClick={handleExportReport} variant="outline" className="gap-2 bg-transparent">
           <Download className="h-4 w-4" />
-          {t("admin.exportReport") || "Export Report"}
+          {t("admin.exportReport")}
         </Button>
       </div>
 
@@ -133,12 +133,12 @@ export default function UsagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              {t("admin.totalDetections") || "Total Detections"}
+              {t("admin.totalDetections")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalDetections.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">{t("admin.allTime") || "All time"}</p>
+            <p className="text-xs text-muted-foreground">{t("admin.allTime")}</p>
           </CardContent>
         </Card>
 
@@ -146,22 +146,22 @@ export default function UsagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
-              {t("admin.totalStorage") || "Total Storage Used"}
+              {t("admin.totalStorage")}
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{totalStorage.toFixed(1)} GB</div>
-            <p className="text-xs text-muted-foreground">{t("admin.across") || "Across all users"}</p>
+            <p className="text-xs text-muted-foreground">{t("admin.across")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">{t("admin.avgDetections") || "Avg Detections/User"}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.avgDetections")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="text-3xl font-bold">{avgDetectionsPerUser}</div>
-            <p className="text-xs text-muted-foreground">{t("admin.perUser") || "Per user"}</p>
+            <p className="text-xs text-muted-foreground">{t("admin.perUser")}</p>
           </CardContent>
         </Card>
       </div>
@@ -170,7 +170,7 @@ export default function UsagePage() {
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t("admin.detectionsOverTime") || "Detections Over Time"}</CardTitle>
+            <CardTitle>{t("admin.detectionsOverTime")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -188,7 +188,7 @@ export default function UsagePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("admin.storageUsage") || "Storage Usage Over Time"}</CardTitle>
+            <CardTitle>{t("admin.storageUsage")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
@@ -208,9 +208,9 @@ export default function UsagePage() {
       {/* Usage Table */}
       <Card>
         <CardHeader>
-          <CardTitle>{t("admin.userUsageDetails") || "User Usage Details"}</CardTitle>
+          <CardTitle>{t("admin.userUsageDetails")}</CardTitle>
           <CardDescription>
-            {t("admin.detailedBreakdown") || "Detailed breakdown of each user's resource consumption"}
+            {t("admin.detailedBreakdown")}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -219,7 +219,7 @@ export default function UsagePage() {
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder={t("common.search") || "Search users..."}
+                placeholder={t("admin.usage.searchPlaceholder")}
                 className="pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -228,25 +228,25 @@ export default function UsagePage() {
 
             <Select value={planFilter} onValueChange={setPlanFilter}>
               <SelectTrigger>
-                <SelectValue placeholder={t("admin.filterByPlan") || "Filter by plan"} />
+                <SelectValue placeholder={t("admin.filterByPlan")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">{t("common.all") || "All"}</SelectItem>
-                <SelectItem value="free">{t("pricing.free") || "Free"}</SelectItem>
-                <SelectItem value="starter">{t("pricing.starter") || "Starter"}</SelectItem>
-                <SelectItem value="professional">{t("pricing.professional") || "Professional"}</SelectItem>
-                <SelectItem value="enterprise">{t("pricing.enterprise") || "Enterprise"}</SelectItem>
+                <SelectItem value="all">{t("common.all")}</SelectItem>
+                <SelectItem value="free">{t("pricing.free")}</SelectItem>
+                <SelectItem value="starter">{t("pricing.starter")}</SelectItem>
+                <SelectItem value="professional">{t("pricing.professional")}</SelectItem>
+                <SelectItem value="enterprise">{t("pricing.enterprise")}</SelectItem>
               </SelectContent>
             </Select>
 
             <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger>
-                <SelectValue placeholder={t("common.sort") || "Sort by"} />
+                <SelectValue placeholder={t("common.sort")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="detections">{t("admin.detections") || "Detections"}</SelectItem>
-                <SelectItem value="storage">{t("admin.storage") || "Storage"}</SelectItem>
-                <SelectItem value="lastActive">{t("admin.lastActive") || "Last Active"}</SelectItem>
+                <SelectItem value="detections">{t("admin.detections")}</SelectItem>
+                <SelectItem value="storage">{t("admin.storage")}</SelectItem>
+                <SelectItem value="lastActive">{t("admin.lastActive")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -256,26 +256,26 @@ export default function UsagePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>{t("common.name") || "Name"}</TableHead>
-                  <TableHead>{t("common.email") || "Email"}</TableHead>
-                  <TableHead>{t("admin.plan") || "Plan"}</TableHead>
-                  <TableHead className="text-right">{t("admin.detections") || "Detections"}</TableHead>
-                  <TableHead className="text-right">{t("admin.storage") || "Storage"}</TableHead>
-                  <TableHead className="text-right">{t("admin.trend") || "Trend"}</TableHead>
-                  <TableHead>{t("admin.lastActive") || "Last Active"}</TableHead>
+                  <TableHead>{t("admin.usage.headers.name")}</TableHead>
+                  <TableHead>{t("admin.usage.headers.email")}</TableHead>
+                  <TableHead>{t("admin.usage.headers.plan")}</TableHead>
+                  <TableHead className="text-right">{t("admin.usage.headers.detections")}</TableHead>
+                  <TableHead className="text-right">{t("admin.usage.headers.storage")}</TableHead>
+                  <TableHead className="text-right">{t("admin.usage.headers.trend")}</TableHead>
+                  <TableHead>{t("admin.usage.headers.lastActive")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8">
-                      {t("common.loading") || "Loading..."}
+                      {t("common.loading")}
                     </TableCell>
                   </TableRow>
                 ) : filteredData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      {t("admin.noData") || "No data found"}
+                      {t("admin.noData")}
                     </TableCell>
                   </TableRow>
                 ) : (

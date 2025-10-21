@@ -7,32 +7,32 @@ import { Label } from "@/components/ui/label"
 import { useAuth } from "@/lib/auth-context"
 import { useCollection } from "@/lib/collection-context"
 import { ProtectedRoute } from "@/components/protected-route"
-import { User, Mail, Lock, Trophy, Dog, ArrowLeft, Camera } from "lucide-react"
+import { User, Mail, Lock, Trophy, Dog, ArrowLeft, Camera, CheckCircle } from "lucide-react"
 import { useI18n } from "@/lib/i18n-context"
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { apiClient } from "@/lib/api-client"
-import { useToast } from "@/hooks/use-toast"
+import { toast } from "sonner"
 
 function ProfileContent() {
   const { t } = useI18n();
   const { user, setUser, logout } = useAuth()
   const { collectionStats, achievementStats } = useCollection()
-  const { toast } = useToast()
   const avatarInputRef = useRef<HTMLInputElement>(null)
 
   const [isEditing, setIsEditing] = useState(false)
-  const [totalBreeds, setTotalBreeds] = useState(0)
   const [isSaving, setIsSaving] = useState(false)
   const [newAvatar, setNewAvatar] = useState<File | null>(null)
 
   const [formData, setFormData] = useState({
-    name: "",
+    username: "",
     email: "",
     currentPassword: "",
     newPassword: "",
     confirmPassword: "",
+    firstName: "",
+    lastName: "",
   })
 
   useEffect(() => {
@@ -40,32 +40,34 @@ function ProfileContent() {
     if (user) {
       setFormData(prev => ({
         ...prev,
-        name: user.username || "",
+        username: user.username || "",
         email: user.email || "",
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
       }));
     }
-    const fetchTotalCount = async () => {
-      try {
-        const response = await apiClient.getPokedex({ limit: 1 })
-        setTotalBreeds(response.total || 0)
-      } catch (error) {
-        console.error("[v0] Failed to fetch total count:", error)
-      }
-    }
-
-    fetchTotalCount()
   }, [user])
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file) return
-    setNewAvatar(file)
-    // Tạm thời hiển thị ảnh mới để người dùng thấy ngay lập tức
-    const reader = new FileReader()
-    reader.onloadend = () => {
-      setUser(prevUser => prevUser ? { ...prevUser, avatarUrl: reader.result as string } : null)
+    if (!file) return;
+
+    const uploadToast = toast.loading("Đang tải lên ảnh đại diện mới...");
+
+    try {
+      // Gọi API để tải ảnh lên ngay lập tức
+      const response = await apiClient.updateAvatar(file);
+
+      // Cập nhật context với dữ liệu user mới từ server
+      setUser(response.data.user);
+
+      toast.success("Cập nhật ảnh đại diện thành công!", { id: uploadToast as string | number });
+    } catch (error: any) {
+      toast.error("Tải ảnh lên thất bại", {
+        id: uploadToast as string | number,
+        description: error.message,
+      });
     }
-    reader.readAsDataURL(file)
   }
 
   const handleSave = async () => {
@@ -74,10 +76,15 @@ function ProfileContent() {
       const formDataToSend = new FormData()
 
       // Chỉ thêm những trường có thay đổi vào FormData
-      if (user?.username !== formData.name) {
-        formDataToSend.append('username', formData.name)
+      if (user?.username !== formData.username) {
+        formDataToSend.append('username', formData.username)
       }
-      // Thêm firstName, lastName nếu có
+      if (user?.firstName !== formData.firstName) {
+        formDataToSend.append('firstName', formData.firstName)
+      }
+      if (user?.lastName !== formData.lastName) {
+        formDataToSend.append('lastName', formData.lastName)
+      }
 
       // Thêm avatar mới nếu có
       if (newAvatar) {
@@ -87,14 +94,14 @@ function ProfileContent() {
       // Chỉ gọi API nếu có gì đó để cập nhật
       if (formDataToSend.entries().next().value) {
         const response = await apiClient.updateProfile(formDataToSend)
-        setUser(response.data) // Cập nhật user trong context với dữ liệu mới từ server
-        toast({ title: t("common.success"), description: response.message })
+        setUser(response.data.user) // Cập nhật user trong context với dữ liệu mới từ server
+        toast.success(t("common.success"), { description: response.message })
       }
 
       setIsEditing(false)
       setNewAvatar(null) // Reset avatar mới sau khi lưu
     } catch (error: any) {
-      toast({ variant: "destructive", title: t("common.error"), description: error.message })
+      toast.error(t("common.error"), { description: error.message })
     } finally {
       setIsSaving(false)
     }
@@ -173,8 +180,8 @@ function ProfileContent() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-secondary/10 rounded-lg">
-                    <Trophy className="h-6 w-6 text-secondary" />
+                  <div className="p-3 bg-chart-4/10 rounded-lg">
+                    <Trophy className="h-6 w-6 text-chart-4" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold">{achievementStats?.unlockedAchievements ?? 0}</p>
@@ -187,12 +194,12 @@ function ProfileContent() {
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center gap-4">
-                  <div className="p-3 bg-accent/10 rounded-lg">
-                    <Trophy className="h-6 w-6 text-accent" />
+                  <div className="p-3 bg-chart-1/10 rounded-lg">
+                    <CheckCircle className="h-6 w-6 text-chart-1" />
                   </div>
                   <div>
                     <p className="text-2xl font-bold">
-                      {totalBreeds > 0 ? Math.round(((collectionStats?.collectedBreeds ?? 0) / totalBreeds) * 100) : 0}%
+                      {achievementStats?.totalBreeds && achievementStats.totalBreeds > 0 ? Math.round((achievementStats.totalCollected / achievementStats.totalBreeds) * 100) : 0}%
                     </p>
                     <p className="text-sm text-muted-foreground">{t('profile.stats.completion')}</p>
                   </div>
@@ -214,16 +221,26 @@ function ProfileContent() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">
+                <Label htmlFor="username">
                   <User className="h-4 w-4 inline mr-2" />
-                  {t('profile.account.name')}
+                  {t('auth.username')}
                 </Label>
                 <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   disabled={!isEditing}
                 />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="firstName">{t("auth.firstName")}</Label>
+                  <Input id="firstName" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} disabled={!isEditing} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lastName">{t("auth.lastName")}</Label>
+                  <Input id="lastName" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} disabled={!isEditing} />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -239,7 +256,6 @@ function ProfileContent() {
                   disabled={!isEditing}
                 />
               </div>
-
               {isEditing && (
                 <>
                   <div className="border-t pt-4 mt-4">
@@ -287,11 +303,13 @@ function ProfileContent() {
                       onClick={() => {
                         setIsEditing(false)
                         setFormData({
-                          name: user?.username || "",
+                          username: user?.username || "",
                           email: user?.email || "",
                           currentPassword: "",
                           newPassword: "",
                           confirmPassword: "",
+                          firstName: user?.firstName || "",
+                          lastName: user?.lastName || "",
                         })
                         setNewAvatar(null) // Hủy cả thay đổi avatar
                       }}
@@ -318,7 +336,7 @@ function ProfileContent() {
                 </Button>
               </Link>
               <Link href="/achievements">
-                <Button variant="outline" className="w-full justify-start bg-transparent">
+                <Button variant="outline" className="w-full justify-start bg-transparent mt-4">
                   <Trophy className="h-4 w-4 mr-2" />
                   {t('profile.links.viewAchievements')}
                 </Button>

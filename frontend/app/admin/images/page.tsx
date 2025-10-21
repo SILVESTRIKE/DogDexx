@@ -100,6 +100,9 @@ export default function ImagesPage() {
 
   // UX 1: Hợp nhất logic điều hướng để giao diện mượt mà hơn
   const navigateToPath = (path: string) => {
+    // FIX 2: Ngăn tải lại nếu đã ở đúng path
+    if (path.toLowerCase() === currentPath) return;
+
     setIsLoading(true);
     setItems([]); // Xóa item cũ ngay lập tức để không bị "nháy"
     setSearchQuery(""); // Reset tìm kiếm khi chuyển thư mục
@@ -212,7 +215,10 @@ export default function ImagesPage() {
         <CardHeader>
           <CardTitle>{t("admin.folderContents") || "Contents"}</CardTitle>
           <CardDescription>
-            Đang hiển thị {filteredItems.length} mục trong thư mục "{breadcrumbs[breadcrumbs.length - 1]?.name || 'Root'}".
+            {t('admin.showingDescription', { 
+              count: filteredItems.length, 
+              folderName: breadcrumbs[breadcrumbs.length - 1]?.name || t('admin.imageManagementRoot') 
+            })}
           </CardDescription>
         </CardHeader>
         <CardContent>

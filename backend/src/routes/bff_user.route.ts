@@ -160,7 +160,7 @@ router.put('/profile', authMiddleware, updateProfile);
  *       200:
  *         description: Cập nhật ảnh đại diện thành công.
  */
-router.put('/avatar', authMiddleware, uploadAvatar, updateAvatar);
+router.post('/avatar', authMiddleware, uploadAvatar, updateAvatar);
 /**
  * @swagger
  * /bff/user/logout:
