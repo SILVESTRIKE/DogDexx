@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { getMessages } from './i18n-config';
+import { getMessages} from './i18n-config';
 
 type Locale = "en" | "vi"
 

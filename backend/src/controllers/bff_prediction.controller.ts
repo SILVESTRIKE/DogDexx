@@ -15,6 +15,7 @@ import { userService } from "../services/user.service";
 import { logger } from "../utils/logger.util";
 import { predictionHistoryService } from "../services/prediction_history.service";
 import { incrementUsage } from "../middlewares/usageLimiter.middleware";
+import { askGemini } from "../services/geminiAI.service";
 
 /**
  * Hàm phụ trợ để tạo đối tượng breedInfo được làm giàu và chọn lọc.
@@ -57,6 +58,7 @@ async function updateUserCollectionAndAchievements(userId: string, breedSlugs: s
     return null;
   }
 
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
   const userObjectId = new Types.ObjectId(userId);
   const [userBeforeUpdate, oldCollections] = await Promise.all([
     userService.getById(userId),
@@ -65,7 +67,7 @@ async function updateUserCollectionAndAchievements(userId: string, breedSlugs: s
 
   if (!userBeforeUpdate) throw new BadRequestError("User not found before update.");
 
-  await collectionService.addOrUpdateManyCollections(userObjectId, breedSlugs, predictionId);
+  await collectionService.addOrUpdateManyCollections(userObjectId, breedSlugs, predictionId, lang);
 
   const [userAfterUpdate, newCollections] = await Promise.all([
     userService.getById(userId),
@@ -74,7 +76,6 @@ async function updateUserCollectionAndAchievements(userId: string, breedSlugs: s
 
   if (!userAfterUpdate) throw new BadRequestError("User not found after update.");
 
-  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
   const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections, lang);
   
   // *** SỬA LỖI TẠI ĐÂY ***
@@ -92,6 +93,8 @@ async function updateUserCollectionAndAchievements(userId: string, breedSlugs: s
  * PHIÊN BẢN NÂNG CẤP: Xử lý TẤT CẢ các dự đoán, không chỉ cái chính.
  */
 async function handlePredictionAndEnrichment(req: Request, predictionPromise: Promise<PredictionHistoryDoc>, source: 'image_upload' | 'video_upload' | 'stream_capture', userId?: string) {
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+  logger.info(`[BFF Enrich] Language resolved to '${lang}' from headers for prediction enrichment.`);
   // 1. Await the raw prediction result from the core service
   const predictionResult = await predictionPromise;
 
@@ -101,7 +104,7 @@ async function handlePredictionAndEnrichment(req: Request, predictionPromise: Pr
   // Tạo một map để tra cứu thông tin wiki một cách hiệu quả
   let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
   if (breedSlugs.length > 0) {
-    const breeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
     breeds.forEach(breed => wikiInfoMap.set(breed.slug, breed));
   }
 
@@ -165,6 +168,8 @@ export const bffPredictionController = {
 
   predictBatch: async (req: Request, res: Response) => {
     const userId = req.user?._id;
+    const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+    logger.info(`[BFF BatchPredict] Language resolved to '${lang}' from headers for batch enrichment.`);
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) {
       throw new BadRequestError("Không có file nào được cung cấp.");
@@ -178,7 +183,7 @@ export const bffPredictionController = {
     let collectionStatus: any = null;
 
     const enrichmentPromises: Promise<any>[] = [
-      wikiService.getBreedsBySlugs(uniqueSlugs).then(breeds => {
+      wikiService.getBreedsBySlugs(uniqueSlugs, lang).then(breeds => {
         breeds.forEach(breed => wikiInfoMap.set(breed.slug, breed));
       })
     ];
@@ -192,14 +197,13 @@ export const bffPredictionController = {
             collectionService.getUserCollection(userObjectId)
           ]);
           if (!userBeforeUpdate) return;
-          await collectionService.addOrUpdateFromPredictionResults(userObjectId, batchPredictionResults);
+          await collectionService.addOrUpdateFromPredictionResults(userObjectId, batchPredictionResults, lang);
           const [userAfterUpdate, newCollections] = await Promise.all([
             userService.getById(userObjectId.toString()),
             collectionService.getUserCollection(userObjectId)
           ]);
           if (!userAfterUpdate) return;
 
-          const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
           const achievementsResult = await achievementService.processUserAchievements(userAfterUpdate, newCollections, lang);
           const unlockedAchievements = achievementsResult.filter(ach => ach.unlocked && !(userBeforeUpdate.achievements || []).some((oldAch: UnlockedAchievement) => oldAch.key === ach.key));
           collectionStatus = {
@@ -264,6 +268,8 @@ export const bffPredictionController = {
 
   getPredictionHistory: async (req: Request, res: Response) => {
     const userId = req.user!._id;
+    const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+    logger.info(`[BFF HistoryList] Language resolved to '${lang}' from headers for history enrichment.`);
     const { page = 1, limit = 10 } = req.query;
 
     const historyResult = await predictionHistoryService.getHistoryForUser(userId, {
@@ -277,7 +283,7 @@ export const bffPredictionController = {
     // 2. Tạo một map để tra cứu thông tin breed hiệu quả
     const wikiInfoMap = new Map<string, { breed: string }>();
     if (allSlugs.length > 0) {
-      const breeds = await wikiService.getBreedsBySlugs(allSlugs);
+      const breeds = await wikiService.getBreedsBySlugs(allSlugs, lang);
       breeds.forEach(breed => wikiInfoMap.set(breed.slug, { breed: breed.breed }));
     }
 
@@ -328,6 +334,8 @@ export const bffPredictionController = {
   getPredictionHistoryById: async (req: Request, res: Response) => {
     const userId = req.user?._id; // Cho phép userId là undefined cho người dùng khách
     const { id: historyId } = req.params;
+    const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
+    logger.info(`[BFF HistoryById] Language for history '${historyId}' resolved to '${lang}' from query param.`);
 
     const historyItem = await predictionHistoryService.getHistoryById(historyId); // Gọi hàm service mới/cập nhật
     if (!historyItem) {
@@ -335,7 +343,7 @@ export const bffPredictionController = {
     }
 
     const breedSlugs: string[] = [...new Set(historyItem.predictions.map((p: IYoloPrediction) => p.class.toLowerCase().replace(/\s+/g, '-')))];
-    const breeds = await wikiService.getBreedsBySlugs(breedSlugs);
+    const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
     const wikiInfoMap = new Map<string, DogBreedWikiDoc>(breeds.map(breed => [breed.slug, breed]));
 
     const transformedPrediction = transformMediaURLs(req, historyItem.toObject());
@@ -352,6 +360,8 @@ export const bffPredictionController = {
 
   handleStreamPrediction: async (ws: WebSocket, req: Request) => {
     const userId = req.user?._id?.toString();
+    const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+    logger.info(`[BFF Stream] Language resolved to '${lang}' from headers for stream enrichment.`);
     const aiServiceUrl = (process.env.AI_SERVICE_URL || "http://localhost:8000").replace(/^http/, 'ws');
     const aiServiceWs = new WebSocket(`${aiServiceUrl}/predict-stream`);
 
@@ -397,7 +407,7 @@ export const bffPredictionController = {
           const slugsToFetch = [...new Set(data.detections.map((p: any) => p.class.toLowerCase().replace(/\s+/g, '-')).filter((slug: string) => !wikiCache.has(slug)))] as string[];
 
           if (slugsToFetch.length > 0) {
-            const breeds = await wikiService.getBreedsBySlugs(slugsToFetch);
+            const breeds = await wikiService.getBreedsBySlugs(slugsToFetch, lang);
             breeds.forEach(breed => wikiCache.set(breed.slug, breed.toObject()));
           }
           if (data.status === 'captured') {
@@ -465,5 +475,21 @@ export const bffPredictionController = {
          logger.info(`[BFF-WS] AI Service closed after final result was sent. Code: ${code}`);
       }
     });
+  },
+
+  /**
+   * @desc [User] Gửi tin nhắn để hỏi Gemini về một giống chó cụ thể.
+   * @route POST /bff/predict/chat/:breedSlug
+   * @access Public
+   */
+  chatWithGemini: async (req: Request, res: Response) => {
+    const { breedSlug } = req.params;
+    const { message } = req.body;
+    if (!message) throw new BadRequestError("Message is required.");
+
+    const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+    logger.info(`[BFF GeminiChat] Language for breed '${breedSlug}' resolved to '${lang}' from headers.`);
+    const result = await askGemini(breedSlug, message, lang);
+    res.status(200).json(result);
   }
 };

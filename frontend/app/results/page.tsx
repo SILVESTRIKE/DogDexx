@@ -14,6 +14,7 @@ import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
+import { BreedChatBox } from "@/components/breed-chat-box";
 
 /**
  * Component con chứa logic chính để có thể sử dụng hook `useSearchParams`
@@ -22,7 +23,7 @@ import { useAuth } from '@/lib/auth-context';
 function ResultsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { user } = useAuth();
   
   // State mới cho loading và error
@@ -67,7 +68,7 @@ function ResultsContent() {
     const fetchHistoryById = async () => {
       setLoading(true);
       try {
-        const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId);
+        const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId, locale);
         processResultData(result);
       } catch (err) {
         console.error("[ResultsPage] Failed to fetch prediction history:", err);
@@ -81,7 +82,7 @@ function ResultsContent() {
 
     // Không cần dọn dẹp sessionStorage nữa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Chỉ chạy effect này một lần duy nhất khi component được tải.
+  }, [locale]); // Chạy lại khi locale thay đổi
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
 
@@ -207,10 +208,12 @@ function ResultsContent() {
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    <Badge variant="default" className="text-sm px-3 py-1">
-                      <MapPin className="h-3 w-3 mr-1" />
-                      {selectedBreedInfo.group || t("results.unknownOrigin")}
-                    </Badge>
+                    <Link href={`/pokedex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
+                      <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {selectedBreedInfo.group || t("results.unknownOrigin")}
+                      </Badge>
+                    </Link>
                   </div>
                 </div>
                 <div>
@@ -319,6 +322,13 @@ function ResultsContent() {
           imageUrl={""} 
           predictionId={predictionId}
         />
+
+        <div className="mt-12">
+          <BreedChatBox
+            breedSlug={selectedBreedInfo.slug}
+            breedName={selectedBreedInfo.breed}
+          />
+        </div>
       </div>
     </main>
   )

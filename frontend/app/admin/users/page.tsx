@@ -128,7 +128,7 @@ export default function UsersPage() {
                     <TableCell>
                       <div className="font-medium">{user.name}</div>
                       <div className="text-sm text-muted-foreground">
-                        <Badge variant={user.role === 'admin' ? 'default' : user.role === 'premium' ? 'outline' : 'secondary'} className="capitalize">
+                        <Badge variant={user.role === 'admin' ? 'default' : user.role === 'de' ? 'outline' : 'secondary'} className="capitalize">
                           {user.role}
                         </Badge>
                       </div>

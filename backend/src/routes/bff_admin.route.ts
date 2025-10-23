@@ -16,6 +16,8 @@ import {
   getUsageStats,
   getHistories,
   browseMedia,
+  getPlans,
+  getSubscriptions,
 } from '../controllers/bff_admin.controller';
 import { browseHistories } from '../controllers/bff_admin.controller';
 import { uploadSingle } from '../middlewares/upload.middleware';
@@ -184,5 +186,33 @@ router.get('/histories/browse', browseHistories);
  *       200: { description: "Lấy nội dung thành công." }
  */
 router.get('/media/browse', browseMedia);
+
+/**
+ * @swagger
+ * /bff/admin/plans:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách các gói cước
+ *     tags: [BFF-Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu thành công.
+ */
+router.get('/plans', getPlans);
+
+/**
+ * @swagger
+ * /bff/admin/subscriptions:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách các đăng ký của người dùng
+ *     tags: [BFF-Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu thành công.
+ */
+router.get('/subscriptions', getSubscriptions);
 
 export default router;

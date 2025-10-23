@@ -1,8 +1,9 @@
 export interface User {
   id: string
+  plan: 'free' | 'starter' | 'professional' | 'enterprise';
   username: string
   email: string
-  role: "user" | "premium" | "admin"
+  role: "user" | "de" | "admin"
   verify: boolean
   createdAt: string
   firstName?: string

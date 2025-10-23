@@ -5,16 +5,19 @@ import { transformMediaURLs } from '../utils/media.util';
 import { wikiController } from './dogs_wiki.controller';
 import { collectionService } from '../services/user_collections.service';
 import { predictionHistoryService } from '../services/prediction_history.service';
+import { logger } from '../utils/logger.util';
 import { MediaController } from './medias.controller';
 
 export const getBreedDetail = async (req: Request, res: Response, next: NextFunction) => {
   const { slug } = req.params;
   const userId = req.user?._id;
+  const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
+  logger.info(`[BFF BreedDetail] Language for slug '${slug}' resolved to '${lang}' from query param.`);
 
   // 1. Get breed info, collection status, and related media in parallel
   const [breed, userCollection, relatedMedia] = await Promise.all([
-    wikiService.getBreedBySlug(slug),
-    userId ? collectionService.getCollectionItemBySlug(userId, slug) : Promise.resolve(null),
+    wikiService.getBreedBySlug(slug, lang),
+    userId ? collectionService.getCollectionItemBySlug(userId, slug, lang) : Promise.resolve(null),
     predictionHistoryService.findHistoriesByBreedName(slug, 10)
   ]);
 

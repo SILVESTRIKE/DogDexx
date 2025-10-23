@@ -1,13 +1,23 @@
 import { Request, Response, NextFunction } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { UserModel } from "../models/user.model";
-import { BadRequestError, TooMuchReqError } from "../errors";
+import { PlanModel } from "../models/plan.model";
+import { BadRequestError, TooMuchReqError, PaymentRequiredError } from "../errors";
+import { logger } from "../utils/logger.util";
 
 const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 
-const LIMITS = {
-  user: { image: 100, video: 5 },
-};
+// Cache plans để tránh query DB liên tục
+let plansCache: Map<string, any> | null = null;
+
+async function getPlans() {
+  if (!plansCache) {
+    const plansFromDb = await PlanModel.find({ isDeleted: false });
+    plansCache = new Map(plansFromDb.map(p => [p.slug, p.toObject()]));
+    logger.info("Plans cache populated.");
+  }
+  return plansCache;
+}
 
 // Limiter cho Guest: 5 lần/tuần/IP
 const guestLimiter = rateLimit({
@@ -32,34 +42,58 @@ export const checkUsageLimit = async (req: Request, res: Response, next: NextFun
     return guestLimiter(req, res, next);
   }
 
-  // Nếu là người dùng đã đăng nhập -> kiểm tra DB
+  // Nếu là người dùng đã đăng nhập -> kiểm tra DB và plan
   try {
     const dbUser = await UserModel.findById(req.user._id);
     if (!dbUser) return next(new BadRequestError("Người dùng không hợp lệ."));
     if (dbUser.role === "admin") return next();
 
+    const plans = await getPlans();
+    const userPlan = plans.get(dbUser.plan);
+
+    if (!userPlan) {
+      logger.error(`User ${dbUser._id} has an invalid plan: '${dbUser.plan}'. Defaulting to free plan limits.`);
+      // Fallback to a default limit if plan is somehow invalid
+      const freePlan = plans.get('free');
+      if (!freePlan) return next(new BadRequestError("Cannot determine usage limits. Free plan not found."));
+      Object.assign(dbUser, freePlan); // Use free plan limits
+    }
+
+    // Reset giới hạn hàng tuần
     const now = new Date();
     if (now.getTime() - (dbUser.lastUsageResetAt?.getTime() || 0) > ONE_WEEK_IN_MS) {
       dbUser.photoUploadsThisWeek = 0;
       dbUser.videoUploadsThisWeek = 0;
       dbUser.lastUsageResetAt = now;
-      await dbUser.save();
+      // Không cần await ở đây, có thể chạy ngầm
+      dbUser.save().catch(err => logger.error(`Failed to save user usage reset for ${dbUser._id}`, err));
     }
 
     const type = (req as any).mediaType as 'image' | 'video';
     if (!type) return next(new BadRequestError("Không thể xác định loại media."));
 
-    if (dbUser.role === "user") {
-      if (type === "image" && dbUser.photoUploadsThisWeek >= LIMITS.user.image) {
-        return next(new TooMuchReqError(`Bạn đã đạt giới hạn ${LIMITS.user.image} ảnh/tuần.`));
-      }
-      if (type === "video" && dbUser.videoUploadsThisWeek >= LIMITS.user.video) {
-        return next(new TooMuchReqError(`Bạn đã đạt giới hạn ${LIMITS.user.video} video/tuần.`));
+    // Kiểm tra giới hạn ảnh/video
+    if (type === "image" && dbUser.photoUploadsThisWeek >= userPlan.imageLimit) {
+      return next(new PaymentRequiredError(`Bạn đã đạt giới hạn ${userPlan.imageLimit} ảnh/tuần của gói ${userPlan.name}. Vui lòng nâng cấp.`));
+    }
+    if (type === "video" && dbUser.videoUploadsThisWeek >= userPlan.videoLimit) {
+      return next(new PaymentRequiredError(`Bạn đã đạt giới hạn ${userPlan.videoLimit} video/tuần của gói ${userPlan.name}. Vui lòng nâng cấp.`));
+    }
+
+    // Kiểm tra giới hạn dung lượng lưu trữ
+    const fileSize = req.file?.size || (req.files as Express.Multer.File[])?.reduce((sum, f) => sum + f.size, 0) || 0;
+    if (fileSize > 0 && userPlan.storageLimitGB !== -1) { // -1 là không giới hạn
+      const storageLimitBytes = userPlan.storageLimitGB * 1024 * 1024 * 1024;
+      if (dbUser.storageUsedBytes + fileSize > storageLimitBytes) {
+        return next(new PaymentRequiredError(`Tải lên sẽ vượt quá giới hạn ${userPlan.storageLimitGB}GB dung lượng của bạn. Vui lòng nâng cấp hoặc xóa bớt file.`));
       }
     }
 
     next();
   } catch (error) {
+    if (error instanceof PaymentRequiredError) {
+      return next(error);
+    }
     next(error);
   }
 };
@@ -76,9 +110,11 @@ export const incrementUsage = async (req: Request) => {
   const type = (req as any).mediaType as 'image' | 'video';
   if (!type) return;
 
+  const fileSize = req.file?.size || (req.files as Express.Multer.File[])?.reduce((sum, f) => sum + f.size, 0) || 0;
+
   const updateField = type === 'image' ? 'photoUploadsThisWeek' : 'videoUploadsThisWeek';
   await UserModel.updateOne(
     { _id: req.user._id },
-    { $inc: { [updateField]: 1 } }
+    { $inc: { [updateField]: 1, storageUsedBytes: fileSize } }
   );
 };

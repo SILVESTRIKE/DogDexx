@@ -117,18 +117,6 @@ function ProfileContent() {
   }
   return (
     <main className="min-h-screen bg-background">
-      <header className="border-b-2 border-border bg-card shadow-sm">
-        <div className="container mx-auto px-4 py-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            {t('profile.backToHome')}
-          </Link>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8 max-w-4xl">
         <div className="mb-8">
           <h1 className="text-4xl font-bold mb-2">{t('profile.title')}</h1>

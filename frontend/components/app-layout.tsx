@@ -20,7 +20,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const showAdBanner =
     !isAdminPage &&
     (!isAuthenticated ||
-      (user && user.role !== "admin" && user.role !== "premium"));
+      (user && user.role !== "admin" && user.role !== "de"));
 
   return (
     <div className="flex flex-col min-h-screen">

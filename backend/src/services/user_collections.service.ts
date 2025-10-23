@@ -1,7 +1,8 @@
 import { UserCollectionModel, CollectedBreed } from '../models/user_collection.model';
-import { DogBreedWikiModel } from '../models/dogs_wiki.model';
+import { getDogBreedWikiModel } from '../models/dogs_wiki.model';
 import { PredictionHistoryDoc } from '../models/prediction_history.model';
 import { Types } from 'mongoose';
+import { PokedexBreed } from '../controllers/bff_collection.controller';
 
 export const collectionService = {
   /**
@@ -10,9 +11,11 @@ export const collectionService = {
    * @param breedSlugs Mảng các slug của giống chó
    * @param predictionId ID của bản ghi lịch sử dự đoán đã phát hiện ra các giống chó này
    */
-  async addOrUpdateManyCollections(userId: Types.ObjectId, breedSlugs: string[], predictionId: Types.ObjectId) {
+  async addOrUpdateManyCollections(userId: Types.ObjectId, breedSlugs: string[], predictionId: Types.ObjectId, lang: 'vi' | 'en' = 'en') {
     const uniqueSlugs = [...new Set(breedSlugs)];
-    const breeds = await DogBreedWikiModel.find({ slug: { $in: uniqueSlugs } }).select('_id').lean();
+    // SỬA LỖI: Sử dụng model theo ngôn ngữ để tìm breed_id
+    const WikiModel = getDogBreedWikiModel(lang);
+    const breeds = await WikiModel.find({ slug: { $in: uniqueSlugs } }).select('_id').lean();
     if (breeds.length === 0) return;
 
     const breedIds = breeds.map(b => b._id);
@@ -47,16 +50,18 @@ export const collectionService = {
    * @param userId ID của người dùng
    * @param predictionResults Mảng các document PredictionHistory
    */
-  async addOrUpdateFromPredictionResults(userId: Types.ObjectId, predictionResults: PredictionHistoryDoc[]) {
+  async addOrUpdateFromPredictionResults(userId: Types.ObjectId, predictionResults: PredictionHistoryDoc[], lang: 'vi' | 'en' = 'en') {
     if (!predictionResults || predictionResults.length === 0) return;
 
     let userCollection = await UserCollectionModel.findOne({ user_id: userId });
     if (!userCollection) {
       userCollection = new UserCollectionModel({ user_id: userId, collectedBreeds: [] });
     }
-
+    
     const allBreedSlugs = [...new Set(predictionResults.flatMap(p => p.predictions.map(pred => pred.class.toLowerCase().replace(/\s+/g, '-'))))];
-    const breedsInDb = await DogBreedWikiModel.find({ slug: { $in: allBreedSlugs } }).select('_id slug').lean();
+    // SỬA LỖI: Sử dụng model theo ngôn ngữ
+    const WikiModel = getDogBreedWikiModel(lang);
+    const breedsInDb = await WikiModel.find({ slug: { $in: allBreedSlugs } }).select('_id slug').lean();
     const slugToIdMap = new Map(breedsInDb.map(b => [b.slug, b._id]));
 
     predictionResults.forEach(prediction => {
@@ -97,11 +102,13 @@ export const collectionService = {
   /**
    * Lấy bộ sưu tập ("Pokedex") của một người dùng.
    */
-  async getUserCollection(userId: Types.ObjectId): Promise<CollectedBreed[]> {
+  async getUserCollection(userId: Types.ObjectId, lang: 'vi' | 'en' = 'en'): Promise<CollectedBreed[]> {
+    const WikiModel = getDogBreedWikiModel(lang);
+
     const userCollection = await UserCollectionModel.findOne({ user_id: userId, isDeleted: { $ne: true } })
       .populate({
         path: 'collectedBreeds.breed_id',
-        model: 'DogBreedWiki',
+        model: WikiModel, // SỬA LỖI: Sử dụng model động theo ngôn ngữ
         select: 'breed slug group' // Lấy các trường cần thiết
       })
       .populate({
@@ -135,8 +142,9 @@ export const collectionService = {
   /**
    * Lấy một item trong bộ sưu tập của người dùng bằng slug của giống chó.
    */
-  async getCollectionItemBySlug(userId: Types.ObjectId, breedSlug: string) {
-    const breed = await DogBreedWikiModel.findOne({ slug: breedSlug }).select('_id').lean();
+  async getCollectionItemBySlug(userId: Types.ObjectId, breedSlug: string, lang: 'vi' | 'en' = 'en') {
+    const WikiModel = getDogBreedWikiModel(lang);
+    const breed = await WikiModel.findOne({ slug: breedSlug }).select('_id').lean();
     if (!breed) return null;
 
     const userCollection = await UserCollectionModel.findOne({ user_id: userId, isDeleted: { $ne: true }, 'collectedBreeds.breed_id': breed._id })
@@ -144,5 +152,29 @@ export const collectionService = {
       .lean();
 
     return userCollection ? userCollection.collectedBreeds.find(cb => (cb.breed_id as any)?._id?.toString() === breed._id.toString()) : null;
+  },
+
+  /**
+   * Sắp xếp danh sách Pokedex ở tầng ứng dụng, đặc biệt cho các trường không có trong DB.
+   * @param breeds Mảng các giống chó đã được làm giàu.
+   * @param sortBy Chuỗi sắp xếp (ví dụ: 'collectedAt-desc').
+   * @returns Mảng đã được sắp xếp.
+   */
+  sortPokedex(breeds: PokedexBreed[], sortBy: string): PokedexBreed[] {
+    if (sortBy === 'collectedAt-desc') {
+      return breeds.sort((a, b) => {
+        if (!a.collectedAt) return 1;
+        if (!b.collectedAt) return -1;
+        return new Date(b.collectedAt).getTime() - new Date(a.collectedAt).getTime();
+      });
+    }
+    if (sortBy === 'collectedAt-asc') {
+      return breeds.sort((a, b) => {
+        if (!a.collectedAt) return 1;
+        if (!b.collectedAt) return -1;
+        return new Date(a.collectedAt).getTime() - new Date(b.collectedAt).getTime();
+      });
+    }
+    return breeds; // Trả về mảng gốc nếu không có tùy chọn sắp xếp phù hợp
   },
 };
