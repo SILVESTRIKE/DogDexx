@@ -99,7 +99,7 @@ class ApiClient {
     });
   }
 
-  private async request<T>(
+  public async request<T>(
     endpoint: string,
     options: RequestInit = {},
     requiresAuth = false
@@ -445,6 +445,7 @@ class ApiClient {
     suitable_for?: string;
     sort?: string;
     isCollected?: 'true' | 'false';
+    lang?: 'vi' | 'en';
   }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -484,8 +485,10 @@ class ApiClient {
   }
 
   // BFF-Content endpoints
-  async getBreedBySlug(slug: string) {
-    return this.request<any>(`/bff/content/breed/${slug}`, {}, false);
+  async getBreedBySlug(slug: string, lang: 'vi' | 'en') {
+    const queryParams = new URLSearchParams();
+    queryParams.append('lang', lang);
+    return this.request<any>(`/bff/content/breed/${slug}?${queryParams.toString()}`, {}, false);
   }
 
   async getBreeds() {
@@ -554,6 +557,19 @@ class ApiClient {
     );
   }
 
+  async chatWithBreed(breedSlug: string, message: string, lang: 'vi' | 'en'): Promise<{ reply: string; initialMessage?: string }> {
+    const headers = { 'Accept-Language': lang };
+    return this.request<{ reply: string; initialMessage?: string }>(
+      `/bff/predict/chat/${breedSlug}`,
+      {
+        method: 'POST',
+        headers: headers,
+        body: JSON.stringify({ message }),
+      },
+      false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
+    );
+  }
+
   async getPredictionHistory(params?: { page?: number; limit?: number }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -570,13 +586,15 @@ class ApiClient {
   }
   
   // ----- MODIFIED: HÀM MỚI ĐƯỢC THÊM VÀO ĐÂY -----
-  async getPredictionHistoryById(id: string): Promise<import("./types").BffPredictionResponse> {
+  async getPredictionHistoryById(id:string, lang: 'vi' | 'en'): Promise<import("./types").BffPredictionResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.append('lang', lang);
     return this.request<import("./types").BffPredictionResponse>(
-        `/bff/predict/history/${id}`,
+        `/bff/predict/history/${id}?${queryParams.toString()}`,
         {
             method: 'GET',
         },
-        false // Yêu cầu xác thực để xem lịch sử
+        false // Để public, ai có link cũng xem được
     );
   }
   // --------------------------------------------------
@@ -791,6 +809,67 @@ class ApiClient {
   // Convenience method for stream prediction WebSocket
   connectStreamPrediction(): WebSocket {
     return this.createWebSocketConnection("/bff/predict/stream");
+  }
+
+  // Subscription endpoints
+  async createCheckoutSession(planId: string, billingPeriod: "monthly" | "yearly") {
+    return this.request<any>(
+      "/bff/user/create-checkout-session",
+      {
+        method: "POST",
+        body: JSON.stringify({ planId, billingPeriod }),
+      },
+      true
+    );
+  }
+
+  async getAdminSubscriptions(params?: { page?: number; limit?: number; search?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== "") queryParams.append(key, String(value));
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<any>(`/bff/admin/subscriptions${query ? `?${query}` : ""}`, {}, true);
+  }
+
+  async approveUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/approve`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+  async rejectUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/reject`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+  async updateUserSubscription(subscriptionId: string, data: { planSlug?: string; status?: string }) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+  async cancelUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/cancel`,
+      {
+        method: "POST",
+      },
+      true
+    );
   }
 }
 

@@ -9,6 +9,8 @@ import { Types } from 'mongoose';
 import { RegisterSchema } from '../types/zod/user.zod';
 import { z } from 'zod';
 import { BadRequestError } from '../errors';
+import { subscriptionService } from '../services/subscription.service';
+import { PlanService } from '../services/plan.service';
 
 export const register = async (req: Request, res: Response) => {
   // Dữ liệu từ form-data sẽ nằm trong req.body và req.file
@@ -39,8 +41,9 @@ export const login = async (req: Request, res: Response) => {
   // 2. Lấy userId một cách an toàn. Dòng này sẽ hoạt động hoàn hảo.
   const userId = user._id.toString();
 
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
   // 3. Chỉ cần lấy thêm collection. KHÔNG cần gọi lại userService.getById.
-  const collection = await collectionService.getUserCollection(new Types.ObjectId(userId));
+  const collection = await collectionService.getUserCollection(new Types.ObjectId(userId), lang);
 
   // 4. Gửi phản hồi với dữ liệu đã được tối ưu.
   res.status(200).json({
@@ -56,11 +59,12 @@ export const login = async (req: Request, res: Response) => {
 
 export const getProfile = async (req: Request, res: Response) => {
   const userId = req.user!._id;
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
   // 1. Aggregate data from multiple services in parallel
   const [user, collection, historyResult] = await Promise.all([
     userService.getById(userId.toString()),
-    collectionService.getUserCollection(userId),
+    collectionService.getUserCollection(userId, lang),
     predictionHistoryService.getHistoryForUser(userId, { page: 1, limit: 5 }) // Get latest 5 predictions
   ]);
 
@@ -131,4 +135,22 @@ export const refreshToken = async (req: Request, res: Response) => {
     oldRefreshToken
   );
   res.status(200).json({ accessToken, refreshToken });
+};
+
+export const createCheckoutSession = async (req: Request, res: Response) => {
+  const userId = req.user!._id.toString();
+  const { planId, billingPeriod } = req.body;
+
+  const session = await subscriptionService.createCheckoutSession(userId, planId, billingPeriod);
+  res.status(200).json(session);
+};
+
+export const getPublicPlans = async (req: Request, res: Response) => {
+  try {
+    // Lấy tất cả các plan, không phân trang cho trang public pricing
+    const plans = await PlanService.getAll({ limit: 100 }); 
+    res.status(200).json(plans);
+  } catch (error) {
+    res.status(500).json({ message: "Lỗi khi lấy danh sách gói cước." });
+  }
 };

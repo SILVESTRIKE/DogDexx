@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
+import { toast } from "sonner"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import Footer from "@/components/footer"
@@ -15,7 +16,7 @@ export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
 
@@ -23,10 +24,10 @@ export default function CheckoutPage() {
   const billingPeriod = (searchParams.get("period") as "monthly" | "yearly") || "monthly"
 
   const plans: Record<string, any> = {
-    free: { name: t("pricing.free"), price: 0 },
-    starter: { name: t("pricing.starter"), price: billingPeriod === "monthly" ? 9.99 : 99.9 },
-    professional: { name: t("pricing.professional"), price: billingPeriod === "monthly" ? 29.99 : 299.9 },
-    enterprise: { name: t("pricing.enterprise"), price: billingPeriod === "monthly" ? 99.99 : 999.9 },
+    free: { name: t("pricing.free"), priceMonthly: 0, priceYearly: 0 },
+    starter: { name: t("pricing.starter"), priceMonthly: 9.99, priceYearly: 99.9 },
+    professional: { name: t("pricing.professional"), priceMonthly: 29.99, priceYearly: 299.9 },
+    enterprise: { name: t("pricing.enterprise"), priceMonthly: 99.99, priceYearly: 999.9 },
   }
 
   const selectedPlan = plans[planId || "starter"]
@@ -44,19 +45,20 @@ export default function CheckoutPage() {
     setError("")
 
     try {
-      const response = await apiClient.createCheckoutSession(planId, billingPeriod)
-      // In a real implementation, redirect to Stripe checkout
-      // For now, show success message
-      alert(t("checkout.success") || "Checkout initiated successfully!")
-      router.push("/profile")
+      const { payUrl } = await apiClient.createCheckoutSession(planId, billingPeriod)
+      window.location.href = payUrl;
     } catch (err: any) {
+      toast.error(t("checkout.failed"), { description: err.message });
       setError(err.message || "Checkout failed")
     } finally {
       setLoading(false)
     }
   }
 
-  if (!user) {
+  const price = billingPeriod === "monthly" ? selectedPlan.priceMonthly : selectedPlan.priceYearly;
+  const formattedPrice = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(price);
+
+  if (!user || !planId || !plans[planId]) {
     return null
   }
 
@@ -80,14 +82,14 @@ export default function CheckoutPage() {
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
                   <span>{selectedPlan.name}</span>
-                  <span className="font-semibold">${selectedPlan.price}</span>
+                  <span className="font-semibold">{formattedPrice}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>{billingPeriod === "monthly" ? t("pricing.monthly") : t("pricing.yearly")}</span>
                 </div>
               </div>
 
-              <div className="border-t pt-4">
+              <div className="border-t pt-4 mt-6">
                 <div className="flex justify-between text-lg font-bold">
                   <span>{t("checkout.total") || "Total"}</span>
                   <span>${selectedPlan.price}</span>
@@ -135,7 +137,7 @@ export default function CheckoutPage() {
               </Link>
               <Button onClick={handleCheckout} disabled={loading} className="flex-1">
                 {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {t("checkout.pay") || "Pay"} ${selectedPlan.price}
+                {t("checkout.pay") || "Pay"} {formattedPrice}
               </Button>
             </div>
           </div>

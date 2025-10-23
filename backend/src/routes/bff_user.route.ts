@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar } from '../controllers/bff_user.controller';
+import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar, createCheckoutSession, getPublicPlans } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
@@ -192,5 +192,51 @@ router.post('/logout', logout);
  *         description: Làm mới token thành công.
  */
 router.post('/refresh', refreshToken);
+
+/**
+ * @swagger
+ * /bff/user/create-checkout-session:
+ *   post:
+ *     summary: (BFF) Tạo phiên thanh toán để nâng cấp gói
+ *     tags: [BFF-User]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Tạo một phiên thanh toán (ví dụ Stripe) để người dùng có thể nâng cấp gói cước.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               planId:
+ *                 type: string
+ *                 description: "ID (slug) của gói cước muốn nâng cấp (ví dụ: 'starter', 'professional')."
+ *               billingPeriod:
+ *                 type: string
+ *                 enum: [monthly, yearly]
+ *     responses:
+ *       200:
+ *         description: Trả về URL của phiên thanh toán để redirect người dùng.
+ */
+router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
+
+/**
+ * @swagger
+ * /bff/user/public/plans:
+ *   get:
+ *     summary: (BFF-Public) Lấy danh sách các gói cước công khai
+ *     tags: [BFF-Public, BFF-User]
+ *     description: Endpoint công khai để lấy danh sách các gói cước hiển thị trên trang giá.
+ *     responses:
+ *       200:
+ *         description: Lấy dữ liệu thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ */
+router.get('/public/plans', getPublicPlans);
+
 
 export default router;

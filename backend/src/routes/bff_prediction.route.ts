@@ -116,6 +116,34 @@ router.get('/stream', checkStreamUsageLimit, (req, res) => {
   res.status(426).send('Upgrade Required: This endpoint requires a WebSocket connection.');
 });
 
+/**
+ * @swagger
+ * /bff/predict/chat/{breedSlug}:
+ *   post:
+ *     summary: (BFF) Trò chuyện với AI về một giống chó
+ *     tags: [BFF-Prediction]
+ *     description: Gửi một tin nhắn để hỏi AI về các thông tin chi tiết của một giống chó cụ thể.
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Slug của giống chó để trò chuyện.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message: { type: string, example: "Giống chó này có thân thiện với trẻ em không?" }
+ *     responses:
+ *       200:
+ *         description: AI trả lời thành công.
+ */
+router.post("/chat/:breedSlug", bffPredictionController.chatWithGemini);
+
 export default router;
 
 /**

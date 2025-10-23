@@ -7,18 +7,22 @@ import { apiClient } from "@/lib/api-client"
 import { ProtectedRoute } from "@/components/protected-route"
 import { Loader2, Trash2, Edit2 } from "lucide-react"
 
-interface UserSubscription {
-  userId: string
-  userName: string
-  email: string
-  planId: string
+interface Subscription {
+  id: string; // Subscription ID
+  user: {
+    _id: string;
+    username: string;
+    email: string;
+  };
+  plan: { name: string };
+  planSlug: string;
   status: string
-  currentPeriodEnd: string
+  currentPeriodEnd: string;
 }
 
 export default function SubscriptionsPage() {
   const { t } = useI18n()
-  const [subscriptions, setSubscriptions] = useState<UserSubscription[]>([])
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
   const [selectedPlan, setSelectedPlan] = useState<string>("")
@@ -31,8 +35,8 @@ export default function SubscriptionsPage() {
   const loadSubscriptions = async () => {
     try {
       setLoading(true)
-      const data = await apiClient.getAdminSubscriptions()
-      setSubscriptions(data.subscriptions || [])
+      const response = await apiClient.getAdminSubscriptions()
+      setSubscriptions(response.data || [])
     } catch (err: any) {
       setError(err.message || "Failed to load subscriptions")
     } finally {
@@ -40,9 +44,10 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const handleUpdateSubscription = async (userId: string, planId: string) => {
+  // Sửa tên tham số từ planId thành planSlug để rõ ràng hơn
+  const handleUpdateSubscription = async (subscriptionId: string, planSlug: string) => {
     try {
-      await apiClient.updateUserSubscription(userId, planId)
+      await apiClient.updateUserSubscription(subscriptionId, { planSlug }) // Gửi planSlug thay vì planId
       setEditingUserId(null)
       loadSubscriptions()
     } catch (err: any) {
@@ -50,11 +55,11 @@ export default function SubscriptionsPage() {
     }
   }
 
-  const handleCancelSubscription = async (userId: string) => {
+  const handleCancelSubscription = async (subscriptionId: string) => {
     if (!confirm(t("admin.confirmCancel") || "Are you sure?")) return
 
     try {
-      await apiClient.cancelUserSubscription(userId)
+      await apiClient.cancelUserSubscription(subscriptionId)
       loadSubscriptions()
     } catch (err: any) {
       setError(err.message || "Failed to cancel subscription")
@@ -90,11 +95,11 @@ export default function SubscriptionsPage() {
               </thead>
               <tbody>
                 {subscriptions.map((sub) => (
-                  <tr key={sub.userId} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-4">{sub.userName}</td>
-                    <td className="py-3 px-4">{sub.email}</td>
+                  <tr key={sub.id} className="border-b hover:bg-muted/50">
+                    <td className="py-3 px-4">{sub.user.username}</td>
+                    <td className="py-3 px-4">{sub.user.email}</td>
                     <td className="py-3 px-4">
-                      {editingUserId === sub.userId ? (
+                      {editingUserId === sub.id ? (
                         <select
                           value={selectedPlan}
                           onChange={(e) => setSelectedPlan(e.target.value)}
@@ -106,7 +111,7 @@ export default function SubscriptionsPage() {
                           <option value="enterprise">Enterprise</option>
                         </select>
                       ) : (
-                        <span className="capitalize">{sub.planId}</span>
+                        <span className="capitalize">{sub.planSlug}</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -119,9 +124,9 @@ export default function SubscriptionsPage() {
                     <td className="py-3 px-4">{new Date(sub.currentPeriodEnd).toLocaleDateString()}</td>
                     <td className="py-3 px-4">
                       <div className="flex gap-2">
-                        {editingUserId === sub.userId ? (
+                        {editingUserId === sub.id ? (
                           <>
-                            <Button size="sm" onClick={() => handleUpdateSubscription(sub.userId, selectedPlan)}>
+                            <Button size="sm" onClick={() => handleUpdateSubscription(sub.id, selectedPlan)}>
                               {t("common.save") || "Save"}
                             </Button>
                             <Button size="sm" variant="outline" onClick={() => setEditingUserId(null)}>
@@ -134,8 +139,8 @@ export default function SubscriptionsPage() {
                               size="sm"
                               variant="outline"
                               onClick={() => {
-                                setEditingUserId(sub.userId)
-                                setSelectedPlan(sub.planId)
+                                setEditingUserId(sub.id)
+                                setSelectedPlan(sub.planSlug)
                               }}
                             >
                               <Edit2 className="h-4 w-4" />
@@ -143,7 +148,7 @@ export default function SubscriptionsPage() {
                             <Button
                               size="sm"
                               variant="destructive"
-                              onClick={() => handleCancelSubscription(sub.userId)}
+                              onClick={() => handleCancelSubscription(sub.id)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>

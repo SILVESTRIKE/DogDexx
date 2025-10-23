@@ -87,19 +87,6 @@ function AchievementsContent() {
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b-4 border-primary bg-card shadow-md sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
-          >
-            <ArrowLeft className="h-5 w-5" />
-            {t('achievements.backToHome')}
-          </Link>
-        </div>
-      </header>
-
       <div className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Page Title */}
         <div className="mb-8 text-center">

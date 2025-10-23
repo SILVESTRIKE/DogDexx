@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import { DirectoryDoc } from "./directory.model";
-export type UserRole = "user" | "premium" | "admin";
-
+export type UserRole = "user" | "de" | "admin";
+export type Plan = "free" | "starter" | "professional" | "enterprise";
 // Cấu trúc cho một thành tích đã mở khóa được nhúng vào User
 export interface UnlockedAchievement {
   key: string;
@@ -30,6 +29,11 @@ export type UserDoc = Document & {
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
+  plan: Plan;
+  storageUsedBytes: number;
+  // Stripe-related fields
+  stripeCustomerId?: string;
+  subscriptionId?: string;
 
   // Thành tích đã mở khóa
   achievements: UnlockedAchievement[];
@@ -52,7 +56,7 @@ const userSchema = new Schema<UserDoc>(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["user", "premium", "admin"],
+      enum: ["user", "de", "admin"],
       default: "user",
       required: true,
     },
@@ -65,6 +69,10 @@ const userSchema = new Schema<UserDoc>(
     photoUploadsThisWeek: { type: Number, default: 0 },
     videoUploadsThisWeek: { type: Number, default: 0 },
     lastUsageResetAt: { type: Date, default: () => new Date() },
+    plan: { type: String, enum:["free", "starter", "professional", "enterprise"],default: "free" },
+    storageUsedBytes: { type: Number, default: 0 },
+    stripeCustomerId: { type: String, unique: true, sparse: true },
+    subscriptionId: { type: String, unique: true, sparse: true },
     achievements: [
       {
         _id: false,

@@ -21,6 +21,7 @@ interface CollectionContextType {
     totalAchievements: number;
     unlockedAchievements: number;
     totalCollected: number;
+    totalBreeds: number;
   } | null
   refreshCollection: () => Promise<void>
 }
@@ -41,7 +42,7 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
       try {
         // Sử dụng Promise.all để tải song song
         const [pokedexResponse, achievementsResponse] = await Promise.all([
-          apiClient.getPokedex({ limit: 9999, isCollected: 'true' }),
+          apiClient.getPokedex({ limit: 9999, isCollected: 'true', lang: locale }),
           apiClient.getAchievements(locale)
         ]);
 
@@ -68,10 +69,10 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
     }
   }, [user, locale]);
 
-  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất)
+  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất) HOẶC khi ngôn ngữ (locale) thay đổi.
   useEffect(() => {
     loadCollectionData();
-  }, [loadCollectionData, user]);
+  }, [loadCollectionData, user, locale]);
 
   const toggleCollected = async (dogSlug: string) => {
     // Logic này về cơ bản đã đúng, chỉ cần đảm bảo nó cập nhật state một cách nhất quán

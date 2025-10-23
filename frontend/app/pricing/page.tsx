@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,93 +9,72 @@ import { useI18n } from "@/lib/i18n-context"
 import { useAuth } from "@/lib/auth-context"
 import Footer from "@/components/footer"
 import AdBanner from "@/components/ad-banner"
+import { apiClient } from "@/lib/api-client"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 interface PricingPlan {
-  id: string
+  slug: string
   name: string
   description: string
-  price: {
-    monthly: number
-    yearly: number
-  }
+  priceMonthly: number
+  priceYearly: number
   features: {
     name: string
     included: boolean
   }[]
+  isFeatured?: boolean
 }
 
 export default function PricingPage() {
   const { t } = useI18n()
   const { user } = useAuth()
+  const router = useRouter()
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly")
+  const [plans, setPlans] = useState<PricingPlan[]>([])
+  const [loading, setLoading] = useState(true)
 
-  const plans: PricingPlan[] = [
-    {
-      id: "free",
-      name: t("pricing.free"),
-      description: t("pricing.freeDescription"),
-      price: { monthly: 0, yearly: 0 },
-      features: [
-        { name: "10 detections/month", included: true },
-        { name: "1GB storage", included: true },
-        { name: "Basic support", included: true },
-        { name: t("pricing.apiAccess"), included: false },
-        { name: t("pricing.priority"), included: false },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "starter",
-      name: t("pricing.starter"),
-      description: t("pricing.starterDescription"),
-      price: { monthly: 9.99, yearly: 99.9 },
-      features: [
-        { name: "100 detections/month", included: true },
-        { name: "10GB storage", included: true },
-        { name: "Email support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: t("pricing.priority"), included: false },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "professional",
-      name: t("pricing.professional"),
-      description: t("pricing.professionalDescription"),
-      price: { monthly: 29.99, yearly: 299.9 },
-      features: [
-        { name: t("pricing.unlimited") + " detections", included: true },
-        { name: "100GB storage", included: true },
-        { name: t("pricing.priority") + " support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: "Advanced analytics", included: true },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "enterprise",
-      name: t("pricing.enterprise"),
-      description: t("pricing.enterpriseDescription"),
-      price: { monthly: 99.99, yearly: 999.9 },
-      features: [
-        { name: t("pricing.unlimited") + " detections", included: true },
-        { name: t("pricing.unlimited") + " storage", included: true },
-        { name: "24/7 dedicated support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: "Advanced analytics", included: true },
-        { name: t("pricing.customModels"), included: true },
-      ],
-    },
-  ]
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await apiClient.request<any>("/bff/user/public/plans") // Sửa lại endpoint công khai
+        const formattedPlans = response.data.map((plan: any) => ({
+          slug: plan.slug,
+          name: t(`pricing.${plan.slug}`) || plan.name,
+          description: t(`pricing.${plan.slug}Description`) || `Description for ${plan.name}`,
+          priceMonthly: plan.priceMonthly,
+          priceYearly: plan.priceYearly,
+          isFeatured: plan.slug === "professional",
+          features: [
+            { name: t("pricing.featureImageLimit", { count: plan.imageLimit }), included: true },
+            { name: t("pricing.featureVideoLimit", { count: plan.videoLimit }), included: true },
+            { name: t("pricing.featureStorage", { count: plan.storageLimitGB === -1 ? t("pricing.unlimited") : plan.storageLimitGB }), included: true },
+            { name: t("pricing.apiAccess"), included: plan.apiAccess },
+            { name: t("pricing.priority"), included: ["professional", "enterprise"].includes(plan.slug) },
+            { name: t("pricing.customModels"), included: ["enterprise"].includes(plan.slug) },
+          ],
+        }))
+        setPlans(formattedPlans)
+      } catch (error) {
+        console.error("Failed to fetch pricing plans:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchPlans()
+  }, [t])
 
-  const handleUpgrade = (planId: string) => {
+  const handleUpgrade = async (planId: string) => {
     if (!user) {
-      alert(t("auth.loginTitle"))
+      const params = new URLSearchParams();
+      params.set("auth", "login");
+      // Chuyển hướng đến trang checkout sau khi đăng nhập
+      params.set("redirect", `/checkout?plan=${planId}&period=${billingPeriod}`);
+      router.push(`/?${params.toString()}`);
       return
     }
-    // TODO: Integrate with Stripe payment
-    console.log(`Upgrading to ${planId}`)
+    // Nếu đã đăng nhập, chuyển thẳng đến trang checkout
+    router.push(`/checkout?plan=${planId}&period=${billingPeriod}`);
   }
 
   return (
@@ -131,15 +110,16 @@ export default function PricingPage() {
           </div>
 
           {/* Pricing Cards */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 min-h-[500px]">
+            {loading && <p>{t("common.loading")}</p>}
             {plans.map((plan) => (
               <Card
-                key={plan.id}
+                key={plan.slug}
                 className={`flex flex-col p-6 transition-all ${
-                  plan.id === "professional" ? "ring-2 ring-primary lg:scale-105" : ""
+                  plan.isFeatured ? "ring-2 ring-primary lg:scale-105" : ""
                 }`}
               >
-                {plan.id === "professional" && (
+                {plan.isFeatured && (
                   <Badge className="mb-4 w-fit">{t("pricing.featured") || "Most Popular"}</Badge>
                 )}
 
@@ -148,19 +128,18 @@ export default function PricingPage() {
 
                 {/* Price */}
                 <div className="mb-6">
-                  <div className="text-4xl font-bold">
-                    ${billingPeriod === "monthly" ? plan.price.monthly : plan.price.yearly}
-                  </div>
+                  <div className="text-4xl font-bold">${billingPeriod === "monthly" ? plan.priceMonthly : plan.priceYearly}</div>
                   <p className="text-sm text-muted-foreground">{billingPeriod === "monthly" ? "/month" : "/year"}</p>
                 </div>
 
                 {/* CTA Button */}
                 <Button
-                  onClick={() => handleUpgrade(plan.id)}
-                  variant={plan.id === "professional" ? "default" : "outline"}
+                  onClick={() => handleUpgrade(plan.slug)}
+                  variant={plan.isFeatured ? "default" : "outline"}
                   className="mb-6 w-full"
+                  disabled={user?.plan === plan.slug}
                 >
-                  {plan.id === "free" ? t("common.getStarted") || "Get Started" : t("pricing.upgrade")}
+                  {user?.plan === plan.slug ? t("pricing.currentPlan") : plan.slug === "free" ? t("pricing.getStarted") : t("pricing.upgrade")}
                 </Button>
 
                 {/* Features */}

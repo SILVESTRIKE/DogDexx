@@ -51,7 +51,7 @@ export interface EnrichedUser {
   id: string
   name: string
   email: string
-  role: "user" | "premium" | "admin"
+  role: "user" | "de" | "admin"
   createdAt: string
   stats: {
     predictions: number

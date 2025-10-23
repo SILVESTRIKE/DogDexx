@@ -8,6 +8,7 @@ import { userService } from '../services/user.service';
 import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
 import { AppError } from '../errors';
 import { predictionHistoryService } from '../services/prediction_history.service';
+import { PlanService } from '../services/plan.service';
 import { transformMediaURLs } from '../utils/media.util';
 
 /**
@@ -297,4 +298,14 @@ export const uploadModel = async (req: Request, res: Response, next: NextFunctio
   } catch (error) {
     next(error);
   }
+};
+
+export const getPlans = async (req: Request, res: Response, next: NextFunction) => {
+  const plans = await PlanService.getAll();
+  res.status(200).json(plans);
+};
+
+export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
+  // Logic này sẽ phức tạp hơn trong thực tế, cần lấy dữ liệu từ DB và có thể từ Stripe
+  res.status(501).json({ message: "Chức năng đang được phát triển" });
 };
