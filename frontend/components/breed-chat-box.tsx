@@ -51,11 +51,10 @@ interface BreedChatBoxProps {
 
 export function BreedChatBox({ breedSlug, breedName, initialMessage }: BreedChatBoxProps) {
   const { t, locale } = useI18n()
-  const { user } = useAuth()
+  const { user, isAuthenticated, refetchUser } = useAuth()
   const [messages, setMessages] = useState<Message[]>(initialMessage ? [{ role: "model", content: initialMessage }] : [])
   const [input, setInput] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [remaining, setRemaining] = useState(10)
   const [isOpen, setIsOpen] = useState(false)
   const scrollAreaRef = useRef<HTMLDivElement>(null)
 
@@ -64,6 +63,9 @@ export function BreedChatBox({ breedSlug, breedName, initialMessage }: BreedChat
   const [isMounted, setIsMounted] = useState(false)
   const [snapEdge, setSnapEdge] = useState<'left' | 'right' | 'none'>('left');
   const [constraints, setConstraints] = useState({ top: 0, left: 0, right: 0, bottom: 0 });
+
+  // CẬP NHẬT: Lấy số token còn lại từ context
+  const remainingTokens = user?.remainingTokens ?? 0;
 
   const pointerDownInfo = useRef<{ x: number, y: number, time: number } | null>(null);
 
@@ -108,15 +110,18 @@ export function BreedChatBox({ breedSlug, breedName, initialMessage }: BreedChat
     return { x: panelX, y: panelY };
   }
   const submitMessage = async (messageContent: string) => {
-    if (!messageContent.trim() || isLoading || remaining <= 0) return
+    if (!messageContent.trim() || isLoading || remainingTokens <= 0) return
     const userMessage: Message = { role: "user", content: messageContent }
     setMessages((prev) => [...prev, userMessage])
     setInput("")
     setIsLoading(true)
     try {
       const { reply } = await apiClient.chatWithBreed(breedSlug, messageContent, locale)
+      // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+      if (isAuthenticated) {
+        await refetchUser();
+      }
       setMessages((prev) => [...prev, { role: "model", content: reply }])
-      setRemaining((prev) => prev - 1)
     } catch (error) {
       toast.error("Failed to get response from AI.", { description: (error as Error).message })
       setInput(messageContent)
@@ -315,15 +320,15 @@ export function BreedChatBox({ breedSlug, breedName, initialMessage }: BreedChat
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder={t("results.chatWithAI.placeholder", { breedName })}
-                    disabled={isLoading || remaining <= 0}
+                    disabled={isLoading || remainingTokens <= 0}
                     className="h-9"
                   />
-                  <Button type="submit" size="icon" className="h-9 w-9" disabled={isLoading || remaining <= 0}>
+                  <Button type="submit" size="icon" className="h-9 w-9" disabled={isLoading || remainingTokens <= 0}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </form>
                 <div className="text-xs text-muted-foreground w-full text-center">
-                  {remaining > 0 ? t("results.chatWithAI.remaining", { count: remaining }) : t("results.chatWithAI.limitReached")}
+                  {remainingTokens > 0 ? t("results.chatWithAI.remaining", { count: remainingTokens }) : t("results.chatWithAI.limitReached")}
                 </div>
               </CardFooter>
             </Card>
