@@ -1,6 +1,8 @@
 import { Router } from "express";
-import { AnalyticsEventModel } from "../models/analytics_event.model";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
+import { AnalyticsEventName } from "../constants/analytics.events";
+// THAY ĐỔI: Import service mới để xử lý logic
+import { analyticsService } from "../services/analytics.service";
 
 const router = Router();
 
@@ -11,33 +13,11 @@ const router = Router();
  */ 
 router.post("/api/analytics/track-visit", optionalAuthMiddleware, async (req, res, next) => {
   try {
-    // SỬA LỖI: Tối ưu việc ghi nhận lượt truy cập
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const query: any = {
-      eventName: 'PAGE_VISIT',
-      date: today,
-    };
-
-    if (req.user?._id) {
-      query.user = req.user._id;
-    } else if (req.fingerprint?.hash) {
-      query.fingerprint = req.fingerprint.hash;
-    }
-
-    const update = {
-      $inc: { visitCount: 1 },
-      $setOnInsert: {
-        ip: req.ip,
-        userAgent: req.headers["user-agent"],
-        eventData: { page: req.body.page || "unknown" },
-      },
-    };
-
-    await AnalyticsEventModel.findOneAndUpdate(query, update, {
-      upsert: true, 
-      new: true, 
+    // THAY ĐỔI: Toàn bộ logic upsert phức tạp được thay thế bằng một dòng gọi service
+    await analyticsService.trackEvent({
+      eventName: AnalyticsEventName.PAGE_VISIT,
+      req,
+      eventData: { page: req.body.page || "unknown" }
     });
 
     res.status(200).json({ message: "Visit tracked successfully" });
@@ -70,21 +50,21 @@ router.post("/api/analytics/track-event", optionalAuthMiddleware, async (req, re
   try {
     const { eventName, eventData } = req.body;
     
-    const eventPayload: any = {
-      eventName,
-      eventData,
-      fingerprint: req.fingerprint?.hash,
-      ip: req.ip,
-      userAgent: req.headers["user-agent"],
-    };
-
-    if (req.user?._id) {
-      eventPayload.user = req.user._id;
+    // Kiểm tra xem eventName có hợp lệ không
+    if (!Object.values(AnalyticsEventName).includes(eventName)) {
+        return res.status(400).json({ message: "Invalid event name provided." });
     }
 
-    await AnalyticsEventModel.create(eventPayload);
+    // THAY ĐỔI: Logic tạo event được chuyển về service
+    await analyticsService.trackEvent({
+        eventName,
+        req,
+        eventData
+    });
+
     res.status(200).json({ message: "Event tracked" });
-  } catch (error) {
+  } catch (error)
+    {
     next(error);
   }
 });

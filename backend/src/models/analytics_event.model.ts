@@ -1,33 +1,14 @@
 import mongoose, { Schema, Document } from "mongoose";
-
-export enum AnalyticsEventName {
-  // User Authentication
-  USER_REGISTRATION = "USER_REGISTRATION",
-  USER_LOGIN = "USER_LOGIN",
-
-  // Core Feature Usage
-  SUCCESSFUL_PREDICTION = "SUCCESSFUL_PREDICTION",
-  SUCCESSFUL_PREDICTION_BATCH = "SUCCESSFUL_PREDICTION_BATCH",
-  SUCCESSFUL_PREDICTION_VIEW = "SUCCESSFUL_PREDICTION_VIEW",
-  SUCCESSFUL_PREDICTION_STREAM = "SUCCESSFUL_PREDICTION_STREAM",
-
-  // Trial (Guest) Feature Usage
-  SUCCESSFUL_TRIAL = "SUCCESSFUL_TRIAL",
-  SUCCESSFUL_TRIAL_BATCH = "SUCCESSFUL_TRIAL_BATCH",
-  SUCCESSFUL_TRIAL_STREAM = "SUCCESSFUL_TRIAL_STREAM",
-
-  // General
-  PAGE_VISIT = "PAGE_VISIT",
-}
+import { AnalyticsEventName } from "../constants/analytics.events";
 
 export interface AnalyticsEventDoc extends Document {
   eventName: AnalyticsEventName;
   fingerprint?: string;
-  user?: mongoose.Types.ObjectId; // Add user field for tracking logged-in users
+  user?: mongoose.Types.ObjectId;
   ip?: string;
   userAgent?: string;
-  date?: Date; // Thêm trường để nhóm theo ngày
-  visitCount?: number; // Thêm biến đếm
+  date: Date;
+  count: number;
   eventData?: mongoose.Schema.Types.Mixed;
   isDeleted: boolean;
   createdAt: Date;
@@ -43,15 +24,17 @@ const analyticsEventSchema = new Schema(
     },
     user: { type: Schema.Types.ObjectId, ref: 'User', required: false },
     eventData: { type: Schema.Types.Mixed },
-    date: { type: Date },
-    visitCount: { type: Number, default: 1 },
+    // THAY ĐỔI: Date là bắt buộc
+    date: { type: Date, required: true },
+    // THAY ĐỔI: Đổi tên trường thành 'count'
+    count: { type: Number, default: 1 },
     fingerprint: { type: String },
     ip: { type: String },
     userAgent: { type: String },
     isDeleted: {
       type: Boolean,
       default: false,
-      select: false, // Ẩn trường này khỏi các câu query mặc định
+      select: false,
     },
   },
   {
@@ -72,8 +55,8 @@ const analyticsEventSchema = new Schema(
   }
 );
 
-analyticsEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 }); // 90 ngày = 7776000 giây
-analyticsEventSchema.index({ eventName: 1, date: 1, user: 1, fingerprint: 1 }); // Index để tối ưu upsert
+analyticsEventSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 });
+analyticsEventSchema.index({ eventName: 1, date: 1, user: 1, fingerprint: 1 });
 
 export const AnalyticsEventModel = mongoose.model<AnalyticsEventDoc>(
   "AnalyticsEvent",
