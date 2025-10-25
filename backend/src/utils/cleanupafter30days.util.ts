@@ -53,13 +53,12 @@ const cleanupTask = cron.schedule(schedule, cleanupOrphanedFiles, {
 });
 
 cleanupTask.stop();
-logger.info('[JOB SCHEDULER] Cleanup task has been initialized in STOPPED state.');
 
 export const startCleanupJob = () => {
     if (process.env.ENABLE_CLEANUP_JOB === 'true') {
-        logger.info('[JOB SCHEDULER] Starting cleanup task according to schedule.');
+        logger.info('[Clean up] Starting');
         cleanupTask.start();
     } else {
-        logger.info('[JOB SCHEDULER] Cleanup task is DISABLED (based on .env configuration).');
+        logger.info('[Clean up] Cleanup DISABLED via config');
     }
 };

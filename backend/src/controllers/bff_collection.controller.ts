@@ -5,11 +5,27 @@ import { collectionService } from '../services/user_collections.service';
 import { achievementService } from '../services/achievement.service';
 import { transformMediaURLs } from '../utils/media.util';
 import { userService } from '../services/user.service';
+import { logger } from '../utils/logger.util';
 import { BadRequestError, NotFoundError } from '../errors';
 import { Types } from 'mongoose';
 
+// Define a type for the enriched breed object sent to the frontend
+export type PokedexBreed = {
+  slug: string;
+  breed: string;
+  group?: string;
+  pokedexNumber?: number;
+  origin?: string;
+  mediaUrl?: string;
+  rarity_level?: number;
+  isCollected: boolean;
+  collectedAt: Date | null;
+  source: string | null;
+};
+
 export const getPokedex = async (req: Request, res: Response) => {
   const userId = req.user?._id;
+  const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
 
   // 1. Lấy và chuẩn bị các tham số query
   const {
@@ -35,6 +51,7 @@ export const getPokedex = async (req: Request, res: Response) => {
     shedding_level: shedding_level ? Number(shedding_level) : undefined,
     suitable_for,
     sort,
+    lang,
   };
 
   let collectedBreedsCount = 0;
@@ -42,7 +59,7 @@ export const getPokedex = async (req: Request, res: Response) => {
 
   // 2. Nếu user đã đăng nhập, LUÔN LUÔN lấy dữ liệu bộ sưu tập của họ
   if (userId) {
-    const userCollection = await collectionService.getUserCollection(userId);
+    const userCollection = await collectionService.getUserCollection(userId, lang); // Đã sửa ở các lượt trước, đảm bảo đúng
     collectedBreedsCount = userCollection.length;
 
     userCollection.forEach((item: any) => {
@@ -57,7 +74,9 @@ export const getPokedex = async (req: Request, res: Response) => {
     
     // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
     const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
-    if (isCollected === 'true') {
+    // SỬA LỖI: Nếu không có user, isCollected=true sẽ không hoạt động.
+    // Chỉ áp dụng filter này nếu có user.
+    if (userId && isCollected === 'true') {
       // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
       options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
     } else if (isCollected === 'false') {
@@ -66,17 +85,17 @@ export const getPokedex = async (req: Request, res: Response) => {
   }
 
   // 4. Gọi Wiki Service MỘT LẦN DUY NHẤT với tất cả các options
-  const breedsResult = await wikiService.getAllBreeds(options);
-
-  const totalBreedsInSystem = await wikiService.getTotalBreedsCount();
+  const [breedsResult, totalBreedsInSystem] = await Promise.all([
+    wikiService.getAllBreeds(options),
+    wikiService.getTotalBreedsCount(lang) // Lấy tổng số theo ngôn ngữ, đã sửa ở service
+  ]);
 
   // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
-  const breedsResponse = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
+  let breedsResponse: PokedexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
     const collectionInfo = userCollectionMap.get(breed.slug);
     return {
       slug: breed.slug,
-      breed: breed.breed,
-      name: breed.breed,
+      breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
       group: breed.group,
       pokedexNumber: breed.pokedexNumber,
       origin: breed.origin,
@@ -87,6 +106,9 @@ export const getPokedex = async (req: Request, res: Response) => {
       source: collectionInfo?.source || null,
     };
   });
+
+  // 5.5. Sắp xếp ở tầng ứng dụng bằng cách gọi service
+  breedsResponse = collectionService.sortPokedex(breedsResponse, sort as string);
 
   // 6. Trả về kết quả cuối cùng
   res.status(200).json({
@@ -148,8 +170,8 @@ export const getAchievements = async (req: Request, res: Response) => {
 
   const [user, userCollections, totalBreedsInSystem] = await Promise.all([
     userService.getById(userId.toString()),
-    collectionService.getUserCollection(userId),
-    wikiService.getTotalBreedsCount(),
+    collectionService.getUserCollection(userId, lang),
+    wikiService.getTotalBreedsCount(lang), // Sửa ở đây: truyền lang vào
   ]);
 
   // SỬA LỖI 1: Kiểm tra `user` có tồn tại không

@@ -45,20 +45,23 @@ const getRarityClasses = (rarityLevel: number | undefined): RarityClassSet => {
 
 interface DogCardProps {
   dog: DogBreed
-  index: number
+  index: number,
+  isHighlighted?: boolean;
+  id?: string;
 }
 
-export function DogCard({ dog, index }: DogCardProps) {
+export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps) {
   const { t } = useI18n();
   const collected = dog.isCollected; // Trust the prop from the parent component
   const rarityClassSet = getRarityClasses(dog.rarity_level);
   const cardBorderClass = collected ? `${rarityClassSet.border} ${rarityClassSet.shadow}` : "border-border";
   const backgroundClass = collected ? "bg-card" : "bg-muted/30";
+  const highlightAnimation = isHighlighted ? "animate-pulse-strong" : "";
 
   const cardContent = (
     <Card
-      className={`group relative overflow-hidden border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer 
-        ${backgroundClass} ${cardBorderClass}`}
+      className={`group relative overflow-hidden border-2 transition-all duration-300 hover:shadow-xl hover:-translate-y-1 cursor-pointer ${backgroundClass} ${cardBorderClass} ${highlightAnimation}`}
+      id={id}
     >
       {/* Phần nội dung của thẻ không thay đổi */}
       <div className="aspect-square bg-gradient-to-br from-muted to-secondary flex items-center justify-center relative overflow-hidden">
@@ -135,9 +138,7 @@ export function DogCard({ dog, index }: DogCardProps) {
                     <Tooltip><TooltipTrigger><Webcam className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceStream')}</p></TooltipContent></Tooltip>
                   </TooltipProvider>
                 )}
-                {dog.source === 'manual_add' && (
-                  <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger><PlusSquare className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceManual')}</p></TooltipContent></Tooltip></TooltipProvider>
-                )}
+                
               </div>
             </>
           ) : (

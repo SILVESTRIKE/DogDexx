@@ -61,7 +61,6 @@ const refreshTokenSchema = new Schema<RefreshTokenDoc>(
 );
 
 refreshTokenSchema.index({ user: 1 });
-refreshTokenSchema.index({ jti: 1 });
 
 export const RefreshTokenModel = mongoose.model<RefreshTokenDoc>(
   "RefreshToken",

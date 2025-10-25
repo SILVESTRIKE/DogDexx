@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp"
 
 import { useState } from "react"
@@ -23,6 +23,7 @@ interface AuthModalProps {
 export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProps) {
   const { login, register, verifyOtp } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { t } = useI18n()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -45,11 +46,19 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       if (view === "form") {
         if (mode === "login") {
           await login(email, password)
-          // Nếu login thành công, đóng modal
           toast.success(t('auth.loginTitle') + " " + t('common.success').toLowerCase());
           resetAndClose()
-          router.refresh() // QUAN TRỌNG: Làm mới trạng thái server và client
-          router.push("/") // SỬA LỖI: Điều hướng về trang chủ sau khi đăng nhập
+
+          // Xử lý chuyển hướng sau khi đăng nhập
+          const redirectUrl = searchParams.get("redirect")
+          if (redirectUrl) {
+            // Lấy các params từ redirectUrl (ví dụ: plan, period)
+            const redirectParams = new URLSearchParams(redirectUrl.split('?')[1] || '');
+            const finalRedirectPath = redirectUrl.split('?')[0];
+            router.push(`${finalRedirectPath}?${redirectParams.toString()}`);
+          } else {
+            router.refresh() // Làm mới trang hiện tại nếu không có redirect
+          }
         } else { // mode === 'register'
           if (!username.trim()) {
             setError(t("auth.errorUsernameRequired"))

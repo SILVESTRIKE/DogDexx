@@ -5,20 +5,27 @@ import { transformMediaURLs } from '../utils/media.util';
 import { wikiController } from './dogs_wiki.controller';
 import { collectionService } from '../services/user_collections.service';
 import { predictionHistoryService } from '../services/prediction_history.service';
+import { logger } from '../utils/logger.util';
 import { MediaController } from './medias.controller';
+import { NotFoundError } from '../errors';
 
 export const getBreedDetail = async (req: Request, res: Response, next: NextFunction) => {
   const { slug } = req.params;
   const userId = req.user?._id;
+  const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
+  logger.info(`[BFF BreedDetail] Language for slug '${slug}' resolved to '${lang}' from query param.`);
 
   // 1. Get breed info, collection status, and related media in parallel
   const [breed, userCollection, relatedMedia] = await Promise.all([
-    wikiService.getBreedBySlug(slug),
-    userId ? collectionService.getCollectionItemBySlug(userId, slug) : Promise.resolve(null),
+    wikiService.getBreedBySlug(slug, lang),
+    userId ? collectionService.getCollectionItemBySlug(userId, slug, lang) : Promise.resolve(null),
     predictionHistoryService.findHistoriesByBreedName(slug, 10)
   ]);
 
-  // 2. Format the response
+  if (!breed) {
+    return next(new NotFoundError(`Không tìm thấy giống chó với slug: '${slug}'`));
+  }
+
   const collectionStatus = {
     isCollected: !!userCollection,
     // Lấy createdAt từ first_prediction_id đã được populate
@@ -39,9 +46,6 @@ export const getBreedDetail = async (req: Request, res: Response, next: NextFunc
 };
 
 export const getBreeds = (req: Request, res: Response, next: NextFunction) => {
-  // This endpoint is very similar to `getPokedex`. We can reuse the logic or point to it.
-  // For simplicity, we'll just call the existing wiki service.
-  // The frontend should call `/bff/collection/pokedex` for the enriched version.
   return wikiController.getAll(req, res);
 };
 

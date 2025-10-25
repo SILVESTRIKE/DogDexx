@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -9,98 +9,65 @@ import { useI18n } from "@/lib/i18n-context"
 import { useAuth } from "@/lib/auth-context"
 import Footer from "@/components/footer"
 import AdBanner from "@/components/ad-banner"
+import { apiClient } from "@/lib/api-client"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
-interface PricingPlan {
-  id: string
-  name: string
-  description: string
-  price: {
-    monthly: number
-    yearly: number
-  }
-  features: {
-    name: string
-    included: boolean
-  }[]
-}
+import type { Plan } from "@/lib/types"
 
 export default function PricingPage() {
-  const { t } = useI18n()
-  const { user } = useAuth()
-  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly")
+  const { t } = useI18n();
+  const { user, setAuthModalOpen, setAuthModalMode } = useAuth();
+  const router = useRouter();
+  const [billingPeriod, setBillingPeriod] = useState<"monthly" | "yearly">("monthly");
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const plans: PricingPlan[] = [
-    {
-      id: "free",
-      name: t("pricing.free"),
-      description: t("pricing.freeDescription"),
-      price: { monthly: 0, yearly: 0 },
-      features: [
-        { name: "10 detections/month", included: true },
-        { name: "1GB storage", included: true },
-        { name: "Basic support", included: true },
-        { name: t("pricing.apiAccess"), included: false },
-        { name: t("pricing.priority"), included: false },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "starter",
-      name: t("pricing.starter"),
-      description: t("pricing.starterDescription"),
-      price: { monthly: 9.99, yearly: 99.9 },
-      features: [
-        { name: "100 detections/month", included: true },
-        { name: "10GB storage", included: true },
-        { name: "Email support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: t("pricing.priority"), included: false },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "professional",
-      name: t("pricing.professional"),
-      description: t("pricing.professionalDescription"),
-      price: { monthly: 29.99, yearly: 299.9 },
-      features: [
-        { name: t("pricing.unlimited") + " detections", included: true },
-        { name: "100GB storage", included: true },
-        { name: t("pricing.priority") + " support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: "Advanced analytics", included: true },
-        { name: t("pricing.customModels"), included: false },
-      ],
-    },
-    {
-      id: "enterprise",
-      name: t("pricing.enterprise"),
-      description: t("pricing.enterpriseDescription"),
-      price: { monthly: 99.99, yearly: 999.9 },
-      features: [
-        { name: t("pricing.unlimited") + " detections", included: true },
-        { name: t("pricing.unlimited") + " storage", included: true },
-        { name: "24/7 dedicated support", included: true },
-        { name: t("pricing.apiAccess"), included: true },
-        { name: "Advanced analytics", included: true },
-        { name: t("pricing.customModels"), included: true },
-      ],
-    },
-  ]
-
-  const handleUpgrade = (planId: string) => {
-    if (!user) {
-      alert(t("auth.loginTitle"))
-      return
+  useEffect(() => {
+    const fetchPlans = async () => {
+      try {
+        const response = await apiClient.getPublicPlans()
+        const plansWithFeatures = response.data.map((plan: Plan) => {
+          // Thêm các trường description và features vào mỗi plan
+          return {
+            ...plan,
+            name: t(`pricing.${plan.slug}`) || plan.name,
+            description: t(`pricing.${plan.slug}Description`) || `Description for ${plan.name}`,
+            isFeatured: plan.slug === "professional",
+            features: [
+              { name: t("pricing.featureTokenLimit", { count: plan.tokenAllotment }), included: true },
+              { name: t("pricing.featureStorage"), included: plan.slug !== 'free' },
+              { name: t("pricing.apiAccess"), included: plan.apiAccess },
+              { name: t("pricing.priority"), included: ["professional", "enterprise"].includes(plan.slug) },
+              { name: t("pricing.customModels"), included: ["enterprise"].includes(plan.slug) },
+            ],
+          }
+        })
+        setPlans(plansWithFeatures)
+      } catch (error) {
+        console.error("Failed to fetch pricing plans:", error)
+      } finally {
+        setLoading(false)
+      }
     }
-    // TODO: Integrate with Stripe payment
-    console.log(`Upgrading to ${planId}`)
-  }
+    fetchPlans()
+  }, [t])
+
+  const handleUpgrade = async (planId: string) => {
+    if (!user || !user.email) { // Kiểm tra user là khách hay chưa đăng nhập
+      // Yêu cầu mở modal login
+      setAuthModalMode("login");
+      setAuthModalOpen(true);
+      // Chuyển hướng người dùng về trang chủ, nơi modal sẽ xuất hiện.
+      router.push("/");
+      return;
+    }
+    // Nếu đã đăng nhập, chuyển thẳng đến trang checkout
+    router.push(`/checkout?plan=${planId}&period=${billingPeriod}`);
+  };
 
   return (
     <>
-      <AdBanner />
       <main className="min-h-screen bg-background">
         <div className="container mx-auto px-4 py-16">
           {/* Header */}
@@ -131,16 +98,17 @@ export default function PricingPage() {
           </div>
 
           {/* Pricing Cards */}
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16 min-h-[500px]">
+            {loading && <p>{t("common.loading")}</p>}
             {plans.map((plan) => (
               <Card
-                key={plan.id}
+                key={plan.slug}
                 className={`flex flex-col p-6 transition-all ${
-                  plan.id === "professional" ? "ring-2 ring-primary lg:scale-105" : ""
+                  plan.isFeatured ? "ring-2 ring-primary lg:scale-105" : ""
                 }`}
               >
-                {plan.id === "professional" && (
-                  <Badge className="mb-4 w-fit">{t("pricing.featured") || "Most Popular"}</Badge>
+                {plan.isFeatured && (
+                  <Badge className="mb-4 w-fit">{t("pricing.featured")}</Badge>
                 )}
 
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
@@ -149,23 +117,26 @@ export default function PricingPage() {
                 {/* Price */}
                 <div className="mb-6">
                   <div className="text-4xl font-bold">
-                    ${billingPeriod === "monthly" ? plan.price.monthly : plan.price.yearly}
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(billingPeriod === "monthly" ? plan.priceMonthly : plan.priceYearly)}
                   </div>
-                  <p className="text-sm text-muted-foreground">{billingPeriod === "monthly" ? "/month" : "/year"}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {billingPeriod === "monthly" ? t("pricing.perMonth") : t("pricing.perYear")}
+                  </p>
                 </div>
 
                 {/* CTA Button */}
                 <Button
-                  onClick={() => handleUpgrade(plan.id)}
-                  variant={plan.id === "professional" ? "default" : "outline"}
+                  onClick={() => handleUpgrade(plan.slug)}
+                  variant={plan.isFeatured ? "default" : "outline"}
                   className="mb-6 w-full"
+                  disabled={user?.plan === plan.slug}
                 >
-                  {plan.id === "free" ? t("common.getStarted") || "Get Started" : t("pricing.upgrade")}
+                  {user?.plan === plan.slug ? t("pricing.currentPlan") : plan.slug === "free" ? t("pricing.getStarted") : t("pricing.upgrade")}
                 </Button>
 
                 {/* Features */}
                 <div className="space-y-3 flex-1">
-                  {plan.features.map((feature, idx) => (
+                  {plan.features?.map((feature, idx) => (
                     <div key={idx} className="flex items-start gap-3">
                       {feature.included ? (
                         <Check className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
@@ -184,36 +155,34 @@ export default function PricingPage() {
 
           {/* FAQ Section */}
           <div className="max-w-3xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 text-center">{t("pricing.faq") || "Frequently Asked Questions"}</h2>
+            <h2 className="text-3xl font-bold mb-8 text-center">{t("pricing.faq")}</h2>
 
             <div className="space-y-4">
               <Card className="p-6">
-                <h3 className="font-semibold mb-2">{t("pricing.faqQ1") || "Can I change my plan anytime?"}</h3>
+                <h3 className="font-semibold mb-2">{t("pricing.faqQ1")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("pricing.faqA1") ||
-                    "Yes, you can upgrade or downgrade your plan at any time. Changes take effect immediately."}
+                  {t("pricing.faqA1")}
                 </p>
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-semibold mb-2">{t("pricing.faqQ2") || "What payment methods do you accept?"}</h3>
+                <h3 className="font-semibold mb-2">{t("pricing.faqQ2")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("pricing.faqA2") || "We accept all major credit cards, PayPal, and bank transfers for enterprise."}
+                  {t("pricing.faqA2")}
                 </p>
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-semibold mb-2">{t("pricing.faqQ3") || "Is there a free trial?"}</h3>
+                <h3 className="font-semibold mb-2">{t("pricing.faqQ3")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("pricing.faqA3") ||
-                    "Yes, the Free plan includes 10 detections per month with no credit card required."}
+                  {t("pricing.faqA3")}
                 </p>
               </Card>
 
               <Card className="p-6">
-                <h3 className="font-semibold mb-2">{t("pricing.faqQ4") || "Do you offer refunds?"}</h3>
+                <h3 className="font-semibold mb-2">{t("faqQ4")}</h3>
                 <p className="text-sm text-muted-foreground">
-                  {t("pricing.faqA4") || "We offer a 30-day money-back guarantee for all paid plans."}
+                  {t("faqA4")}
                 </p>
               </Card>
             </div>
@@ -221,43 +190,43 @@ export default function PricingPage() {
 
           {/* CTA Section */}
           <div className="mt-16 text-center">
-            <h2 className="text-3xl font-bold mb-4">{t("pricing.ready") || "Ready to get started?"}</h2>
+            <h2 className="text-3xl font-bold mb-4">{t("ready")}</h2>
             <p className="text-muted-foreground mb-6">
-              {t("pricing.readyDescription") || "Join thousands of users detecting dog breeds with AI"}
+              {t("readyDescription")}
             </p>
             <Link href="/">
-              <Button size="lg">{t("pricing.startFree") || "Start Free"}</Button>
+              <Button size="lg">{t("startFree")}</Button>
             </Link>
           </div>
         </div>
         <div className="grid md:grid-cols-3 gap-6 mb-12 pb-12 border-b">
           <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg p-6 text-center">
-            <h3 className="font-semibold mb-2">{t("footer.adSection1Title") || "Premium Features"}</h3>
+            <h3 className="font-semibold mb-2">{t("footer.adSection1Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {t("footer.adSection1Description") || "Unlock unlimited detections and advanced analytics"}
+              {t("footer.adSection1Description")}
             </p>
             <Link href="/pricing" className="text-primary text-sm font-medium hover:underline">
-              {t("footer.learnMore") || "Learn More"} →
+              {t("footer.learnMore")} →
             </Link>
           </div>
 
           <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-6 text-center">
-            <h3 className="font-semibold mb-2">{t("footer.adSection2Title") || "API Access"}</h3>
+            <h3 className="font-semibold mb-2">{t("footer.adSection2Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {t("footer.adSection2Description") || "Integrate dog detection into your applications"}
+              {t("footer.adSection2Description")}
             </p>
             <Link href="/pricing" className="text-blue-600 dark:text-blue-400 text-sm font-medium hover:underline">
-              {t("footer.learnMore") || "Learn More"} →
+              {t("footer.learnMore")} →
             </Link>
           </div>
 
           <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-lg p-6 text-center">
-            <h3 className="font-semibold mb-2">{t("footer.adSection3Title") || "Enterprise"}</h3>
+            <h3 className="font-semibold mb-2">{t("footer.adSection3Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {t("footer.adSection3Description") || "Custom solutions for large-scale deployments"}
+              {t("footer.adSection3Description")}
             </p>
             <Link href="/pricing" className="text-green-600 dark:text-green-400 text-sm font-medium hover:underline">
-              {t("footer.learnMore") || "Learn More"} →
+              {t("footer.learnMore")} →
             </Link>
           </div>
         </div>

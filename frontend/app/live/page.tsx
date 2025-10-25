@@ -1,4 +1,3 @@
-// live/page.tsx - Đã sửa lỗi Bounding Box và đảm bảo logic tắt camera
 "use client";
 
 import { useRouter } from "next/navigation";
@@ -6,9 +5,10 @@ import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Camera, CameraOff, Wifi, WifiOff } from "lucide-react";
-import { useCollection } from "@/lib/collection-context";
+import { Camera, CameraOff, Loader2, Wifi, WifiOff } from "lucide-react";
+import { useCollection } from "@/lib/collection-context"; // THAY ĐỔI
 import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
 import { useI18n } from "@/lib/i18n-context";
 import { Detection } from "@/lib/types";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ import { toast } from "sonner";
 export default function LiveDetectionPage() {
   const router = useRouter();
   const { t } = useI18n();
+  const { isAuthenticated, refetchUser } = useAuth();
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -25,10 +26,11 @@ export default function LiveDetectionPage() {
   const [detections, setDetections] = useState<Detection[]>([]);
   const { refreshCollection, isCollected } = useCollection();
   const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false); // State mới để quản lý trạng thái kết nối
 
-  const connectWebSocket = () => {
+  const initializeWebSocket = async () => {
     try {
-      const ws = apiClient.connectStreamPrediction();
+      const ws = await apiClient.connectStreamPrediction(); // SỬ DỤNG HÀM MỚI
 
       ws.onopen = () => {
         console.log("[BFF-WS] WebSocket connected");
@@ -39,36 +41,29 @@ export default function LiveDetectionPage() {
         try {
           const data = JSON.parse(event.data);
 
-          // QUAN TRỌNG: Xử lý luồng mới
-          if (data.status === "redirect" && data.payload) {
+          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "final_result"
+          if (data.type === "final_result") {
             console.log(
               "[BFF-WS] Captured final result, redirecting...",
-              data.payload
+              data // Toàn bộ object data chính là payload của bạn
             );
-
-            // 1. Dừng camera và websocket
-            stopCamera("Redirecting");
-
-            // 2. Lưu kết quả vào sessionStorage (CHỈ LƯU payload)
-            sessionStorage.setItem(
-              "detection-result",
-              JSON.stringify(data.payload)
-            );
-
-            // 3. Chuyển hướng đến trang kết quả
-            router.push("/results");
-
-            // Sửa đổi nhẹ ở đây để tương thích với cấu trúc mới của BFF
-          } else if (
-            data &&
-            data.payload &&
-            Array.isArray(data.payload.detections)
-          ) {
-            // Nếu BFF trả về payload cho các dự đoán thông thường
-            setDetections(data.payload.detections);
-            drawBoundingBoxes(data.payload.detections);
+            
+            // Dữ liệu bây giờ nằm trực tiếp trong 'data', không có 'payload' lồng vào nữa
+            if (data.predictionId) {
+              // Chuyển hướng trước, hàm stopCamera sẽ được gọi trong useEffect cleanup
+              router.push(`/results?id=${data.predictionId}`);
+            } else {
+              console.error("[BFF-WS] Final result missing predictionId:", data);
+              toast.error(t("live.redirectError") || "Failed to get prediction ID for redirect.");
+              router.push("/"); // Fallback to home
+            }
+          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "endOfStream" để dừng camera
+          } else if (data.type === "endOfStream") {
+            console.log("[BFF-WS] Stream ended by server:", data.message);
+            // Dừng camera và đóng kết nối một cách an toàn
+            stopCamera("Stream Completed");
           } else if (data && Array.isArray(data.detections)) {
-            // Giữ lại logic cũ phòng trường hợp BFF vẫn gửi cấu trúc phẳng
+            // Xử lý các frame có bounding box trung gian
             setDetections(data.detections);
             drawBoundingBoxes(data.detections);
           } else if (data.error) {
@@ -77,7 +72,6 @@ export default function LiveDetectionPage() {
             toast.error(t("live.serverError") || "Server error", {
               description: errorMessage,
             });
-            stopCamera("Error");
           }
         } catch (error) {
           console.error("[v0] Error parsing WebSocket message:", error);
@@ -95,17 +89,13 @@ export default function LiveDetectionPage() {
         console.log(
           `[BFF-WS] WebSocket disconnected: Code=${event.code}, Reason=${event.reason}`
         );
+        // Luôn dừng camera khi kết nối bị đóng, bất kể lý do gì
         setIsConnected(false);
-        // Chỉ hiện thông báo và đóng nếu không phải do chuyển hướng (code 1000)
-        if (
-          isStreaming &&
-          !event.reason.includes("Redirecting") &&
-          !event.reason.includes("Error")
-        ) {
-          toast.error(t("live.disconnectedError") || "Connection lost", {
+        stopCamera("Connection Closed");
+        if (event.code !== 1000 && event.code !== 1005) { // 1000 = Normal Closure, 1005 = No Status Rcvd
+          toast.info(t("live.disconnectedError") || "Connection to server closed.", {
             description: "Please check your internet connection and try again.",
           });
-          stopCamera("Unexpected Close");
         }
       };
 
@@ -165,7 +155,9 @@ export default function LiveDetectionPage() {
         setIsStreaming(true);
         setDetections([]);
 
-        connectWebSocket();
+        // Kết nối WebSocket
+        setIsConnecting(true);
+        initializeWebSocket().finally(() => setIsConnecting(false));
 
         // Gửi khung hình mỗi 200ms (5 FPS)
         frameIntervalRef.current = setInterval(() => {
@@ -202,6 +194,11 @@ export default function LiveDetectionPage() {
       }
 
       clearCanvas();
+
+      // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+      if (isAuthenticated) {
+        refetchUser();
+      }
     }
   };
 
@@ -301,7 +298,12 @@ export default function LiveDetectionPage() {
                       (isConnected ? (
                         <Badge variant="default" className="gap-1">
                           <Wifi className="h-3 w-3" />
-                          Connected
+                          {t('live.connected') || 'Connected'}
+                        </Badge>
+                      ) : isConnecting ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {t('live.connecting') || 'Connecting...'}
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="gap-1">

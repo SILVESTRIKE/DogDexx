@@ -87,10 +87,15 @@ Admin endpoints require `role: 'admin'`:
 
 - `GET /bff/admin/dashboard` - Dashboard statistics
 - `GET /bff/admin/feedback` - User feedback
+- `POST /bff/admin/feedback/{id}/approve` - Approve feedback
+- `POST /bff/admin/feedback/{id}/reject` - Reject feedback
 - `GET /bff/admin/users` - User management
+- `POST /bff/admin/users` - Create a new user
+- `PUT /bff/admin/users/{id}` - Update a user
 - `GET /bff/admin/model/config` - AI model configuration
 - `PUT /bff/admin/model/config` - Update model config
 - `GET /bff/admin/alerts` - System alerts
+- `GET /bff/admin/histories/browse` - Browse prediction histories by directory structure
 
 ## Error Handling
 
@@ -217,16 +222,30 @@ interface DetectionResult {
 - `POST /bff/predict/image` - Predict from image
 - `POST /bff/predict/video` - Predict from video
 - `POST /bff/predict/batch` - Batch prediction
-- `POST /bff/predict/{id}/feedback` - Submit feedback
+- `POST /bff/predict/history/{id}/feedback` - Submit feedback for a prediction (Private)
 - `GET /bff/predict/history` - Get prediction history
+- `GET /bff/predict/history/{id}` - Get a specific prediction history item (Public for guest's own history, Private for user's history)
+- `DELETE /bff/predict/history/{id}` - Delete a prediction history item
 
 ### BFF-Admin
 - `GET /bff/admin/dashboard` - Admin dashboard
 - `GET /bff/admin/feedback` - Manage feedback
+- `POST /bff/admin/feedback/{id}/approve` - Approve feedback
+- `POST /bff/admin/feedback/{id}/reject` - Reject feedback
 - `GET /bff/admin/users` - Manage users
+- `POST /bff/admin/users` - Create user
+- `PUT /bff/admin/users/{id}` - Update user
 - `GET /bff/admin/model/config` - Get model config
 - `PUT /bff/admin/model/config` - Update model config
+- `POST /bff/admin/models/upload` - Upload a new AI model
 - `GET /bff/admin/alerts` - Get system alerts
+- `GET /bff/admin/usage` - Get usage statistics
+- `GET /bff/admin/histories` - Get all prediction histories (paginated)
+- `GET /bff/admin/histories/browse` - Browse histories by directory
+- `GET /bff/admin/media/browse` - Browse user media files by directory
+
+### Analytics (Public)
+- `POST /api/analytics/track-visit` - Track a page visit (no auth required)
 
 ### BFF-Realtime (WebSocket)
 - `WS /bff/live` - Live detection stream

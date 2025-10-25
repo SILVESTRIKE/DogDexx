@@ -1,14 +1,14 @@
 "use client"
 
 import Link from "next/link"
-import { useState, useEffect, useMemo, useRef } from "react"
-import { usePathname } from "next/navigation"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { usePathname, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { I18nContextType, useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield } from "lucide-react"
+import { User, Shield, Coins } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,19 +22,18 @@ import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function Navbar() {
-  const { user, logout, isLoading, isAuthenticated } = useAuth()
+  const { user, logout, isLoading, isAuthenticated, isAuthModalOpen, setAuthModalOpen, authModalMode, setAuthModalMode } = useAuth()
   const { t } = useI18n()
   const mounted = useMounted()
-  const [showAuthModal, setShowAuthModal] = useState(false)
-  const [authMode, setAuthMode] = useState<"login" | "register">("login")
   const [scrolled, setScrolled] = useState(false)
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const navContainerRef = useRef<HTMLDivElement>(null)
   const [indicatorStyle, setIndicatorStyle] = useState({})
 
-  const handleAuthClick = (mode: "login" | "register") => {
-    setAuthMode(mode)
-    setShowAuthModal(true)
+  const handleAuthClick = (mode: "login" | "register") => {    
+    setAuthModalMode(mode)
+    setAuthModalOpen(true)
   }
 
   useEffect(() => {
@@ -43,6 +42,14 @@ export function Navbar() {
     handleScroll() // Check initial scroll position
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
+
+  useEffect(() => {
+    const authAction = searchParams.get("auth")
+    if (authAction === "login" || authAction === "register") {
+      setAuthModalMode(authAction)
+      setAuthModalOpen(true)
+    }
+  }, [searchParams, setAuthModalMode, setAuthModalOpen])
 
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
@@ -76,7 +83,7 @@ export function Navbar() {
           href={link.href}
           data-active={isActive}
           className={cn(
-            "relative transition-colors px-4 py-2 rounded-full text-sm font-medium z-10",
+            "relative transition-colors px-4 rounded-full text-sm font-medium z-10 whitespace-nowrap h-full flex items-center",
             isActive ? "text-primary-foreground" : "text-foreground/70 hover:text-foreground"
           )}
         >
@@ -102,22 +109,24 @@ export function Navbar() {
   ), [navLinks, isAuthenticated, pathname]);
 
   const userMenuContent = useMemo(() => {
-    if (isLoading) {
-      return <div className="h-10 w-24 bg-muted rounded-md animate-pulse" /> // Tăng chiều cao cho skeleton loader
-    }
-
     if (isAuthenticated && user) {
       return (
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="flex items-center gap-2 rounded-full pl-1.5 pr-3 h-9">
-              <Avatar className="h-6 w-6">
-                <AvatarImage src={user.avatarUrl} alt={user.username} />
-                <AvatarFallback>{user.username.charAt(0).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              {user.username}
-            </Button>
-          </DropdownMenuTrigger>
+            <DropdownMenuTrigger asChild>
+              <div className="flex items-center gap-3">
+                <div className="hidden sm:flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+                  <Coins className="h-4 w-4 text-amber-500" />
+                  <span className="font-mono">{user.remainingTokens}/{user.tokenAllotment}</span>
+                </div>
+                <Button variant="outline" className="flex items-center gap-2 rounded-full pl-1.5 pr-3 h-9">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={user.avatarUrl} alt={user.username} />
+                    <AvatarFallback>{user.username.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  {user.username}
+                </Button>
+              </div>
+            </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
             {/* Mobile Nav Links */}
             <div className="md:hidden">
@@ -136,26 +145,44 @@ export function Navbar() {
       )
     }
 
+    // Nếu chưa đăng nhập nhưng có thông tin user (trường hợp guest)
+    if (!isAuthenticated && user) {
+      return (
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
+            <Coins className="h-4 w-4 text-amber-500" />
+            <span className="font-mono">{user.remainingTokens}/{user.tokenAllotment}</span>
+          </div>
+          <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
+          <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
+        </div>
+      )
+    }
+
+    // Trường hợp 3: Chưa có thông tin gì (đang tải hoặc chưa có phiên)
     return (
-      <>
+      <div className="flex items-center gap-3">
         <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
         <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
-      </>
+      </div>
     )
-  }, [isLoading, isAuthenticated, user, t, logout, mobileNavLinks, pathname])
+  }, [isLoading, isAuthenticated, user, user?.remainingTokens, t, logout, mobileNavLinks, pathname])
 
   return (
     <>
       <nav className={`sticky top-0 z-50 border-b transition-colors duration-300 ${scrolled ? "bg-background/90 backdrop-blur-lg border-border" : "bg-background border-transparent"}`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-8 flex-1">
-            <Link href="/" className="text-2xl font-bold">{t("common.appName")}</Link>
+            <Link href="/" className="flex items-center gap-2 text-2xl font-bold">
+              <img src="/LogoWebWhite.png" alt={t("common.appName")} className="w-8 h-auto" />
+              <span>{t("common.appName")}</span>
+            </Link>
           </div>
           <div className="hidden md:flex flex-1 justify-center">
             <div ref={navContainerRef} className="flex items-center justify-around relative bg-muted rounded-full h-9">
               {mounted ? (
                 <>
-                  <div className="absolute bg-primary rounded-full h-[calc(100%-4px)] transition-all duration-300 ease-in-out" style={indicatorStyle} />
+                  <div className="absolute bg-primary rounded-full h-[calc(100%-2px)] transition-all duration-300 ease-in-out" style={indicatorStyle} />
                   {navLinksContent}
                 </>
               ) : (
@@ -171,7 +198,7 @@ export function Navbar() {
           </div>
         </div>
       </nav>
-      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} mode={authMode} onSwitchMode={setAuthMode} />
+      <AuthModal isOpen={isAuthModalOpen} onClose={() => setAuthModalOpen(false)} mode={authModalMode} onSwitchMode={setAuthModalMode} />
     </>
   )
 }

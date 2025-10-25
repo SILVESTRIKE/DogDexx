@@ -21,6 +21,7 @@ interface CollectionContextType {
     totalAchievements: number;
     unlockedAchievements: number;
     totalCollected: number;
+    totalBreeds: number;
   } | null
   refreshCollection: () => Promise<void>
 }
@@ -28,7 +29,7 @@ interface CollectionContextType {
 const CollectionContext = createContext<CollectionContextType | undefined>(undefined)
 
 export function CollectionProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth() // Dùng user từ auth context
+  const { user, isAuthenticated } = useAuth() // Dùng user và isAuthenticated từ auth context
   const { locale } = useI18n()
   const [collectedDogs, setCollectedDogs] = useState<Map<string, { collectedAt: string | null; source: CollectionSource | null; }>>(new Map())
   const [unlockedAchievements, setUnlockedAchievements] = useState<Achievement[]>([]) // Giữ lại để có thể dùng ở đâu đó khác
@@ -37,11 +38,12 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
 
   // Hàm tải dữ liệu có thể tái sử dụng
   const loadCollectionData = useCallback(async () => {
-    if (user) {
+    // SỬA LỖI: Chỉ tải dữ liệu bộ sưu tập khi người dùng đã được xác thực (đăng nhập)
+    if (isAuthenticated && user) {
       try {
         // Sử dụng Promise.all để tải song song
         const [pokedexResponse, achievementsResponse] = await Promise.all([
-          apiClient.getPokedex({ limit: 9999, isCollected: 'true' }),
+          apiClient.getPokedex({ limit: 9999, isCollected: 'true', lang: locale }),
           apiClient.getAchievements(locale)
         ]);
 
@@ -66,12 +68,12 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
       setCollectionStats(null);
       setAchievementStats(null);
     }
-  }, [user, locale]);
+  }, [user, isAuthenticated, locale]);
 
-  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất)
+  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất) HOẶC khi ngôn ngữ (locale) thay đổi.
   useEffect(() => {
     loadCollectionData();
-  }, [loadCollectionData, user]);
+  }, [loadCollectionData]); // loadCollectionData đã có đủ dependencies
 
   const toggleCollected = async (dogSlug: string) => {
     // Logic này về cơ bản đã đúng, chỉ cần đảm bảo nó cập nhật state một cách nhất quán

@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { userService, PlainUser } from "./user.service";
+import { userService, EnrichedUser } from "./user.service";
 import { UserModel } from "../models/user.model";
 import { tokenService } from "./token.service";
 import { RefreshTokenModel } from "../models/refreshToken.model";
@@ -33,16 +33,18 @@ export const authService = {
     email: string,
     password: string
   ): Promise<{
-    user: PlainUser;
+    user: EnrichedUser;
     accessToken: string;
     refreshToken: string;
   }> {
-    const userDoc = await userService.getByEmail(email, true);
+    // SỬA LỖI: Lấy trực tiếp Mongoose document để đảm bảo có trường password
+    const userDoc = await UserModel.findOne({ email, isDeleted: false }).select('+password');
     if (!userDoc || !userDoc.password) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
 
     const isMatch = await bcrypt.compare(password, userDoc.password);
+    // Sau khi so sánh, xóa trường password khỏi bộ nhớ để bảo mật
     if (!isMatch) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
@@ -58,10 +60,14 @@ export const authService = {
 
     const tokens = await tokenService.createTokens(userDoc);
 
-    // Bây giờ userDoc.toObject() đã hoạt động đúng và an toàn
-    const userObject = userDoc.toObject();
+    // LÀM GIÀU DỮ LIỆU: Sau khi xác thực thành công, gọi service để làm giàu thông tin user
+    const enrichedUser = await userService.getById(userDoc.id);
 
-    return { user: userObject, ...tokens };
+    if (!enrichedUser) {
+      throw new NotAuthorizedError("Không thể lấy thông tin chi tiết người dùng sau khi đăng nhập.");
+    }
+
+    return { user: enrichedUser as EnrichedUser, ...tokens };
   },
 
   async logout(refreshToken: string): Promise<void> {

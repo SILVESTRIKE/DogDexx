@@ -46,76 +46,61 @@ export const TokenManager = {
 // API Client with automatic token refresh
 class ApiClient {
   private baseUrl: string;
-  private guestSessionPromise: Promise<void> | null = null;
+  // THAY ĐỔI 1: Tạo một callback duy nhất, mạnh mẽ hơn
+  private onTokenUpdate:
+    | ((tokens: { remaining: number; limit: number }) => void)
+    | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
-  // Đảm bảo người dùng khách có một session cookie từ backend
-  ensureGuestSession(): Promise<void> {
-    // Nếu đã có promise, tức là đang có một request chạy rồi, chỉ cần chờ nó hoàn thành.
-    if (this.guestSessionPromise) {
-      return this.guestSessionPromise;
+  // THAY ĐỔI 2: Đổi tên hàm callback để rõ ràng hơn
+  public setTokenUpdateCallback(
+    callback: (tokens: { remaining: number; limit: number }) => void
+  ) {
+    this.onTokenUpdate = callback;
+  }
+  
+  private handleTokenHeaders(response: Response | XMLHttpRequest) {
+    if (!this.onTokenUpdate) return;
+
+    // Logic lấy header chung cho cả fetch Response và XHR
+    const getHeader = (name: string) =>
+      response instanceof Response
+        ? response.headers.get(name)
+        : response.getResponseHeader(name);
+
+    // Ưu tiên đọc header của người dùng đã đăng nhập trước
+    let limit = getHeader("X-User-Tokens-Limit");
+    let remaining = getHeader("X-User-Tokens-Remaining");
+
+    // Nếu không có, thì đọc header của khách
+    if (!limit || !remaining) {
+      limit = getHeader("X-Trial-Tokens-Limit");
+      remaining = getHeader("X-Trial-Tokens-Remaining");
     }
 
-    // Nếu đã đăng nhập hoặc đã có cờ guest session, không cần làm gì.
-    if (
-      typeof window === "undefined" ||
-      TokenManager.getAccessToken() ||
-      TokenManager.hasGuestSession()
-    ) {
-      return Promise.resolve();
+    if (limit && remaining) {
+      this.onTokenUpdate({
+        remaining: parseInt(remaining, 10),
+        limit: parseInt(limit, 10),
+      });
     }
-
-    // Tạo một promise mới để ping server. Các lời gọi sau sẽ chờ promise này.
-    this.guestSessionPromise = (async () => {
-      console.log(
-        "No user or guest session found. Pinging server to create guest session..."
-      );
-      try {
-        // Gọi đến một endpoint công khai bất kỳ để kích hoạt middleware tạo session phía backend.
-        // Chúng ta không cần dữ liệu trả về, chỉ cần request được gửi đi.
-        await fetch(`${this.baseUrl}/bff/content/breeds`);
-        TokenManager.setGuestSession();
-        console.log("Guest session created and flag set in localStorage.");
-      } catch (error: any) {
-        console.error("Failed to ping server for guest session:", error);
-        // Cải thiện xử lý lỗi cho các lỗi mạng
-        if (error instanceof TypeError && error.message === 'Failed to fetch') {
-          throw new Error('Network error: Could not connect to the backend server to create a guest session.');
-        }
-        throw error;
-      } finally {
-        // QUAN TRỌNG: Luôn luôn xóa promise để lần gọi tiếp theo có thể thử lại
-        this.guestSessionPromise = null;
-      }
-    })();
-
-    // Thêm .catch() để tránh UnhandledPromiseRejection, nhưng vẫn re-throw lỗi cho caller
-    return this.guestSessionPromise.catch((e) => {
-      // Chúng ta không cần làm gì ở đây, chỉ cần ensureGuestSession re-throw lỗi.
-      throw e;
-    });
   }
 
-  private async request<T>(
+  // SỬA LẠI: Hàm request<T>
+  public async request<T>(
     endpoint: string,
     options: RequestInit = {},
     requiresAuth = false
   ): Promise<T> {
-    // FIX: Xử lý trường hợp có dấu '/' thừa. Sử dụng URL constructor là cách sạch nhất.
     const url = new URL(endpoint, this.baseUrl).toString();
-
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       ...(options.headers as Record<string, string>),
     };
 
-    // Chờ cho việc kiểm tra/tạo guest session hoàn tất trước khi gửi request
-    await this.ensureGuestSession();
-
-    // Luôn đính kèm token nếu nó tồn tại
     const token = TokenManager.getAccessToken();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -124,37 +109,33 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        headers,
-      });
+      const response = await fetch(url, { ...options, headers });
 
-      // Handle 401 - try to refresh token
+      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
+
       if (response.status === 401 && requiresAuth) {
         const refreshed = await this.refreshAccessToken();
         if (refreshed) {
-          // Retry the request with new token
           const newToken = TokenManager.getAccessToken();
           if (newToken) {
             headers["Authorization"] = `Bearer ${newToken}`;
           }
           const retryResponse = await fetch(url, { ...options, headers });
 
+          this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
+
           if (!retryResponse.ok) {
-            // Tái sử dụng logic xử lý lỗi chi tiết
             const retryErrorData = await retryResponse.json().catch(() => ({}));
             const retryErrorMessage =
               retryErrorData.errors?.[0]?.message ||
-              retryErrorData.message || `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
+              retryErrorData.message ||
+              `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
             throw new Error(retryErrorMessage);
           }
 
           return retryResponse.json();
         } else {
-          // Refresh failed, clear tokens and throw
           TokenManager.clearTokens();
-          // Ném lỗi xác thực cụ thể, sẽ được bắt ở AuthContext để xử lý Logout.
-          // Thêm thông tin về việc refresh token thất bại.
           throw new Error("Authentication failed: Unable to refresh token.");
         }
       }
@@ -162,38 +143,31 @@ class ApiClient {
       if (!response.ok) {
         if (response.status === 304) {
         } else {
-            const errorData = await response.json().catch(() => ({})); // { success: false, errors: [{ message: '...' }] }
-            // Lấy message từ lỗi đầu tiên trong mảng errors, hoặc fallback về message chung
-            const errorMessage =
-              errorData.errors?.[0]?.message ||
-              errorData.message || `API Error: ${response.status} ${response.statusText} on ${url}`;
-            throw new Error(errorMessage);
+          const errorData = await response.json().catch(() => ({}));
+          const errorMessage =
+            errorData.errors?.[0]?.message ||
+            errorData.message ||
+            `API Error: ${response.status} ${response.statusText} on ${url}`;
+          throw new Error(errorMessage);
         }
       }
-      
-      // Xử lý 204 No Content (thường là từ các request DELETE), không có body để parse.
+
       if (response.status === 204) {
         return Promise.resolve(null as T);
       }
-      
-      // Đối với 200 OK hoặc 304 Not Modified, trình duyệt sẽ cung cấp body (mới hoặc từ cache)
-      // nên chúng ta có thể gọi .json() một cách an toàn.
+
       return response.json();
     } catch (error) {
       console.error("[ApiClient] Request failed:", error, `(URL: ${url})`);
-
-      // Cải thiện thông báo lỗi cho các lỗi mạng
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Network error: Could not connect to the server. Please check your internet connection or contact support.');
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
+        throw new Error(
+          "Network error: Could not connect to the server. Please check your internet connection or contact support."
+        );
       }
-
-      // Ném lại lỗi gốc nếu nó đã là một Error object với message rõ ràng
       if (error instanceof Error) {
         throw error;
       }
-
-      // Fallback cho các trường hợp khác
-      throw new Error('An unexpected error occurred.');
+      throw new Error("An unexpected error occurred.");
     }
   }
 
@@ -205,9 +179,6 @@ class ApiClient {
     const url = new URL(endpoint, this.baseUrl).toString();
     const headers: Record<string, string> = {};
 
-    await this.ensureGuestSession();
-
-    // luôn đính kèm token nếu tồn tại
     const token = TokenManager.getAccessToken();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
@@ -221,66 +192,50 @@ class ApiClient {
 
     try {
       const response = await fetch(url, options);
+      
+      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
 
-      // handle 401 - thử refresh token
       if (response.status === 401 && requiresAuth) {
         const refreshed = await this.refreshAccessToken();
         if (refreshed) {
           const newToken = TokenManager.getAccessToken();
           if (newToken) {
-            // tạo headers mới để tránh thêm Content-Type mặc định
-            const retryHeaders = {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            };
+            const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
             const retryOptions = { ...options, headers: retryHeaders };
-
             const retryResponse = await fetch(url, retryOptions);
+            
+            this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
 
-            // kiểm tra lỗi sau khi retry
             if (!retryResponse.ok) {
-              const retryErrorData = await retryResponse
-                .json()
-                .catch(() => ({}));
-              const retryErrorMessage =
-                retryErrorData.errors?.[0]?.message ||
-                retryErrorData.message || `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
+              const retryErrorData = await retryResponse.json().catch(() => ({}));
+              const retryErrorMessage = retryErrorData.errors?.[0]?.message || retryErrorData.message || `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
               throw new Error(retryErrorMessage);
             }
-
             return retryResponse.json();
           }
         }
-
-        // nếu refresh token thất bại
         TokenManager.clearTokens();
         throw new Error("Authentication failed: Unable to refresh token.");
       }
 
-      // nếu response không ok
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.errors?.[0]?.message || errorData.message || `API Error: ${response.status} ${response.statusText} on ${url}`;
+        const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${response.status} ${response.statusText} on ${url}`;
         throw new Error(errorMessage);
       }
-
       return response.json();
     } catch (error) {
       console.error("[ApiClient] FormData request failed:", error, `(URL: ${url})`);
-      
-      // Cải thiện logic xử lý lỗi để cung cấp thông báo chi tiết hơn
       if (error instanceof TypeError && error.message === 'Failed to fetch') {
         throw new Error('Network error: Could not connect to the server. Please check your internet connection or contact support.');
       }
-
       if (error instanceof Error) {
         throw error;
       }
-      // Fallback cho các trường hợp khác
       throw new Error('Something went wrong during the file upload.');
     }
   }
+
   private async requestWithUploadProgress<T>(
     endpoint: string,
     formData: FormData,
@@ -288,57 +243,45 @@ class ApiClient {
     requiresAuth = false
   ): Promise<T> {
     return new Promise(async (resolve, reject) => {
-      const url = new URL(endpoint, this.baseUrl).toString();
-      const xhr = new XMLHttpRequest();
+        const url = new URL(endpoint, this.baseUrl).toString();
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
 
-      xhr.open("POST", url, true);
+        const token = TokenManager.getAccessToken();
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
-      // Đảm bảo guest session (nếu cần)
-      await this.ensureGuestSession().catch(reject);
-
-      // Đính kèm token
-      const token = TokenManager.getAccessToken();
-      if (token) {
-        xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      } else if (requiresAuth) {
-        return reject(new Error("Token is not provided for an authenticated request."));
-      }
-
-      // Theo dõi tiến trình upload
-      xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const progress = Math.round((event.loaded / event.total) * 100);
-          onProgress(progress);
-        }
-      };
-
-      // Xử lý khi hoàn thành
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            const jsonResponse = JSON.parse(xhr.responseText);
-            resolve(jsonResponse);
-          } catch (e) {
-            reject(new Error("Failed to parse server response."));
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            onProgress(percentComplete);
           }
-        } else {
-          // Xử lý lỗi tương tự như trong hàm request()
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
-            reject(new Error(errorMessage));
-          } catch (e) {
-            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+        };
+
+        xhr.onload = () => {
+          this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (e) {
+              reject(new Error("Failed to parse server response."));
+            }
+          } else {
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
+              reject(new Error(errorMessage));
+            } catch (e) {
+              reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+            }
           }
-        }
-      };
+        };
 
-      // Xử lý lỗi mạng
-      xhr.onerror = () => {
-        reject(new Error("Network error occurred during the upload."));
-      };
+        xhr.onerror = () => {
+          reject(new Error("Network error occurred during the upload."));
+        };
 
-      xhr.send(formData);
+        xhr.send(formData);
     });
   }
 
@@ -412,25 +355,31 @@ class ApiClient {
     );
   }
 
+  // THÊM MỚI: Hàm kiểm tra trạng thái phiên làm việc
+  async getSessionStatus() {
+    // Sử dụng optionalAuth ở backend, không cần token ở đây
+    // Endpoint này sẽ trả về hoặc là profile người dùng, hoặc là trạng thái guest
+    return this.request<any>("/bff/user/session-status", {
+      cache: "no-cache",
+    });
+  }
+
   async getProfile() {
-    return this.request<import("./types").ProfileResponse>("/bff/user/profile", { cache: "no-cache" }, true);
+    return this.request<import("./types").ProfileResponse>(
+      "/bff/user/profile",
+      { cache: "no-cache" },
+      true
+    );
   }
 
   async updateProfile(formData: FormData) {
-    return this.requestWithFormData<any>(
-      "/bff/user/profile",
-      formData,
-      true
-    );
+    return this.requestWithFormData<any>("/bff/user/profile", formData, true);
   }
 
   async updateAvatar(file: File) {
     const formData = new FormData();
     formData.append("avatar", file);
-    return this.requestWithFormData<any>(
-      "/bff/user/avatar",
-      formData,
-      true);
+    return this.requestWithFormData<any>("/bff/user/avatar", formData, true);
   }
 
   // BFF-Collection endpoints
@@ -444,7 +393,8 @@ class ApiClient {
     shedding_level?: number;
     suitable_for?: string;
     sort?: string;
-    isCollected?: 'true' | 'false';
+    isCollected?: "true" | "false";
+    lang?: "vi" | "en";
   }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -472,11 +422,15 @@ class ApiClient {
     );
   }
 
-  async getAchievements(lang: 'vi' | 'en') {
+  async getAchievements(lang: "vi" | "en") {
     const queryParams = new URLSearchParams();
-    queryParams.append('lang', lang);
+    queryParams.append("lang", lang);
 
-    return this.request<any>(`/bff/collection/achievements?${queryParams.toString()}`, {}, true);
+    return this.request<any>(
+      `/bff/collection/achievements?${queryParams.toString()}`,
+      {},
+      true
+    );
   }
 
   async getCollectionStats() {
@@ -484,8 +438,14 @@ class ApiClient {
   }
 
   // BFF-Content endpoints
-  async getBreedBySlug(slug: string) {
-    return this.request<any>(`/bff/content/breed/${slug}`, {}, false);
+  async getBreedBySlug(slug: string, lang: "vi" | "en") {
+    const queryParams = new URLSearchParams();
+    queryParams.append("lang", lang);
+    return this.request<any>(
+      `/bff/content/breed/${slug}?${queryParams.toString()}`,
+      {},
+      false
+    );
   }
 
   async getBreeds() {
@@ -554,6 +514,23 @@ class ApiClient {
     );
   }
 
+  async chatWithBreed(
+    breedSlug: string,
+    message: string,
+    lang: "vi" | "en"
+  ): Promise<{ reply: string; initialMessage?: string }> {
+    const headers = { "Accept-Language": lang };
+    return this.request<{ reply: string; initialMessage?: string }>(
+      `/bff/predict/chat/${breedSlug}`,
+      {
+        method: "POST",
+        headers: headers,
+        body: JSON.stringify({ message }),
+      },
+      false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
+    );
+  }
+
   async getPredictionHistory(params?: { page?: number; limit?: number }) {
     const queryParams = new URLSearchParams();
     if (params) {
@@ -565,18 +542,25 @@ class ApiClient {
     }
     const query = queryParams.toString();
     return this.request<any>(
-      `/bff/predict/history${query ? `?${query}` : ""}`, {}, true
+      `/bff/predict/history${query ? `?${query}` : ""}`,
+      {},
+      true
     );
   }
-  
+
   // ----- MODIFIED: HÀM MỚI ĐƯỢC THÊM VÀO ĐÂY -----
-  async getPredictionHistoryById(id: string): Promise<import("./types").BffPredictionResponse> {
+  async getPredictionHistoryById(
+    id: string,
+    lang: "vi" | "en"
+  ): Promise<import("./types").BffPredictionResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.append("lang", lang);
     return this.request<import("./types").BffPredictionResponse>(
-        `/bff/predict/history/${id}`,
-        {
-            method: 'GET',
-        },
-        true // Yêu cầu xác thực để xem lịch sử
+      `/bff/predict/history/${id}?${queryParams.toString()}`,
+      {
+        method: "GET",
+      },
+      false // Để public, ai có link cũng xem được
     );
   }
   // --------------------------------------------------
@@ -585,7 +569,7 @@ class ApiClient {
     return this.request<{ message: string }>(
       `/bff/predict/history/${id}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
       },
       true
     );
@@ -623,7 +607,12 @@ class ApiClient {
     return this.request<any>("/bff/admin/dashboard", {}, true);
   }
 
-  async getAdminFeedback(params?: { page?: number; limit?: number; status?: string; search?: string }) {
+  async getAdminFeedback(params?: {
+    page?: number;
+    limit?: number;
+    status?: string;
+    search?: string;
+  }) {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
@@ -631,7 +620,11 @@ class ApiClient {
       });
     }
     const query = queryParams.toString();
-    return this.request<any>(`/bff/admin/feedback${query ? `?${query}` : ""}`, {}, true);
+    return this.request<any>(
+      `/bff/admin/feedback${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
   }
 
   async adminApproveFeedback(feedbackId: string) {
@@ -654,15 +647,24 @@ class ApiClient {
     );
   }
 
-  async getAdminUsers(params?: { page?: number; limit?: number; search?: string }) {
+  async getAdminUsers(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== "") queryParams.append(key, String(value));
+        if (value !== undefined && value !== "")
+          queryParams.append(key, String(value));
       });
     }
     const query = queryParams.toString();
-    return this.request<any>(`/bff/admin/users${query ? `?${query}` : ""}`, {}, true);
+    return this.request<any>(
+      `/bff/admin/users${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
   }
 
   async getModelConfig() {
@@ -688,37 +690,58 @@ class ApiClient {
     return this.request<any>("/bff/admin/usage", {}, true);
   }
 
-  async getAdminHistories(params?: { page?: number; limit?: number; search?: string }) {
+  async getAdminHistories(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
     const queryParams = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== "") queryParams.append(key, String(value));
+        if (value !== undefined && value !== "")
+          queryParams.append(key, String(value));
       });
     }
     const query = queryParams.toString();
-    return this.request<any>(`/bff/admin/histories${query ? `?${query}` : ""}`, {}, true);
+    return this.request<any>(
+      `/bff/admin/histories${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
   }
 
-  async browseAdminHistories(path: string, params?: { breed?: string, startDate?: string, endDate?: string }) {
+  async browseAdminHistories(
+    path: string,
+    params?: { breed?: string; startDate?: string; endDate?: string }
+  ) {
     const queryParams = new URLSearchParams();
-    if (path) queryParams.append('path', path);
-    if (params?.breed && params.breed !== 'all') queryParams.append('breed', params.breed);
-    if (params?.startDate) queryParams.append('startDate', params.startDate);
-    if (params?.endDate) queryParams.append('endDate', params.endDate);
-    return this.request<any>(`/bff/admin/histories/browse?${queryParams.toString()}`, {}, true);
+    if (path) queryParams.append("path", path);
+    if (params?.breed && params.breed !== "all")
+      queryParams.append("breed", params.breed);
+    if (params?.startDate) queryParams.append("startDate", params.startDate);
+    if (params?.endDate) queryParams.append("endDate", params.endDate);
+    return this.request<any>(
+      `/bff/admin/histories/browse?${queryParams.toString()}`,
+      {},
+      true
+    );
   }
 
   async browseAdminMedia(path: string, options: RequestInit = {}) {
     const queryParams = new URLSearchParams();
-    if (path) queryParams.append('path', path);
-    return this.request<any>(`/bff/admin/media/browse?${queryParams.toString()}`, options, true);
+    if (path) queryParams.append("path", path);
+    return this.request<any>(
+      `/bff/admin/media/browse?${queryParams.toString()}`,
+      options,
+      true
+    );
   }
 
   async adminDeleteMedia(mediaId: string): Promise<{ message: string }> {
     return this.request<{ message: string }>(
       `/bff/admin/media/${mediaId}`,
       {
-        method: 'DELETE',
+        method: "DELETE",
       },
       true
     );
@@ -726,10 +749,20 @@ class ApiClient {
 
   // Core User Management (Admin)
   async deleteUser(userId: string) {
-    return this.request<void>(`/api/users/${userId}`, { method: 'DELETE' }, true);
+    return this.request<void>(
+      `/api/users/${userId}`,
+      { method: "DELETE" },
+      true
+    );
   }
 
-  async adminCreateUser(data: { username: string; email: string; password: string; role: string, verify: string }) {
+  async adminCreateUser(data: {
+    username: string;
+    email: string;
+    password: string;
+    role: string;
+    verify: string;
+  }) {
     return this.request<any>(
       "/bff/admin/users",
       {
@@ -740,7 +773,10 @@ class ApiClient {
     );
   }
 
-  async adminUpdateUser(userId: string, data: { username?: string; email?: string; role?: string, status?: string }) {
+  async adminUpdateUser(
+    userId: string,
+    data: { username?: string; email?: string; role?: string; status?: string }
+  ) {
     return this.request<any>(
       `/bff/admin/users/${userId}`,
       {
@@ -752,7 +788,11 @@ class ApiClient {
   }
 
   async adminUploadModel(formData: FormData) {
-    return this.requestWithFormData<any>("/bff/admin/models/upload", formData, true);
+    return this.requestWithFormData<any>(
+      "/bff/admin/models/upload",
+      formData,
+      true
+    );
   }
 
   // Core AI Model Management (Admin)
@@ -791,6 +831,145 @@ class ApiClient {
   // Convenience method for stream prediction WebSocket
   connectStreamPrediction(): WebSocket {
     return this.createWebSocketConnection("/bff/predict/stream");
+  }
+
+  // Subscription endpoints
+  async createCheckoutSession(
+    planId: string,
+    billingPeriod: "monthly" | "yearly"
+  ) {
+    return this.request<any>(
+      "/bff/user/create-checkout-session",
+      {
+        method: "POST",
+        body: JSON.stringify({ planId, billingPeriod }),
+      },
+      true
+    );
+  }
+
+  // THÊM MỚI: Lấy danh sách các gói cước công khai
+  async getPublicPlans() {
+    return this.request<any>(
+      "/bff/public/plans",
+      {},
+      false // Endpoint này là public
+    );
+  }
+
+  // THÊM MỚI: Lấy chi tiết một gói cước công khai bằng slug
+  async getPublicPlanBySlug(slug: string) {
+    return this.request<any>(
+      `/bff/public/plans/${slug}`,
+      {},
+      false // Endpoint này là public
+    );
+  }
+
+  // THÊM MỚI: Các hàm quản lý Plan cho Admin
+  async getAdminPlans(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== "")
+          queryParams.append(key, String(value));
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<any>(
+      `/bff/admin/plans${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
+  }
+
+  async createAdminPlan(planData: any) {
+    return this.request<any>(
+      "/bff/admin/plans",
+      { method: "POST", body: JSON.stringify(planData) },
+      true
+    );
+  }
+
+  async updateAdminPlan(planId: string, planData: any) {
+    return this.request<any>(
+      `/bff/admin/plans/${planId}`,
+      { method: "PUT", body: JSON.stringify(planData) },
+      true
+    );
+  }
+
+  async deleteAdminPlan(planId: string) {
+    return this.request<any>(
+      `/bff/admin/plans/${planId}`,
+      { method: "DELETE" },
+      true
+    );
+  }
+
+  async getAdminSubscriptions(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== "")
+          queryParams.append(key, String(value));
+      });
+    }
+    const query = queryParams.toString();
+    return this.request<any>(
+      `/bff/admin/subscriptions${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
+  }
+
+  async approveUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/approve`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+  async rejectUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/reject`,
+      {
+        method: "POST",
+      },
+      true
+    );
+  }
+  async updateUserSubscription(
+    subscriptionId: string,
+    data: { planSlug?: string; status?: string }
+  ) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+  async cancelUserSubscription(subscriptionId: string) {
+    return this.request<any>(
+      `/bff/admin/subscriptions/${subscriptionId}/cancel`,
+      {
+        method: "POST",
+      },
+      true
+    );
   }
 }
 

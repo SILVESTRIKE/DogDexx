@@ -24,6 +24,7 @@ import {
   CheckCircle,
   XCircle,
   Award,
+  Stethoscope
 } from "lucide-react"
 import { useI18n } from "@/lib/i18n-context"
 import React, { useEffect, useState } from "react" // Import React
@@ -51,7 +52,7 @@ export default function DogDetailPage() {
   const [data, setData] = useState<EnrichedDogBreed | null>(null);
   const [loading, setLoading] = useState(true)
   const { toggleCollected } = useCollection()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const params = useParams() as { slug: string }; // Lấy params bằng hook
 
   useEffect(() => {
@@ -59,7 +60,7 @@ export default function DogDetailPage() {
       try {
         setLoading(true)
         const slug = params.slug; // Sử dụng slug từ hook
-        const response = await apiClient.getBreedBySlug(slug)
+        const response = await apiClient.getBreedBySlug(slug, locale)
         setData(response); // The API returns the full object { breed, collectionStatus, media }
       } catch (error) {
         console.error("[v0] Failed to fetch breed:", error)
@@ -70,7 +71,7 @@ export default function DogDetailPage() {
     }
 
     fetchBreed()
-  }, [params, t])
+  }, [params, t, locale])
 
   if (loading) {
     return (
@@ -133,9 +134,11 @@ export default function DogDetailPage() {
                   <MapPin className="h-3 w-3 mr-1" />
                   {dog.origin}
                 </Badge>
-                <Badge variant="secondary" className="text-sm px-3 py-1">
-                  {dog.group}
-                </Badge>
+                <Link href={`/pokedex?filter=${encodeURIComponent(dog.group || '')}`}>
+                  <Badge variant="secondary" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
+                    {dog.group}
+                  </Badge>
+                </Link>
                 <Badge variant="outline" className="text-sm px-3 py-1">
                   {dog.coat_type}
                 </Badge>
@@ -227,7 +230,7 @@ export default function DogDetailPage() {
                 <p className="text-sm text-muted-foreground mb-2">{t('results.coatColors')}</p>
                 <div className="flex flex-wrap gap-1.5">
                   {(dog.coat_colors ?? []).map((color) => (
-                    <Badge key={color} variant="outline" className="text-xs">
+                    <Badge key={color} variant="outline" className="text-sm">
                       {color}
                     </Badge>
                   ))}
@@ -247,7 +250,7 @@ export default function DogDetailPage() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {(dog.temperament ?? []).map((trait) => (
-                  <Badge key={trait} variant="secondary">
+                  <Badge key={trait} variant="secondary" className="text-sm">
                     {trait}
                   </Badge>
                 ))}
@@ -270,9 +273,9 @@ export default function DogDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithChildren')}</p>
-                <Badge variant={dog.good_with_children ? "default" : "destructive"}>
+                <Badge variant={dog.good_with_children ? "default" : "destructive"} className="text-sm">
                   {dog.good_with_children ? (
-                    <CheckCircle className="h-3 w-3 mr-1 text-chart-1" />
+                    <CheckCircle className="h-3 w-3 mr-1" />
                   ) : (
                     <XCircle className="h-3 w-3 mr-1" />
                   )}
@@ -281,7 +284,7 @@ export default function DogDetailPage() {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground mb-2">{t('dogDetails.goodWithPets')}</p>
-                <Badge variant={dog.good_with_other_pets ? "default" : "destructive"}>
+                <Badge variant={dog.good_with_other_pets ? "default" : "destructive"} className="text-sm">
                   {dog.good_with_other_pets ? (
                     <CheckCircle className="h-3 w-3 mr-1 text-chart-1" />
                   ) : (
@@ -350,7 +353,7 @@ export default function DogDetailPage() {
             <CardContent>
               <div className="flex flex-wrap gap-2">
                 {(dog.favorite_foods ?? []).map((food) => (
-                  <Badge key={food} variant="secondary" className="capitalize">
+                  <Badge key={food} variant="secondary" className="text-sm capitalize">
                     {food}
                   </Badge>
                 ))}
@@ -362,7 +365,7 @@ export default function DogDetailPage() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
+                <Stethoscope className="h-5 w-5 text-chart-4" />
                 {t('dogDetails.healthIssues')}
               </CardTitle>
             </CardHeader>
@@ -370,7 +373,7 @@ export default function DogDetailPage() {
               <ul className="space-y-2">
                 {(dog.common_health_issues ?? []).map((issue) => (
                   <li key={issue} className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                    <AlertCircle className="h-4 w-4 text-chart-4 flex-shrink-0" />
                     <span className="capitalize">{issue}</span>
                   </li>
                 ))}
@@ -390,7 +393,7 @@ export default function DogDetailPage() {
           <CardContent>
             <div className="flex flex-wrap gap-2">
               {(dog.trainable_skills ?? []).map((skill) => (
-                <Badge key={skill} variant="outline" className="capitalize">
+                <Badge key={skill} variant="secondary" className="text-sm capitalize">
                   {skill}
                 </Badge>
               ))}

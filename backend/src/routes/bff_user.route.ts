@@ -1,11 +1,11 @@
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar } from '../controllers/bff_user.controller';
+import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar, createCheckoutSession, getSessionStatus } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { RegisterSchema } from '../types/zod/user.zod';
-
+import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 const router = Router();
 
 /**
@@ -117,25 +117,36 @@ router.get('/profile', authMiddleware, getProfile);
  *     tags: [BFF-User]
  *     security:
  *       - bearerAuth: []
- *     description: Cập nhật thông tin cá nhân của người dùng.
+ *     description: Cập nhật thông tin cá nhân của người dùng (username, firstName, lastName) và/hoặc ảnh đại diện.
  *     requestBody:
  *       required: true
  *       content:
- *         application/json:
+ *         multipart/form-data:
  *           schema:
  *             type: object
  *             properties:
  *               username:
  *                 type: string
+ *                 description: Tên người dùng mới.
  *               firstName:
  *                 type: string
+ *                 description: Họ mới.
  *               lastName:
  *                 type: string
+ *                 description: Tên mới.
+ *               avatar:
+ *                 type: string
+ *                 format: binary
+ *                 description: File ảnh đại diện mới (tùy chọn).
  *     responses:
  *       200:
  *         description: Cập nhật thành công.
+ *       400:
+ *         description: Dữ liệu không hợp lệ.
+ *       401:
+ *         description: Chưa xác thực.
  */
-router.put('/profile', authMiddleware, updateProfile);
+router.put('/profile', authMiddleware, uploadAvatar, updateProfile);
 
 /**
  * @swagger
@@ -192,5 +203,43 @@ router.post('/logout', logout);
  *         description: Làm mới token thành công.
  */
 router.post('/refresh', refreshToken);
+
+/**
+ * @swagger
+ * /bff/user/create-checkout-session:
+ *   post:
+ *     summary: (BFF) Tạo phiên thanh toán để nâng cấp gói
+ *     tags: [BFF-User]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Tạo một phiên thanh toán (ví dụ Stripe) để người dùng có thể nâng cấp gói cước.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               planId:
+ *                 type: string
+ *                 description: "ID (slug) của gói cước muốn nâng cấp (ví dụ: 'starter', 'professional')."
+ *               billingPeriod:
+ *                 type: string
+ *                 enum: [monthly, yearly]
+ *     responses:
+ *       200:
+ *         description: Trả về URL của phiên thanh toán để redirect người dùng.
+ */
+router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
+
+/**
+ * @route GET /bff/user/session-status
+ * @desc Kiểm tra trạng thái phiên của người dùng.
+ * - Nếu đã đăng nhập, trả về thông tin user đầy đủ (tương tự /profile).
+ * - Nếu là khách, khởi tạo hoặc lấy thông tin phiên dùng thử.
+ * @access Public
+ */
+router.get('/session-status', optionalAuthMiddleware, getSessionStatus);
+
 
 export default router;

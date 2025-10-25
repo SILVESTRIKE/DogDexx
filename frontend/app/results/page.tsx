@@ -14,6 +14,7 @@ import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
+import { BreedChatBox } from "@/components/breed-chat-box";
 
 /**
  * Component con chứa logic chính để có thể sử dụng hook `useSearchParams`
@@ -22,7 +23,7 @@ import { useAuth } from '@/lib/auth-context';
 function ResultsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { user } = useAuth();
   
   // State mới cho loading và error
@@ -57,56 +58,33 @@ function ResultsContent() {
       setSelectedDetection(primary);
     };
     
-    // Luồng logic mới
-    if (historyId) {
-      // TRƯỜNG HỢP 1: Xem lại từ lịch sử (có ID trên URL)
-      const fetchHistoryById = async () => {
-        setLoading(true);
-        try {
-          const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId);
-          processResultData(result);
-        } catch (err) {
-          console.error("[v0] Failed to fetch prediction history:", err);
-          setError("Failed to load prediction history. It may have been deleted.");
-        } finally {
-          setLoading(false);
-        }
-      };
-      fetchHistoryById();
-    } else {
-      // TRƯỜNG HỢP 2: Xem kết quả mới (không có ID) - Logic cũ
-      const resultData = sessionStorage.getItem("detection-result");
-
-      if (!resultData) {
-        setError("No recent detection result found.");
-        setLoading(false);
-        return;
-      }
-      
+    // Luồng logic mới: Luôn lấy dữ liệu từ historyId trên URL.
+    if (!historyId) {
+      setError("No prediction ID provided. Please go back and try again.");
+      setLoading(false);
+      return;
+    }
+    
+    const fetchHistoryById = async () => {
+      setLoading(true);
       try {
-        const result: BffPredictionResponse = JSON.parse(resultData);
+        const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId, locale);
         processResultData(result);
-        
-        if (!user && result.predictionId) {
-          apiClient.trackEvent('SUCCESSFUL_PREDICTION', { predictionId: result.predictionId })
-            .catch(console.warn);
-        }
       } catch (err) {
-        console.error("[v0] Failed to parse prediction result:", err);
-        setError("Failed to read the detection result.");
+        console.error("[ResultsPage] Failed to fetch prediction history:", err);
+        setError("Failed to load prediction history. It may have been deleted or the link is invalid.");
       } finally {
         setLoading(false);
       }
-    }
-
-    // SỬA LỖI: Dọn dẹp sessionStorage khi component unmount (người dùng rời khỏi trang)
-    return () => {
-      sessionStorage.removeItem("detection-result");
     };
+
+    fetchHistoryById();
+
+    // Không cần dọn dẹp sessionStorage nữa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // SỬA LỖI: Chỉ chạy effect này một lần duy nhất khi component được tải.
-          // Điều này ngăn việc xóa sessionStorage một cách không cần thiết khi re-render.
-          // Logic bên trong đã xử lý cả hai trường hợp (có và không có ID) nên việc chạy một lần là an toàn.
+  }, [locale]); // Chạy lại khi locale thay đổi
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
 
 
   const handleSelectionChange = (selectionKey: string) => {
@@ -230,10 +208,12 @@ function ResultsContent() {
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    <Badge variant="default" className="text-sm px-3 py-1">
-                      <MapPin className="h-3 w-3 mr-1" />
-                      {selectedBreedInfo.group || t("results.unknownOrigin")}
-                    </Badge>
+                    <Link href={`/pokedex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
+                      <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
+                        <MapPin className="h-3 w-3 mr-1" />
+                        {selectedBreedInfo.group || t("results.unknownOrigin")}
+                      </Badge>
+                    </Link>
                   </div>
                 </div>
                 <div>
@@ -342,6 +322,13 @@ function ResultsContent() {
           imageUrl={""} 
           predictionId={predictionId}
         />
+
+        <div className="mt-12">
+          <BreedChatBox
+            breedSlug={selectedBreedInfo.slug}
+            breedName={selectedBreedInfo.breed}
+          />
+        </div>
       </div>
     </main>
   )

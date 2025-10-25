@@ -1,8 +1,8 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import { DirectoryDoc } from "./directory.model";
-export type UserRole = "user" | "premium" | "admin";
 
-// Cấu trúc cho một thành tích đã mở khóa được nhúng vào User
+export type UserRole = "user" | "de" | "admin";
+export type Plan = "free" | "starter" | "professional" | "enterprise";
+
 export interface UnlockedAchievement {
   key: string;
   unlockedAt: Date;
@@ -20,16 +20,21 @@ export type UserDoc = Document & {
   lastName?: string;
   avatarPath?: string;
 
-  //bao Mat
+  // bao Mat
   verify: boolean;
   isDeleted: boolean;
 
+  // Thư mục gốc của người dùng
   directory_id: Types.ObjectId;
 
-  //gioi han
-  photoUploadsThisWeek: number;
-  videoUploadsThisWeek: number;
+  // THAY ĐỔI: Cơ chế giới hạn mới dựa trên token
+  remainingTokens: number;
   lastUsageResetAt: Date;
+  plan: Plan;
+
+  // Stripe-related fields
+  stripeCustomerId?: string;
+  subscriptionId?: string;
 
   // Thành tích đã mở khóa
   achievements: UnlockedAchievement[];
@@ -52,19 +57,31 @@ const userSchema = new Schema<UserDoc>(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["user", "premium", "admin"],
+      enum: ["user", "de", "admin"],
       default: "user",
       required: true,
     },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
     avatarPath: { type: String, trim: true },
-    directory_id: { type: Schema.Types.ObjectId, ref: "Directory" },
     verify: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, select: false },
-    photoUploadsThisWeek: { type: Number, default: 0 },
-    videoUploadsThisWeek: { type: Number, default: 0 },
+
+    // THAY ĐỔI: Thêm trường token
+    remainingTokens: {
+      type: Number,
+      default: 10, // Mặc định 10 token "chào mừng" cho người dùng mới
+      min: [0, "Số token không thể là số âm."], // THÊM DÒNG NÀY
+    },
     lastUsageResetAt: { type: Date, default: () => new Date() },
+    plan: {
+      type: String,
+      enum: ["free", "starter", "professional", "enterprise"],
+      default: "free",
+    },
+
+    stripeCustomerId: { type: String, unique: true, sparse: true },
+    subscriptionId: { type: String, unique: true, sparse: true },
     achievements: [
       {
         _id: false,
@@ -79,13 +96,13 @@ const userSchema = new Schema<UserDoc>(
     toJSON: {
       virtuals: true,
       transform: (doc: any, ret: any) => {
-        ret.id = ret._id.toString(); 
-        ret._id = ret._id.toString(); 
-        
+        ret.id = ret._id.toString();
+        ret._id = ret._id.toString();
+
         if (ret.directory_id) {
-            ret.directory_id = ret.directory_id.toString();
+          ret.directory_id = ret.directory_id.toString();
         }
-        
+
         delete ret.__v;
         delete ret.password;
         delete ret.isDeleted;
@@ -97,7 +114,7 @@ const userSchema = new Schema<UserDoc>(
         ret._id = ret._id.toString();
 
         if (ret.directory_id) {
-            ret.directory_id = ret.directory_id.toString();
+          ret.directory_id = ret.directory_id.toString();
         }
 
         delete ret.__v;

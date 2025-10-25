@@ -1,7 +1,6 @@
-"use client"
+"use client";
 
 import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Upload, Camera, ImageIcon, Video } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,7 +16,7 @@ import { toast } from "sonner"
 
 export default function Home() {
   const mounted = useMounted()
-  const { user } = useAuth()
+  const { user, isAuthenticated, refetchUser } = useAuth()
   const { trackVisit } = useAnalytics()
   const { t } = useI18n()
   const router = useRouter()
@@ -31,7 +30,27 @@ export default function Home() {
 
   useEffect(() => {
     trackVisit("home")
-  }, [trackVisit]) // Dependency array vẫn giữ nguyên
+
+    const handlePaste = (event: ClipboardEvent) => {
+      const items = event.clipboardData?.items
+      if (!items) return
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          const blob = items[i].getAsFile()
+          if (blob) {
+            const file = new File([blob], "pasted-image.png", { type: blob.type })
+            handleFileSelect(file)
+            toast.info("Ảnh đã được dán từ clipboard.")
+            break 
+          }
+        }
+      }
+    }
+
+    window.addEventListener("paste", handlePaste)
+    return () => window.removeEventListener("paste", handlePaste)
+  }, [trackVisit])
 
   const handleFileSelect = (file: File) => {
     setSelectedFile(file)
@@ -95,10 +114,14 @@ export default function Home() {
           response = await apiClient.predictVideo(selectedFile, onProgress)
         }
 
-        // SỬA LỖI: Điều hướng trực tiếp đến trang kết quả với ID, không dùng sessionStorage
-        router.push(`/results?id=${response.predictionId}`)
+        // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+        if (isAuthenticated) {
+          await refetchUser();
+        }
 
-        toast.success(t("results.title"), { id: detectionToast })
+        router.push(`/results?id=${response.predictionId}`);
+        toast.success(t("results.title"), { id: detectionToast });
+
         // Không cần reset ở đây nữa vì sẽ chuyển trang
 
       } catch (error: any) {
@@ -147,7 +170,7 @@ export default function Home() {
         {/* Upload Section */}
         <div className="max-w-3xl mx-auto">
           <Card className="p-8">
-            {!selectedFile ? (
+            {!selectedFile ? ( // Giao diện khi chưa chọn file
               <div
                 onDrop={handleDrop}
                 onDragOver={handleDragOver}

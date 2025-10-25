@@ -135,7 +135,6 @@ function HistoryContent() {
       case 'image_upload': return t('history.sourceImage');
       case 'video_upload': return t('history.sourceVideo');
       case 'stream_capture': return t('history.sourceStream');
-      case 'manual_add': return t('pokedex.sourceManual'); // Tận dụng key đã có
       default: return source;
     }
   }
@@ -203,7 +202,7 @@ function HistoryContent() {
           </Link>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
           {filteredPredictions.map((prediction) => (
             <Card key={prediction.id} className="overflow-hidden hover:shadow-lg transition-shadow">
               {/* Thumbnail */}
@@ -245,9 +244,6 @@ function HistoryContent() {
                       )}
                       {prediction.source === 'stream_capture' && (
                         <Webcam className="h-3 w-3" />
-                      )}
-                      {prediction.source === 'manual_add' && (
-                        <PlusSquare className="h-3 w-3" />
                       )}
                       <span>{getSourceText(prediction.source)}</span>
                     </div>

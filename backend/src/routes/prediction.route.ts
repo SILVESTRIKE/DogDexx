@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { createProxyMiddleware, Options } from "http-proxy-middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
-import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
+// import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
 import { uploadSingle } from "../middlewares/upload.middleware";
 import { predictionController } from "../controllers/prediction.controller";
 import { setMediaType } from "../middlewares/setMediaType.middleware";
@@ -49,12 +49,6 @@ const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Không được phép (nếu vượt quá giới hạn sử dụng)
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
  *       404:
  *         description: Không tìm thấy tài nguyên
  *         content:
@@ -67,7 +61,6 @@ router.post(
   optionalAuthMiddleware,
   uploadSingle, // Upload trước để lấy file info
   setMediaType(), // Tự động detect type từ uploaded file
-  checkUsageLimit, // Check limit sau khi biết media type
   predictionController.predict
 );
 
@@ -95,12 +88,6 @@ router.post(
  *               $ref: '#/components/schemas/PredictionHistoryResponse'
 *       400:
  *         description: Yêu cầu không hợp lệ
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
- *       401:
- *         description: Không được phép (nếu vượt quá giới hạn sử dụng)
  *         content:
  *           application/json:
  *             schema:
@@ -166,7 +153,6 @@ router.post(
   "/api/predictions/stream-result",
   optionalAuthMiddleware,
   setMediaType(),
-  checkUsageLimit,
   predictionController.saveStreamResult
 );
 
