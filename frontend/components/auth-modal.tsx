@@ -52,10 +52,10 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           // Xử lý chuyển hướng sau khi đăng nhập
           const redirectUrl = searchParams.get("redirect")
           if (redirectUrl) {
-            // Xóa query param 'auth' khỏi URL trước khi chuyển hướng
-            const currentParams = new URLSearchParams(window.location.search);
-            currentParams.delete('auth');
-            router.push(`${redirectUrl}?${currentParams.toString()}`);
+            // Lấy các params từ redirectUrl (ví dụ: plan, period)
+            const redirectParams = new URLSearchParams(redirectUrl.split('?')[1] || '');
+            const finalRedirectPath = redirectUrl.split('?')[0];
+            router.push(`${finalRedirectPath}?${redirectParams.toString()}`);
           } else {
             router.refresh() // Làm mới trang hiện tại nếu không có redirect
           }

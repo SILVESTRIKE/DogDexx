@@ -1,0 +1,15 @@
+export enum AnalyticsEventName {
+  // User Authentication
+  USER_REGISTRATION = "USER_REGISTRATION",
+  USER_LOGIN = "USER_LOGIN",
+
+  // Core Feature Usage
+  SUCCESSFUL_PREDICTION = "SUCCESSFUL_PREDICTION",
+  SUCCESSFUL_PREDICTION_VIEW = "SUCCESSFUL_PREDICTION_VIEW",
+
+  // Trial (Guest) Feature Usage
+  SUCCESSFUL_TRIAL = "SUCCESSFUL_TRIAL",
+
+  // General
+  PAGE_VISIT = "PAGE_VISIT",
+}

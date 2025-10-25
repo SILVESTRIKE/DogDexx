@@ -138,9 +138,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
                     <Tooltip><TooltipTrigger><Webcam className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceStream')}</p></TooltipContent></Tooltip>
                   </TooltipProvider>
                 )}
-                {dog.source === 'manual_add' && (
-                  <TooltipProvider delayDuration={100}><Tooltip><TooltipTrigger><PlusSquare className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceManual')}</p></TooltipContent></Tooltip></TooltipProvider>
-                )}
+                
               </div>
             </>
           ) : (

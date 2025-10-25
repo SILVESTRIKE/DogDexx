@@ -1,15 +1,13 @@
 import Achievement, { IAchievement } from '../models/achievement.model';
-import { CollectedBreed } from '../models/user_collection.model';
 import { getDogBreedWikiModel } from '../models/dogs_wiki.model';
-import { UserModel } from '../models/user.model';
-import { PlainUser } from './user.service';
+import { UserModel, UserDoc } from '../models/user.model';
 
 let cachedAchievements: IAchievement[] | null = null;
 // Sửa lỗi: Cache totalBreeds theo ngôn ngữ
 const totalBreedsCache = new Map<'vi' | 'en', number>();
 
 export const achievementService = {
-  async processUserAchievements(user: PlainUser, userCollections: any[], lang: 'vi' | 'en' = 'vi') {
+  async processUserAchievements(user: UserDoc, userCollections: any[], lang: 'vi' | 'en' = 'vi') {
     const WikiModel = getDogBreedWikiModel(lang);
 
     // Lấy định nghĩa gốc (chưa flatten)
