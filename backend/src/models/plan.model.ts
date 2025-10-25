@@ -6,10 +6,10 @@ export type PlanDoc = Document & {
   slug: string;
   priceMonthly: number;
   priceYearly: number;
-  imageLimit: number; // Số ảnh/tuần
-  videoLimit: number; // Số video/tuần
-  storageLimitGB: number; // Dung lượng lưu trữ (GB), -1 là không giới hạn
-  apiAccess: boolean; // Có quyền truy cập API không
+  
+  tokenAllotment: number;
+  
+  apiAccess: boolean;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -21,9 +21,9 @@ const planSchema = new Schema<PlanDoc>(
     slug: { type: String, required: true, unique: true },
     priceMonthly: { type: Number, required: true, min: 0 },
     priceYearly: { type: Number, required: true, min: 0 },
-    imageLimit: { type: Number, required: true, default: 20 },
-    videoLimit: { type: Number, required: true, default: 7 },
-    storageLimitGB: { type: Number, required: true, default: 1 },
+    
+    tokenAllotment: { type: Number, required: true, min: 0 },
+
     apiAccess: { type: Boolean, required: true, default: false },
     isDeleted: {
       type: Boolean,

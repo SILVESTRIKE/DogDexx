@@ -11,37 +11,55 @@ import { apiClient } from "@/lib/api-client"
 import Footer from "@/components/footer"
 import Link from "next/link"
 import { ArrowLeft, Loader2 } from "lucide-react"
+import type { Plan } from "@/lib/types"
 
 export default function CheckoutPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { user } = useAuth()
   const { t, locale } = useI18n()
-  const [loading, setLoading] = useState(false)
+  
+  // Tách state loading cho từng mục đích
+  const [isPageLoading, setIsPageLoading] = useState(true)
+  const [isCheckingOut, setIsCheckingOut] = useState(false)
   const [error, setError] = useState("")
+  const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null)
 
   const planId = searchParams.get("plan")
   const billingPeriod = (searchParams.get("period") as "monthly" | "yearly") || "monthly"
 
-  const plans: Record<string, any> = {
-    free: { name: t("pricing.free"), priceMonthly: 0, priceYearly: 0 },
-    starter: { name: t("pricing.starter"), priceMonthly: 9.99, priceYearly: 99.9 },
-    professional: { name: t("pricing.professional"), priceMonthly: 29.99, priceYearly: 299.9 },
-    enterprise: { name: t("pricing.enterprise"), priceMonthly: 99.99, priceYearly: 999.9 },
-  }
-
-  const selectedPlan = plans[planId || "starter"]
-
   useEffect(() => {
     if (!user) {
       router.push("/")
+      return;
     }
-  }, [user, router])
+
+    if (!planId) {
+      toast.error(t("checkout.failed"), { description: "Plan ID is missing." });
+      router.push("/pricing");
+      return;
+    }
+
+    const fetchPlanDetails = async () => {
+      try {
+        const response = await apiClient.getPublicPlanBySlug(planId);
+        setSelectedPlan(response.data);
+      } catch (err: any) {
+        toast.error(t("checkout.failed"), { description: `Could not load plan details: ${err.message}` });
+        setError(`Could not load plan details for "${planId}"`);
+      } finally {
+        setIsPageLoading(false);
+      }
+    };
+
+    fetchPlanDetails();
+
+  }, [user, router, planId, t])
 
   const handleCheckout = async () => {
     if (!planId) return
 
-    setLoading(true)
+    setIsCheckingOut(true)
     setError("")
 
     try {
@@ -51,16 +69,25 @@ export default function CheckoutPage() {
       toast.error(t("checkout.failed"), { description: err.message });
       setError(err.message || "Checkout failed")
     } finally {
-      setLoading(false)
+      setIsCheckingOut(false)
     }
   }
 
-  const price = billingPeriod === "monthly" ? selectedPlan.priceMonthly : selectedPlan.priceYearly;
-  const formattedPrice = new Intl.NumberFormat(locale, { style: 'currency', currency: 'USD' }).format(price);
+  if (isPageLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
+  }
 
-  if (!user || !planId || !plans[planId]) {
+  if (!user || !planId || !selectedPlan) {
     return null
   }
+
+  const price = billingPeriod === "monthly" ? selectedPlan.priceMonthly : selectedPlan.priceYearly;
+  // Cập nhật định dạng tiền tệ sang VND
+  const formattedPrice = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(price);
 
   return (
     <>
@@ -81,7 +108,7 @@ export default function CheckoutPage() {
 
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between">
-                  <span>{selectedPlan.name}</span>
+                  <span>{t(`pricing.${selectedPlan.slug}`) || selectedPlan.name}</span>
                   <span className="font-semibold">{formattedPrice}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
@@ -92,7 +119,7 @@ export default function CheckoutPage() {
               <div className="border-t pt-4 mt-6">
                 <div className="flex justify-between text-lg font-bold">
                   <span>{t("checkout.total") || "Total"}</span>
-                  <span>${selectedPlan.price}</span>
+                  <span>{formattedPrice}</span>
                 </div>
               </div>
             </Card>
@@ -117,7 +144,7 @@ export default function CheckoutPage() {
                     {t("checkout.cardInfo") || "Card Information"}
                   </label>
                   <div className="p-4 border rounded-lg bg-muted text-sm text-muted-foreground">
-                    {t("checkout.cardPlaceholder") || "Card payment form would be integrated here with Stripe"}
+                    {t("checkout.cardPlaceholder") || "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch."}
                   </div>
                 </div>
               </div>
@@ -135,8 +162,8 @@ export default function CheckoutPage() {
                   {t("common.cancel") || "Cancel"}
                 </Button>
               </Link>
-              <Button onClick={handleCheckout} disabled={loading} className="flex-1">
-                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Button onClick={handleCheckout} disabled={isCheckingOut} className="flex-1">
+                {isCheckingOut && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                 {t("checkout.pay") || "Pay"} {formattedPrice}
               </Button>
             </div>

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPublicPlans } from '../controllers/bff_public.controller';
+import { bffPublicController } from '../controllers/bff_public.controller';
 
 const router = Router();
 
@@ -7,17 +7,38 @@ const router = Router();
  * @swagger
  * /bff/public/plans:
  *   get:
- *     summary: (BFF-Public) Lấy danh sách các gói cước công khai
+ *     summary: "(BFF) Lấy danh sách các gói cước công khai"
  *     tags: [BFF-Public]
- *     description: Endpoint công khai để lấy danh sách các gói cước hiển thị trên trang giá.
+ *     description: Lấy danh sách tất cả các gói cước được đánh dấu là công khai để hiển thị trên trang giá.
  *     responses:
  *       200:
- *         description: Lấy dữ liệu thành công.
+ *         description: Trả về danh sách các gói cước.
  *         content:
  *           application/json:
  *             schema:
  *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/Plan'
  */
-router.get('/plans', getPublicPlans);
+router.get('/plans', bffPublicController.getPublicPlans);
+
+/**
+ * @swagger
+ * /bff/public/plans/{slug}:
+ *   get:
+ *     summary: "(BFF) Lấy chi tiết một gói cước công khai bằng slug"
+ *     tags: [BFF-Public]
+ *     description: Lấy thông tin chi tiết của một gói cước cụ thể dựa trên slug của nó.
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Trả về chi tiết gói cước.
+ */
+router.get('/plans/:slug', bffPublicController.getPublicPlanBySlug);
 
 export default router;

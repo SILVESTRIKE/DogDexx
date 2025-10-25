@@ -1,6 +1,5 @@
 "use client";
 
-import type React from "react";
 import { usePathname } from "next/navigation";
 import { Navbar } from "@/components/navbar";
 import Footer from "@/components/footer";
@@ -16,11 +15,8 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   // Logic hiển thị AdBanner:
   // - Không hiển thị trên trang admin.
   // - Hiển thị nếu người dùng chưa đăng nhập.
-  // - Hiển thị nếu người dùng đã đăng nhập nhưng không phải admin và đang dùng gói 'free'.
-  const showAdBanner =
-    !isAdminPage &&
-    (!isAuthenticated ||
-      (user && user.role !== "admin" && user.role !== "de"));
+  // - Hiển thị nếu người dùng đã đăng nhập nhưng đang dùng gói 'free'.
+  const showAdBanner = !isAdminPage && (!isAuthenticated || (user && user.plan === 'free'));
 
   return (
     <div className="flex flex-col min-h-screen">
