@@ -1,7 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { userService } from "../services/user.service";
-import { PlainUser } from "../services/user.service";
+import { userService, EnrichedUser } from "../services/user.service"; // THAY ĐỔI: Import EnrichedUser
 import { NotAuthorizedError } from "../errors";
 
 interface JwtPayload {
@@ -22,13 +21,15 @@ export const authMiddleware = async (
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
 
+    // userService.getById giờ đây trả về user đã được làm giàu
     const user = await userService.getById(decoded.userId);
 
     if (!user) {
       return next(new NotAuthorizedError("User not found"));
     }
 
-    req.user = user as PlainUser;
+    // Gán user đã được làm giàu vào req.user
+    (req as any).user = user as EnrichedUser;
 
     next();
   } catch (error) {

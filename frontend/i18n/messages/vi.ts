@@ -242,6 +242,9 @@ export default {
       collected: "Chó đã sưu tầm",
       achievements: "Thành tích",
       completion: "Hoàn thành",
+      tokensRemaining: "Token trong tuần: {remaining}/{limit}",
+      tokens: "Tokens",
+      guestTokens: "Lượt dùng thử",
     },
     account: {
       title: "Thông tin tài khoản",
@@ -559,9 +562,8 @@ export default {
     upgrade: "Nâng cấp ngay",
   },
   pricing: {
-    featureImageLimit: "{count} lượt nhận diện ảnh/tháng",
-    featureVideoLimit: "{count} lượt nhận diện video/tháng",
-    featureStorage: "{count} GB dung lượng lưu trữ",
+    featureTokenLimit: "{count} Tokens / tuần",
+    featureStorage: "Lưu trữ lịch sử",
     priority: "Hỗ trợ ưu tiên",
     customModels: "Mô hình tùy chỉnh",
     faq: "Câu hỏi thường gặp",
@@ -575,6 +577,8 @@ export default {
     description: "Chọn gói hoàn hảo cho nhu cầu của bạn",
     monthly: "Hàng tháng",
     yearly: "Hàng năm",
+    perMonth: "/tháng",
+    perYear: "/năm",
     save: "Tiết kiệm 20%",
     free: "Miễn phí",
     starter: "Khởi đầu",
@@ -610,12 +614,20 @@ export default {
     total: "Tổng cộng",
     billingInfo: "Thông tin thanh toán",
     email: "Email",
-    cardInfo: "Thông tin thẻ",
-    cardPlaceholder: "Biểu mẫu thanh toán sẽ được tích hợp tại đây với Stripe/MoMo",
+    cardInfo: "Phương thức thanh toán",
+    cardPlaceholder: "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
     pay: "Thanh toán",
     failed: "Thanh toán thất bại",
   },
   language: {
     toggle: "Chuyển đổi ngôn ngữ",
   },
+  // THÊM MỚI: Các chuỗi cho trang hồ sơ và nâng cấp
+  profilePage: {
+    upgradeSuccessTitle: "Nâng cấp thành công!",
+    upgradeSuccessDescription: "Gói cước của bạn đã được nâng cấp lên {planName}. Tận hưởng các tính năng mới!"
+  },
+  plans: {
+    title: "Gói cước"
+  }
 };

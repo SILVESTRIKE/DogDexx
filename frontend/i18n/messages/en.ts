@@ -605,4 +605,9 @@ export default {
   language: {
     toggle: "Toggle language",
   },
+  // ADDED: Strings for profile page and upgrades
+  profilePage: {
+    upgradeSuccessTitle: "Upgrade Successful!",
+    upgradeSuccessDescription: "Your plan has been upgraded to {planName}. Enjoy the new features!",
+  }
 };

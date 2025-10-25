@@ -1,15 +1,14 @@
-// BFF Admin Controller
 import { Request, Response, NextFunction } from 'express';
-import { ConfigService } from '../services/config.service';
-import { AIModelService } from '../services/ai_models.service';
 import { AdminService } from '../services/admin.service';
 import { feedbackService } from '../services/feedback.service';
 import { userService } from '../services/user.service';
-import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
-import { AppError } from '../errors';
+import { AppError, NotFoundError} from '../errors';
 import { predictionHistoryService } from '../services/prediction_history.service';
 import { PlanService } from '../services/plan.service';
 import { transformMediaURLs } from '../utils/media.util';
+import { ConfigService } from '../services/config.service';
+import { AIModelService } from '../services/ai_models.service';
+import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -18,7 +17,6 @@ function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
   const prediction = feedbackDoc.prediction_id;
   const user = feedbackDoc.user_id;
 
-  // Transform media URLs
   const transformedPrediction = prediction ? transformMediaURLs(req, prediction.toObject()) : null;
 
   return {
@@ -28,8 +26,6 @@ function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
     predictionTimestamp: prediction?.createdAt,
     user: user ? { name: user.username, email: user.email } : { name: 'Guest', email: null },
     feedbackContent: {
-      // SỬA LỖI: is_correct không tồn tại trên FeedbackModel, nó nằm trên PredictionHistory.
-      // isCorrect sẽ được xác định bằng sự tồn tại của feedback (luôn là false).
       isCorrect: feedbackDoc.is_correct,
       userSubmittedLabel: feedbackDoc.user_submitted_label,
       notes: feedbackDoc.notes,
@@ -39,7 +35,7 @@ function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
       : null,
     originalMediaUrl: transformedPrediction?.mediaUrl,
     processedMediaUrl: transformedPrediction?.processedMediaUrl,
-    status: feedbackDoc.status, // THÊM LẠI TRƯỜNG STATUS
+    status: feedbackDoc.status,
   };
 }
 
@@ -52,8 +48,8 @@ function transformHistoryForAdmin(req: Request, historyDoc: any) {
     user: user ? { id: user._id, name: user.username, email: user.email } : { id: null, name: 'Guest', email: null },
     media: {
       type: transformedHistory.media.type,
-      url: transformedHistory.media.mediaUrl, // URL của media gốc
-      name: transformedHistory.media.name, // Giữ lại tên file gốc
+      url: transformedHistory.media.mediaUrl,
+      name: transformedHistory.media.name,
     },
     processedMediaUrl: transformedHistory.processedMediaUrl,
     predictions: (transformedHistory.predictions || []).map((p: any) => ({
@@ -91,10 +87,7 @@ export const getFeedback = async (req: Request, res: Response, next: NextFunctio
   const pagination = { page: Number(page), limit: Number(limit) };
   const filters = { status, username: search, startDate, endDate };
   const feedbackData = await feedbackService.getAdminFeedbackPageData(filters, pagination);
-
-  // Transform the feedbacks data before sending
   const transformedFeedbacks = feedbackData.feedbacks.data.map(fb => transformFeedbackForAdmin(req, fb));
-
   res.status(200).json({
     ...feedbackData,
     feedbacks: { ...feedbackData.feedbacks, data: transformedFeedbacks },
@@ -122,42 +115,24 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
   res.status(200).json(usersData);
 };
 
-/**
- * @desc (Admin) Duyệt các file media đã tải lên theo cấu trúc thư mục ảo.
- * @route GET /bff/admin/media/browse
- * @access Private (Admin)
- */
 export const browseMedia = async (req: Request, res: Response, next: NextFunction) => {
   const path = req.query.path as string || "";
   const result = await adminService.browseMedia(path);
-
   res.status(200).json({
     directories: result.directories,
     media: result.media.map(m => transformMediaForAdmin(req, m)),
   });
 };
 
-/**
- * @desc (Admin) Xóa một file media và các bản ghi liên quan.
- * @route DELETE /bff/admin/media/:id
- * @access Private (Admin)
- */
 export const deleteMedia = async (req: Request, res: Response, next: NextFunction) => {
   const result = await adminService.deleteMedia(req.params.id);
   res.status(200).json(result);
 };
-/**
- * @desc (Admin) Tạo người dùng mới
- * @route POST /bff/admin/users
- * @access Private (Admin)
- */
+
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
   const { username, email, password, role, verify } = req.body;
-  // Ánh xạ 'verify' từ frontend ('active'/'pending') sang 'isVerified' (true/false) cho service
   const verifyStatus = verify === 'active';
-
   const newUser = await userService.createUserByAdmin({ username, email, password, role, verify: verifyStatus });
-
   res.status(201).json({
       success: true,
       message: 'User created successfully',
@@ -165,22 +140,14 @@ export const createUser = async (req: Request, res: Response, next: NextFunction
   });
 };
 
-/**
- * @desc (Admin) Cập nhật thông tin người dùng
- * @route PUT /bff/admin/users/:id
- * @access Private (Admin)
- */
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
   const { username, email, role, status } = req.body;
-  // Ánh xạ 'status' từ frontend ('active'/'pending') sang 'isVerified' (true/false) cho service
   const updateData: any = { username, email, role };
   if (status !== undefined) {
       updateData.verify = status === 'active';
   }
-
   const updatedUser = await userService.updateUserById(id, updateData);
-
   res.status(200).json({
       success: true,
       message: 'User updated successfully',
@@ -192,6 +159,7 @@ export const getUsageStats = async (req: Request, res: Response, next: NextFunct
   const usageData = await adminService.getUsageStats();
   res.status(200).json(usageData);
 };
+
 export const getModelConfig = async (req: Request, res: Response, next: NextFunction) => {
   const config = await configService.getAiConfig();
   res.status(200).json({
@@ -207,9 +175,7 @@ export const getHistories = async (req: Request, res: Response, next: NextFuncti
     limit: Number(limit),
     search,
   });
-
   const transformedHistories = result.histories.map(h => transformHistoryForAdmin(req, h));
-
   res.status(200).json({
     data: transformedHistories,
     pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages },
@@ -219,51 +185,28 @@ export const getHistories = async (req: Request, res: Response, next: NextFuncti
 export const browseHistories = async (req: Request, res: Response, next: NextFunction) => {
   const path = req.query.path as string;
   const result = await adminService.browseDirectory(path || "", req.query);
-
-  // Transform histories to the format expected by the admin frontend
-  const transformedHistories = result.histories.map((h: any) => {
-    // Ensure feedback is populated if it exists on the history document
-    return transformHistoryForAdmin(req, h);
-  });
-
+  const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
   res.status(200).json({
     directories: result.directories,
-    histories: transformedHistories, // Return the transformed histories
+    histories: transformedHistories,
   });
 };
+
 export const updateModelConfig = async (req: Request, res: Response, next: NextFunction) => {
   const { modelId, ...otherConfigData } = req.body;
-
-  try {
-    const promises = [];
-
-    // 1. Nếu có modelId được gửi lên, kích hoạt model đó.
-    if (modelId) {
-      console.log(`[BFF-Admin] Activating new model: ${modelId}`);
-      promises.push(AIModelService.activateModel(modelId));
-    }
-
-    // 2. Nếu có các dữ liệu cấu hình khác (device, thresholds), cập nhật chúng.
-    if (Object.keys(otherConfigData).length > 0) {
-      console.log(`[BFF-Admin] Updating config:`, otherConfigData);
-      promises.push(configService.updateAiConfig(otherConfigData));
-    }
-
-    // Thực hiện các cập nhật song song
-    await Promise.all(promises);
-
-    // 3. Sau khi tất cả cập nhật DB hoàn tất, yêu cầu AI service tải lại cấu hình.
-    console.log(`[BFF-Admin] Triggering AI service reload...`);
-    const reloadResult = await configService.reloadAiService();
-
-    res.status(200).json({
-      message: 'AI configuration updated and reload triggered successfully.',
-      details: reloadResult.details,
-    });
-  } catch (error: any) {
-    console.error('[BFF-Admin] Failed to update model config:', error);
-    res.status(500).json({ message: 'Failed to update configuration', error: error.message });
+  const promises = [];
+  if (modelId) {
+    promises.push(AIModelService.activateModel(modelId));
   }
+  if (Object.keys(otherConfigData).length > 0) {
+    promises.push(configService.updateAiConfig(otherConfigData));
+  }
+  await Promise.all(promises);
+  const reloadResult = await configService.reloadAiService();
+  res.status(200).json({
+    message: 'AI configuration updated and reload triggered successfully.',
+    details: reloadResult.details,
+  });
 };
 
 export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
@@ -271,41 +214,55 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
   res.status(200).json({ alerts });
 };
 
-/**
- * @desc (Admin) Upload a new AI model file and create its record via BFF.
- * @route POST /bff/admin/models/upload
- * @access Private (Admin)
- */
 export const uploadModel = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    // Dữ liệu file được multer xử lý và đưa vào req.files
-    const files = req.files;
-
-    // Kiểm tra chặt chẽ để TypeScript có thể suy luận kiểu
-    if (!files || typeof files !== 'object' || !('modelFile' in files) || !Array.isArray(files.modelFile)) {
-      throw new AppError("Model file is required.");
-    }
-
-    // Dữ liệu metadata từ req.body
-    const data = CreateAIModelSchema.parse(req.body);
-
-    const newModel = await AIModelService.uploadAndCreateModel(
-      files as { modelFile: Express.Multer.File[] },
-      data,
-      (req as any).user.id
-    );
-    res.status(201).json({ message: "Model uploaded and created successfully.", data: newModel });
-  } catch (error) {
-    next(error);
+  const files = req.files;
+  if (!files || typeof files !== 'object' || !('modelFile' in files) || !Array.isArray(files.modelFile)) {
+    throw new AppError("Model file is required.");
   }
+  const data = CreateAIModelSchema.parse(req.body);
+  const newModel = await AIModelService.uploadAndCreateModel(
+    files as { modelFile: Express.Multer.File[] },
+    data,
+    (req as any).user.id
+  );
+  res.status(201).json({ message: "Model uploaded and created successfully.", data: newModel });
 };
 
 export const getPlans = async (req: Request, res: Response, next: NextFunction) => {
-  const plans = await PlanService.getAll();
-  res.status(200).json(plans);
+  const plansData = await PlanService.getAllPaginated({
+      page: parseInt(req.query.page as string, 10) || 1,
+      limit: parseInt(req.query.limit as string, 10) || 10,
+      search: req.query.search as string | undefined,
+  });
+  res.status(200).json(plansData);
+};
+
+// THÊM: Hàm controller để tạo Plan mới
+export const createPlan = async (req: Request, res: Response, next: NextFunction) => {
+  // Trong một ứng dụng thực tế, bạn nên có một lớp validation (ví dụ: Zod) ở đây
+  const newPlan = await PlanService.create(req.body);
+  res.status(201).json({ message: "Gói cước đã được tạo thành công.", data: newPlan });
+};
+
+// THÊM: Hàm controller để cập nhật Plan
+export const updatePlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const updatedPlan = await PlanService.update(id, req.body);
+  if (!updatedPlan) {
+    // Vẫn cần kiểm tra này để trả về 404 một cách tường minh
+    throw new NotFoundError("Không tìm thấy gói cước để cập nhật.");
+  }
+  res.status(200).json({ message: "Gói cước đã được cập nhật thành công.", data: updatedPlan });
+};
+
+// THÊM: Hàm controller để xóa Plan
+export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  // Lưu ý: PlanService nên xử lý soft delete (đặt isDeleted = true) thay vì xóa cứng
+  await PlanService.softDelete(id);
+  res.status(200).json({ message: "Yêu cầu xóa gói cước đã được xử lý." });
 };
 
 export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
-  // Logic này sẽ phức tạp hơn trong thực tế, cần lấy dữ liệu từ DB và có thể từ Stripe
   res.status(501).json({ message: "Chức năng đang được phát triển" });
 };

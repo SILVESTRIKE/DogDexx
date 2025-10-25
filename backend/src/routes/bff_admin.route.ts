@@ -18,8 +18,12 @@ import {
   browseMedia,
   getPlans,
   getSubscriptions,
+  browseHistories,
+  // THAY ĐỔI: Import các controller mới để quản lý Plans
+  createPlan,
+  updatePlan,
+  deletePlan,
 } from '../controllers/bff_admin.controller';
-import { browseHistories } from '../controllers/bff_admin.controller';
 import { uploadSingle } from '../middlewares/upload.middleware';
 
 const router = Router();
@@ -27,105 +31,32 @@ const router = Router();
 // Tất cả các route trong file này đều yêu cầu quyền admin
 router.use(authMiddleware, checkAllowedRoles(['admin']));
 
-/**
- * @swagger
- * /bff/admin/dashboard:
- *   get:
- *     summary: (BFF-Admin) Lấy dữ liệu cho trang dashboard
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy dữ liệu thành công.
- */
+// --- CÁC ROUTE HIỆN CÓ GIỮ NGUYÊN ---
 router.get('/dashboard', getDashboard);
-
-/**
- * @swagger
- * /bff/admin/feedback:
- *   get:
- *     summary: (BFF-Admin) Lấy danh sách feedback
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy dữ liệu thành công.
- */
 router.get('/feedback', getFeedback);
-
-/**
- * @swagger
- * /bff/admin/feedback/{id}/approve:
- *   post:
- *     summary: (BFF-Admin) Duyệt một feedback
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Duyệt thành công.
- */
 router.post('/feedback/:id/approve', approveFeedback);
-
-/**
- * @swagger
- * /bff/admin/feedback/{id}/reject:
- *   post:
- *     summary: (BFF-Admin) Từ chối một feedback
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Từ chối thành công.
- */
 router.post('/feedback/:id/reject', rejectFeedback);
-
-/**
- * @swagger
- * /bff/admin/users:
- *   get:
- *     summary: (BFF-Admin) Lấy danh sách người dùng
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy dữ liệu thành công.
- */
 router.get('/users', getUsers);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
-
 router.get('/model/config', getModelConfig);
 router.put('/model/config', updateModelConfig);
-
 router.get('/alerts', getAlerts);
-
 router.post('/models/upload', uploadSingle, uploadModel);
-/**
- * @swagger
- * /bff/admin/usage:
- *   get:
- *     summary: (BFF-Admin) Lấy dữ liệu thống kê sử dụng
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy dữ liệu thành công.
- */
 router.get('/usage', getUsageStats);
+router.get('/histories', getHistories);
+router.get('/histories/browse', browseHistories);
+router.get('/media/browse', browseMedia);
+
+// --- THAY ĐỔI: THÊM CÁC ENDPOINT MỚI ĐỂ QUẢN LÝ PLANS ---
 
 /**
  * @swagger
- * /bff/admin/histories:
+ * /bff/admin/plans:
  *   get:
- *     summary: (BFF-Admin) Lấy toàn bộ lịch sử dự đoán
- *     tags: [BFF-Admin]
- *     description: Lấy danh sách tất cả lịch sử dự đoán với hỗ trợ phân trang và tìm kiếm (chỉ dành cho admin).
+ *     summary: (BFF-Admin) Lấy danh sách tất cả các gói cước
+ *     tags: [BFF-Admin-Plans]
+ *     description: Lấy danh sách tất cả các gói cước hiện có trong hệ thống.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -138,81 +69,91 @@ router.get('/usage', getUsageStats);
  *       - in: query
  *         name: search
  *         schema: { type: string }
- *         description: Tìm kiếm theo tên người dùng hoặc tên giống chó.
  *     responses:
  *       200:
- *         description: Lấy lịch sử thành công.
- *       403:
- *         description: Không có quyền truy cập.
- */
-router.get(
-  '/histories', getHistories
-);
-
-/**
- * @swagger
- * /bff/admin/histories/browse:
- *   get:
- *     summary: (BFF-Admin) Duyệt lịch sử dự đoán theo cấu trúc thư mục
- *     tags: [BFF-Admin]
- *     description: Lấy nội dung của một đường dẫn cụ thể trong cây thư mục lịch sử.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: path
- *         schema: { type: string }
- *         description: "Đường dẫn để duyệt. Ví dụ: '', 'userId', 'userId/2024', 'userId/2024/05', 'userId/2024/05/21'"
- *     responses:
- *       200: { description: "Lấy nội dung thành công." }
- */
-router.get('/histories/browse', browseHistories);
-
-/**
- * @swagger
- * /bff/admin/media/browse:
- *   get:
- *     summary: (BFF-Admin) Duyệt các file media đã tải lên
- *     tags: [BFF-Admin]
- *     description: Lấy nội dung của một đường dẫn cụ thể trong cây thư mục media ảo.
- *     security:
- *       - bearerAuth: []
- *     parameters:
- *       - in: query
- *         name: path
- *         schema: { type: string }
- *         description: "Đường dẫn để duyệt. Ví dụ: '', 'username', 'username/images'"
- *     responses:
- *       200: { description: "Lấy nội dung thành công." }
- */
-router.get('/media/browse', browseMedia);
-
-/**
- * @swagger
- * /bff/admin/plans:
- *   get:
- *     summary: (BFF-Admin) Lấy danh sách các gói cước
- *     tags: [BFF-Admin]
- *     security:
- *       - bearerAuth: []
- *     responses:
- *       200:
- *         description: Lấy dữ liệu thành công.
+ *         description: Lấy danh sách gói cước thành công.
  */
 router.get('/plans', getPlans);
 
 /**
  * @swagger
- * /bff/admin/subscriptions:
- *   get:
- *     summary: (BFF-Admin) Lấy danh sách các đăng ký của người dùng
- *     tags: [BFF-Admin]
+ * /bff/admin/plans:
+ *   post:
+ *     summary: (BFF-Admin) Tạo một gói cước mới
+ *     tags: [BFF-Admin-Plans]
+ *     description: Tạo một gói cước mới với các thông số chi tiết.
  *     security:
  *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/PlanCreatePayload'
+ *     responses:
+ *       201:
+ *         description: Tạo gói cước thành công.
+ *       400:
+ *         description: Dữ liệu không hợp lệ.
+ */
+router.post('/plans', createPlan);
+
+/**
+ * @swagger
+ * /bff/admin/plans/{id}:
+ *   put:
+ *     summary: (BFF-Admin) Cập nhật một gói cước theo ID
+ *     tags: [BFF-Admin-Plans]
+ *     description: Cập nhật thông tin chi tiết của một gói cước đã tồn tại.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của gói cước cần cập nhật.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/PlanUpdatePayload'
  *     responses:
  *       200:
- *         description: Lấy dữ liệu thành công.
+ *         description: Cập nhật gói cước thành công.
+ *       404:
+ *         description: Không tìm thấy gói cước.
  */
+router.put('/plans/:id', updatePlan);
+
+/**
+ * @swagger
+ * /bff/admin/plans/{id}:
+ *   delete:
+ *     summary: (BFF-Admin) Xóa một gói cước theo ID
+ *     tags: [BFF-Admin-Plans]
+ *     description: Xóa (mềm) một gói cước khỏi hệ thống.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của gói cước cần xóa.
+ *     responses:
+ *       200:
+ *         description: Xóa gói cước thành công.
+ *       404:
+ *         description: Không tìm thấy gói cước.
+ */
+router.delete('/plans/:id', deletePlan);
+
+
+// --- CÁC ROUTE CÒN LẠI GIỮ NGUYÊN ---
 router.get('/subscriptions', getSubscriptions);
 
 export default router;
