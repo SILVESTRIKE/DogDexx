@@ -1,4 +1,4 @@
-"use client"
+"use client";
 
 import type React from "react"
 import { useState, useEffect } from "react"
@@ -16,7 +16,7 @@ import { toast } from "sonner"
 
 export default function Home() {
   const mounted = useMounted()
-  const { user } = useAuth()
+  const { user, isAuthenticated, refetchUser } = useAuth()
   const { trackVisit } = useAnalytics()
   const { t } = useI18n()
   const router = useRouter()
@@ -114,10 +114,14 @@ export default function Home() {
           response = await apiClient.predictVideo(selectedFile, onProgress)
         }
 
-        // SỬA LỖI: Điều hướng trực tiếp đến trang kết quả với ID, không dùng sessionStorage
-        router.push(`/results?id=${response.predictionId}`)
+        // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+        if (isAuthenticated) {
+          await refetchUser();
+        }
 
-        toast.success(t("results.title"), { id: detectionToast })
+        router.push(`/results?id=${response.predictionId}`);
+        toast.success(t("results.title"), { id: detectionToast });
+
         // Không cần reset ở đây nữa vì sẽ chuyển trang
 
       } catch (error: any) {

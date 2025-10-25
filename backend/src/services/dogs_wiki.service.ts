@@ -1,8 +1,7 @@
 import { getDogBreedWikiModel, DogBreedWikiDoc } from '../models/dogs_wiki.model';
 import { ConflictError, NotFoundError } from '../errors';
-
-// Các tùy chọn cho việc lấy danh sách
 import { logger } from '../utils/logger.util';
+
 export interface QueryOptions {
   page: number;
   limit: number;
@@ -14,8 +13,8 @@ export interface QueryOptions {
   suitable_for?: string;
   lang?: 'vi' | 'en';
   sort?: string;
-  ids?: string[]; // Dùng để lọc các ID cụ thể
-  excludeIds?: string[]; // Dùng để loại trừ các ID
+  ids?: string[];
+  excludeIds?: string[];
 }
 
 export const wikiService = {
@@ -37,7 +36,7 @@ export const wikiService = {
   },
 
   /**
-   * READ (Single): Lấy thông tin của một giống chó bằng slug (cho người dùng công khai)
+   * READ (Single): Lấy thông tin của một giống chó bằng slug
    */
   async getBreedBySlug(slug: string, lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc> {
     const Model = getDogBreedWikiModel(lang);
@@ -45,27 +44,22 @@ export const wikiService = {
       slug,
       isDeleted: false,
     });
-    if (!breed) {
-      throw new NotFoundError(`Không tìm thấy thông tin cho giống chó với slug: ${slug}`);
-    }
+    if (!breed) throw new NotFoundError(`Không tìm thấy giống chó với slug: '${slug}'`);
     return breed;
   },
 
   /**
    * READ (Multiple by Slugs): Lấy thông tin của nhiều giống chó bằng mảng các slug.
-   * Được sử dụng bởi BFF để làm giàu dữ liệu dự đoán.
    */
   async getBreedsBySlugs(slugs: string[], lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc[]> {
     const Model = getDogBreedWikiModel(lang);
     if (!slugs || slugs.length === 0) {
       return [];
     }
-    const breeds = await Model.find({
+    return Model.find({
       slug: { $in: slugs },
       isDeleted: false,
     });
-
-    return breeds;
   },
 
   /**
@@ -76,63 +70,48 @@ export const wikiService = {
     const Model = getDogBreedWikiModel(lang);
     const skip = (page - 1) * limit;
 
-    // Logic sắp xếp linh hoạt hơn
     const allowedSortFields = ['breed', 'energy_level', 'trainability', 'shedding_level', 'maintenance_difficulty', 'rarity_level'];
-    let sortOption: { [key: string]: 1 | -1 } = { breed: 1 }; // Mặc định sắp xếp theo tên hiển thị (breed) A-Z
+    let sortOption: { [key: string]: 1 | -1 } = { breed: 1 };
 
     if (options.sort) {
       const [field, direction] = options.sort.split('-');
-      if (field === 'name' && allowedSortFields.includes('breed')) { // Frontend gửi 'name', map sang 'breed'
+      if (field === 'name' && allowedSortFields.includes('breed')) {
         sortOption = { breed: direction === 'desc' ? -1 : 1 };
       } else if (allowedSortFields.includes(field)) {
         sortOption = { [field]: direction === 'desc' ? -1 : 1 };
       }
     }
 
-    // Lấy tất cả breed nếu isDeleted không phải là true
     const query: any = { isDeleted: { $ne: true } };
     
-    // Xây dựng query động
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
-      query.$or = [
-        { breed: searchRegex }, // Chỉ tìm kiếm theo trường breed
-        { slug: searchRegex }
-      ];
+      query.$or = [{ breed: searchRegex }, { slug: searchRegex }];
     }
     if (group) query.group = group;
     if (energy_level) query.energy_level = energy_level;
     if (trainability) query.trainability = trainability;
     if (shedding_level) query.shedding_level = shedding_level;
     if (suitable_for) query.suitable_for = suitable_for;
-
-    // SỬA LỖI: Sử dụng `ids` và `excludeIds` đã được controller chuẩn bị
     if (ids) {
       query._id = { $in: ids };
     } else if (excludeIds) {
       query._id = { $nin: excludeIds };
     }
 
-    // Thực hiện 2 truy vấn song song để tối ưu
     const [breeds, total] = await Promise.all([
       Model.find(query)
-        // TỐI ƯU HÓA: Chỉ chọn các trường cần thiết cho trang Pokedex
         .select('slug breed pokedexNumber group origin mediaPath rarity_level')
         .sort(sortOption)
         .skip(skip)
         .limit(limit)
-        .lean(), // Thêm lean() để tăng hiệu suất
+        .lean(),
       Model.countDocuments(query)
     ]);
     
     return {
       data: breeds,
-      pagination: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      }
+      pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
     };
   },
 
@@ -140,7 +119,7 @@ export const wikiService = {
    * READ: Đếm tổng số giống chó trong hệ thống.
    */
   async getTotalBreedsCount(lang: 'vi' | 'en' = 'en'): Promise<number> {
-    const Model = getDogBreedWikiModel(lang); // Sửa: Sử dụng model theo ngôn ngữ
+    const Model = getDogBreedWikiModel(lang);
     return Model.countDocuments({ isDeleted: { $ne: true } });
   },
 
@@ -154,9 +133,7 @@ export const wikiService = {
       data,
       { new: true, runValidators: true }
     );
-    if (!breed) {
-      throw new NotFoundError(`Không tìm thấy giống chó với slug: ${slug} để cập nhật.`);
-    }
+    if (!breed) throw new NotFoundError(`Không tìm thấy giống chó với slug: '${slug}' để cập nhật.`);
     return breed;
   },
 

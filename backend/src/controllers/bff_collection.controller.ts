@@ -26,7 +26,6 @@ export type PokedexBreed = {
 export const getPokedex = async (req: Request, res: Response) => {
   const userId = req.user?._id;
   const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
-  logger.info(`[BFF Pokedex] Language resolved to '${lang}' from query param.`);
 
   // 1. Lấy và chuẩn bị các tham số query
   const {
@@ -168,7 +167,6 @@ export const getAchievements = async (req: Request, res: Response) => {
   const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
     ? req.query.lang as 'vi' | 'en'
     : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
-  logger.info(`[BFF Achievements] Language resolved to '${lang}'.`);
 
   const [user, userCollections, totalBreedsInSystem] = await Promise.all([
     userService.getById(userId.toString()),

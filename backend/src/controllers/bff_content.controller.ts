@@ -7,6 +7,7 @@ import { collectionService } from '../services/user_collections.service';
 import { predictionHistoryService } from '../services/prediction_history.service';
 import { logger } from '../utils/logger.util';
 import { MediaController } from './medias.controller';
+import { NotFoundError } from '../errors';
 
 export const getBreedDetail = async (req: Request, res: Response, next: NextFunction) => {
   const { slug } = req.params;
@@ -21,7 +22,10 @@ export const getBreedDetail = async (req: Request, res: Response, next: NextFunc
     predictionHistoryService.findHistoriesByBreedName(slug, 10)
   ]);
 
-  // 2. Format the response
+  if (!breed) {
+    return next(new NotFoundError(`Không tìm thấy giống chó với slug: '${slug}'`));
+  }
+
   const collectionStatus = {
     isCollected: !!userCollection,
     // Lấy createdAt từ first_prediction_id đã được populate
@@ -42,9 +46,6 @@ export const getBreedDetail = async (req: Request, res: Response, next: NextFunc
 };
 
 export const getBreeds = (req: Request, res: Response, next: NextFunction) => {
-  // This endpoint is very similar to `getPokedex`. We can reuse the logic or point to it.
-  // For simplicity, we'll just call the existing wiki service.
-  // The frontend should call `/bff/collection/pokedex` for the enriched version.
   return wikiController.getAll(req, res);
 };
 

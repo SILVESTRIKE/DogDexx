@@ -1,10 +1,12 @@
+import dotenv from "dotenv";
+dotenv.config();
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import cookieParser from "cookie-parser";
-import Fingerprint from "express-fingerprint";
+import Fingerprint from 'express-fingerprint';
+
 import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
 import { configureViewEngine } from "./config/viewEngine";
 import authRoutes from "./routes/auth.route";
@@ -18,19 +20,21 @@ import { predictionHistoryRouter } from "./routes/prediction_history.route";
 import { adminPredictionHistoryRouter } from "./routes/admin_prediction_history.route";
 import aiModelsRoutes from "./routes/ai_models.route";
 import analyticsRoutes from "./routes/analytics.route";
+import "./utils/redis.util";
 
 import bffUserRoutes from './routes/bff_user.route';
 import bffPredictionRoutes from './routes/bff_prediction.route';
 import bffCollectionRoutes from './routes/bff_collection.route';
 import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
+import bffPublicRoutes from './routes/bff_public.route';
+
 import achievementRoute from './routes/achievement.route';
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import { options as swaggerOptions } from "../swaggerConfig.js";
 
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
-dotenv.config();
 const app = express();
 
 const allowedOrigins = [
@@ -55,7 +59,12 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
-app.use(Fingerprint());
+app.use((Fingerprint as any)({
+  parameters: [
+    (Fingerprint as any).useragent,
+    (Fingerprint as any).geoip,
+  ]
+}));
 
 // --- Swagger Routes ---
 app.get('/api-docs.json', (req, res) => {
@@ -83,6 +92,7 @@ app.use('/bff/predict', bffPredictionRoutes);
 app.use('/bff/collection', bffCollectionRoutes);
 app.use('/bff/content', bffContentRoutes);
 app.use('/bff/admin', bffAdminRoutes);
+app.use('/bff/public', bffPublicRoutes);
  
 // 3. Core API Routes
 app.use(analyticsRoutes);

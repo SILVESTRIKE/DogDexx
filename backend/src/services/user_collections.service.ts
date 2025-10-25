@@ -2,25 +2,33 @@ import { UserCollectionModel, CollectedBreed } from '../models/user_collection.m
 import { getDogBreedWikiModel } from '../models/dogs_wiki.model';
 import { PredictionHistoryDoc } from '../models/prediction_history.model';
 import { Types } from 'mongoose';
-import { PokedexBreed } from '../controllers/bff_collection.controller';
+
+// Giữ lại type này để service và controller có thể giao tiếp
+export interface PokedexBreed {
+  slug: string;
+  breed: string;
+  group?: string;
+  pokedexNumber?: number;
+  origin?: string;
+  mediaUrl?: string;
+  rarity_level?: number;
+  isCollected: boolean;
+  collectedAt: Date | null;
+  source: string | null;
+}
 
 export const collectionService = {
   /**
    * Thêm hoặc cập nhật nhiều giống chó vào bộ sưu tập của người dùng từ một lần dự đoán.
-   * @param userId ID của người dùng
-   * @param breedSlugs Mảng các slug của giống chó
-   * @param predictionId ID của bản ghi lịch sử dự đoán đã phát hiện ra các giống chó này
    */
   async addOrUpdateManyCollections(userId: Types.ObjectId, breedSlugs: string[], predictionId: Types.ObjectId, lang: 'vi' | 'en' = 'en') {
     const uniqueSlugs = [...new Set(breedSlugs)];
-    // SỬA LỖI: Sử dụng model theo ngôn ngữ để tìm breed_id
     const WikiModel = getDogBreedWikiModel(lang);
     const breeds = await WikiModel.find({ slug: { $in: uniqueSlugs } }).select('_id').lean();
     if (breeds.length === 0) return;
 
     const breedIds = breeds.map(b => b._id);
 
-    // Find the user's single collection document, or create it if it doesn't exist.
     let userCollection = await UserCollectionModel.findOne({ user_id: userId });
     if (!userCollection) {
       userCollection = new UserCollectionModel({ user_id: userId, collectedBreeds: [] });
@@ -30,10 +38,8 @@ export const collectionService = {
       const existingBreedIndex = userCollection!.collectedBreeds.findIndex(cb => cb.breed_id.toString() === breedId.toString());
 
       if (existingBreedIndex > -1) {
-        // Breed already exists, just increment the count
         userCollection!.collectedBreeds[existingBreedIndex].collection_count++;
       } else {
-        // New breed, add it to the array
         userCollection!.collectedBreeds.push({
           breed_id: breedId as Types.ObjectId,
           first_prediction_id: predictionId as Types.ObjectId,
@@ -46,9 +52,7 @@ export const collectionService = {
   },
 
   /**
-   * [MỚI & TỐI ƯU] Cập nhật bộ sưu tập từ một mảng các kết quả dự đoán (dành cho batch).
-   * @param userId ID của người dùng
-   * @param predictionResults Mảng các document PredictionHistory
+   * Cập nhật bộ sưu tập từ một mảng các kết quả dự đoán (dành cho batch).
    */
   async addOrUpdateFromPredictionResults(userId: Types.ObjectId, predictionResults: PredictionHistoryDoc[], lang: 'vi' | 'en' = 'en') {
     if (!predictionResults || predictionResults.length === 0) return;
@@ -59,7 +63,6 @@ export const collectionService = {
     }
     
     const allBreedSlugs = [...new Set(predictionResults.flatMap(p => p.predictions.map(pred => pred.class.toLowerCase().replace(/\s+/g, '-'))))];
-    // SỬA LỖI: Sử dụng model theo ngôn ngữ
     const WikiModel = getDogBreedWikiModel(lang);
     const breedsInDb = await WikiModel.find({ slug: { $in: allBreedSlugs } }).select('_id slug').lean();
     const slugToIdMap = new Map(breedsInDb.map(b => [b.slug, b._id]));
@@ -89,17 +92,6 @@ export const collectionService = {
   },
 
   /**
-   * Thêm hoặc cập nhật một giống chó vào bộ sưu tập (thường dùng cho 'manual_add').
-   * Chức năng này cần được thiết kế lại vì không có predictionId.
-   * Tạm thời, chúng ta sẽ không triển khai chức năng này.
-   */
-  async addOrUpdateCollection(userId: Types.ObjectId, breedSlug: string) {
-    console.warn("addOrUpdateCollection (manual add) is not supported in the new schema that requires a predictionId.");
-    // Trả về null để controller biết rằng chức năng này không được hỗ trợ
-    return null;
-  },
-
-  /**
    * Lấy bộ sưu tập ("Pokedex") của một người dùng.
    */
   async getUserCollection(userId: Types.ObjectId, lang: 'vi' | 'en' = 'en'): Promise<CollectedBreed[]> {
@@ -108,15 +100,15 @@ export const collectionService = {
     const userCollection = await UserCollectionModel.findOne({ user_id: userId, isDeleted: { $ne: true } })
       .populate({
         path: 'collectedBreeds.breed_id',
-        model: WikiModel, // SỬA LỖI: Sử dụng model động theo ngôn ngữ
-        select: 'breed slug group' // Lấy các trường cần thiết
+        model: WikiModel,
+        select: 'breed slug group'
       })
       .populate({
         path: 'collectedBreeds.first_prediction_id',
         model: 'PredictionHistory',
-        select: 'createdAt source' // Lấy ngày và nguồn từ prediction
+        select: 'createdAt source'
       })
-      .lean(); // Sử dụng lean() để tăng hiệu suất
+      .lean();
     return userCollection ? userCollection.collectedBreeds : [];
   },
 
@@ -155,10 +147,7 @@ export const collectionService = {
   },
 
   /**
-   * Sắp xếp danh sách Pokedex ở tầng ứng dụng, đặc biệt cho các trường không có trong DB.
-   * @param breeds Mảng các giống chó đã được làm giàu.
-   * @param sortBy Chuỗi sắp xếp (ví dụ: 'collectedAt-desc').
-   * @returns Mảng đã được sắp xếp.
+   * Sắp xếp danh sách Pokedex ở tầng ứng dụng.
    */
   sortPokedex(breeds: PokedexBreed[], sortBy: string): PokedexBreed[] {
     if (sortBy === 'collectedAt-desc') {
@@ -175,6 +164,6 @@ export const collectionService = {
         return new Date(a.collectedAt).getTime() - new Date(b.collectedAt).getTime();
       });
     }
-    return breeds; // Trả về mảng gốc nếu không có tùy chọn sắp xếp phù hợp
+    return breeds;
   },
 };

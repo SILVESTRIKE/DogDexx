@@ -135,7 +135,6 @@ function HistoryContent() {
       case 'image_upload': return t('history.sourceImage');
       case 'video_upload': return t('history.sourceVideo');
       case 'stream_capture': return t('history.sourceStream');
-      case 'manual_add': return t('pokedex.sourceManual'); // Tận dụng key đã có
       default: return source;
     }
   }
@@ -245,9 +244,6 @@ function HistoryContent() {
                       )}
                       {prediction.source === 'stream_capture' && (
                         <Webcam className="h-3 w-3" />
-                      )}
-                      {prediction.source === 'manual_add' && (
-                        <PlusSquare className="h-3 w-3" />
                       )}
                       <span>{getSourceText(prediction.source)}</span>
                     </div>
