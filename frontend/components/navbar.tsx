@@ -6,7 +6,7 @@ import { usePathname, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { I18nContextType, useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
-import { Button } from "@/components/ui/button"
+import { Button, buttonVariants } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
 import { User, Shield, Coins } from "lucide-react"
 import {
@@ -19,6 +19,7 @@ import {
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { cn } from "@/lib/utils";
+import { Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 
 export function Navbar() {
@@ -108,6 +109,26 @@ export function Navbar() {
       ))
   ), [navLinks, isAuthenticated, pathname]);
 
+  const allMobileLinks = useMemo(() => (
+    <>
+      {mobileNavLinks}
+      {!isAuthenticated && (
+        <>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={() => handleAuthClick("login")} className="cursor-pointer">
+            {t("nav.login")}
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => handleAuthClick("register")} className="cursor-pointer">
+            {t("nav.register")}
+          </DropdownMenuItem>
+        </>
+      )}
+    </>
+  ), [mobileNavLinks, isAuthenticated, t, handleAuthClick]);
+
+
+
+
   const userMenuContent = useMemo(() => {
     if (isAuthenticated && user) {
       return (
@@ -128,12 +149,6 @@ export function Navbar() {
               </div>
             </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            {/* Mobile Nav Links */}
-            <div className="md:hidden">
-              {mobileNavLinks}
-              <DropdownMenuSeparator />
-            </div>
-
             <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer"><User className="h-4 w-4 mr-2" />{t("nav.profile")}</Link></DropdownMenuItem>
             {user.role === "admin" && (
               <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href="/admin" className="cursor-pointer"><Shield className="h-4 w-4 mr-2" />{t("nav.adminPanel")}</Link></DropdownMenuItem></>
@@ -153,8 +168,10 @@ export function Navbar() {
             <Coins className="h-4 w-4 text-amber-500" />
             <span className="font-mono">{user.remainingTokens}/{user.tokenAllotment}</span>
           </div>
-          <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
-          <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
+          <div className="hidden md:flex items-center gap-3">
+            <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
+            <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
+          </div>
         </div>
       )
     }
@@ -162,22 +179,27 @@ export function Navbar() {
     // Trường hợp 3: Chưa có thông tin gì (đang tải hoặc chưa có phiên)
     return (
       <div className="flex items-center gap-3">
-        <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
-        <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
+        <div className="hidden md:flex items-center gap-3">
+          <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
+          <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
+        </div>
       </div>
     )
-  }, [isLoading, isAuthenticated, user, user?.remainingTokens, t, logout, mobileNavLinks, pathname])
+  }, [isLoading, isAuthenticated, user, user?.remainingTokens, t, logout, mobileNavLinks, pathname, handleAuthClick])
 
   return (
     <>
       <nav className={`sticky top-0 z-50 border-b transition-colors duration-300 ${scrolled ? "bg-background/90 backdrop-blur-lg border-border" : "bg-background border-transparent"}`}>
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-8 flex-1">
-            <Link href="/" className="flex items-center gap-2 text-2xl font-bold">
-              <img src="/LogoWebWhite.png" alt={t("common.appName")} className="w-8 h-auto" />
-              <span>{t("common.appName")}</span>
+            <Link href="/" className="flex flex-col md:flex-row items-center md:gap-2 text-2xl font-bold">
+              <img src="/LogoWebWhite.png" alt={t("common.appName")} className="w-9 h-auto" />
+              <span className="hidden md:inline">{t("common.appName")}</span>
+              <span className="text-xs font-semibold md:hidden">{t("common.appName")}</span>
             </Link>
           </div>
+
+          {/* Desktop Nav Links */}
           <div className="hidden md:flex flex-1 justify-center">
             <div ref={navContainerRef} className="flex items-center justify-around relative bg-muted rounded-full h-9">
               {mounted ? (
@@ -190,11 +212,27 @@ export function Navbar() {
               )}
             </div>
           </div>
+
           <div className="flex items-center justify-end gap-3 flex-1">
             <ThemeToggle />
             <LanguageToggle />
-            {/* Thay đổi chiều cao skeleton loader để khớp với button mặc định */}
-            {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted rounded-md animate-pulse" />}
+            {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted rounded-full animate-pulse" />}
+
+            {/* Mobile Menu */}
+            <div className="md:hidden">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <Menu className="h-6 w-6" />
+                    <span className="sr-only">Open menu</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {allMobileLinks}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
           </div>
         </div>
       </nav>

@@ -4,6 +4,7 @@ export interface TransactionDoc extends Document {
   orderId: string; // Unique ID for this transaction, sent to MoMo
   user: Types.ObjectId;
   plan: Types.ObjectId;
+  subscriptionId?: Types.ObjectId; // ID của subscription mà giao dịch này thuộc về (cho việc gia hạn)
   planSlug: string;
   amount: number;
   billingPeriod: 'monthly' | 'yearly';
@@ -17,6 +18,7 @@ const transactionSchema = new Schema<TransactionDoc>({
   orderId: { type: String, required: true, unique: true, index: true },
   user: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   plan: { type: Schema.Types.ObjectId, ref: 'Plan', required: true },
+  subscriptionId: { type: Schema.Types.ObjectId, ref: 'Subscription' },
   planSlug: { type: String, required: true },
   amount: { type: Number, required: true },
   billingPeriod: { type: String, enum: ['monthly', 'yearly'], required: true },

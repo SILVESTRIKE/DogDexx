@@ -431,3 +431,18 @@ export interface PaginatedPlansResponse {
   data: Plan[];
   total: number;
 }
+
+// THÊM MỚI: Kiểu dữ liệu cho một Đăng ký (Subscription)
+export interface Subscription {
+  id: string;
+  user: {
+    name: string;
+    email: string;
+  };
+  plan: {
+    name: string;
+  };
+  status: 'active' | 'pending' | 'cancelled' | 'expired';
+  startDate: string;
+  endDate: string | null;
+}

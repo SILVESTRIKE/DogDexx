@@ -9,17 +9,23 @@ import { useCollection } from "@/lib/collection-context"
 import { ProtectedRoute } from "@/components/protected-route"
 import { User, Mail, Lock, Trophy, Dog, ArrowLeft, Camera, CheckCircle } from "lucide-react"
 import { useI18n } from "@/lib/i18n-context"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, use } from "react"
 import Link from "next/link"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { apiClient } from "@/lib/api-client"
 import { toast } from "sonner"
+import { useSearchParams, useRouter, usePathname } from "next/navigation"
 
 function ProfileContent() {
   const { t } = useI18n();
   const { user, setUser, logout } = useAuth()
   const { collectionStats, achievementStats } = useCollection()
   const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  // --- LOGIC MỚI ĐỂ XỬ LÝ SAU KHI THANH TOÁN ---
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -47,6 +53,25 @@ function ProfileContent() {
       }));
     }
   }, [user])
+
+  // --- LOGIC MỚI ĐỂ XỬ LÝ SAU KHI THANH TOÁN ---
+  useEffect(() => {
+    const upgradeStatus = searchParams.get("upgrade_status")
+    const resultCode = searchParams.get("resultCode")
+
+    if (upgradeStatus === "success" && resultCode === "0") {
+      // Hiển thị thông báo thành công
+      toast.success(t("profile.upgradeSuccessTitle") || "Upgrade Successful!", {
+        description: t("profile.upgradeSuccessDesc") || "Your account has been upgraded. Please wait a moment for the changes to apply.",
+      })
+
+      // Tải lại thông tin người dùng để cập nhật plan mới
+      // refetchUser() đã có trong useAuth, chỉ cần gọi nó
+
+      // Xóa query params khỏi URL để không hiển thị lại toast khi F5
+      router.replace(pathname, { scroll: false })
+    }
+  }, [searchParams, pathname, router, t])
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]

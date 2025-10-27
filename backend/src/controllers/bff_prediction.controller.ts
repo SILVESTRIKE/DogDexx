@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import WebSocket from "ws";
+import crypto from 'crypto';
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
 import { wikiService } from "../services/dogs_wiki.service";
@@ -14,8 +15,8 @@ import { predictionHistoryService } from "../services/prediction_history.service
 import { askGemini } from "../services/geminiAI.service";
 import { redisClient } from "../utils/redis.util";
 import { tokenConfig } from "../config/token.config";
+import { batchProcessor } from '../utils/BatchProcessor.util';
 import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
-// SỬA LỖI: Import các kiểu dữ liệu cần thiết từ model
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
 
@@ -23,7 +24,6 @@ import { UserDoc, UnlockedAchievement } from "../models/user.model";
 interface PredictionItem {
   class: string;
 }
-import { UserModel } from "../models/user.model"; // Import UserModel cho thao tác atomic
 
 function createEnrichedBreedInfo(
   breedInfoDoc: DogBreedWikiDoc | null | undefined
@@ -667,6 +667,21 @@ export const bffPredictionController = {
             userId
           );
 
+          // ======================== THAY ĐỔI LOGIC TRỪ TOKEN ========================
+          // Chỉ trừ token KHI có kết quả cuối cùng và chỉ trừ MỘT LẦN.
+          if (!tokensDeducted) {
+            tokensDeducted = true;
+            deductTokensForRequest(mockReq, {} as Response, tokenConfig.costs.streamSession, 'stream')
+              .then(() => logger.info(
+                `[BFF-WS] Token deduction processed for session of ${userId || guestIdentifier} after final result.`
+              ))
+              .catch((err) => logger.error(
+                `[BFF-WS] Failed to process token deduction after stream final result:`, err
+              ));
+          }
+          // ==========================================================================
+
+
           ws.send(JSON.stringify({ type: "final_result", ...enrichedResult }));
           ws.send(
             JSON.stringify({
@@ -722,28 +737,6 @@ export const bffPredictionController = {
       );
       if (aiServiceWs.readyState === WebSocket.OPEN) {
         aiServiceWs.close(1000, "Client closed BFF connection");
-      }
-
-      // Logic trừ token chỉ chạy một lần khi kết nối đóng
-      if (!tokensDeducted) {
-        tokensDeducted = true;
-        const mockReq = createMockRequest();
-        
-        // Hàm deductTokensForRequest giờ sẽ hoạt động chính xác vì mockReq chứa đúng identifier
-        deductTokensForRequest(mockReq, {} as Response, tokenConfig.costs.streamSession, 'stream') // Không có res ở đây, sẽ xử lý sau nếu cần
-          .then(() =>
-            logger.info(
-              `[BFF-WS] Token deduction processed for session of ${
-                userId || guestIdentifier
-              }.`
-            )
-          )
-          .catch((err) =>
-            logger.error(
-              `[BFF-WS] Failed to process token deduction after stream:`,
-              err
-            )
-          );
       }
     });
 

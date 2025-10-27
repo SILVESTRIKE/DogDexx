@@ -23,6 +23,12 @@ import {
   createPlan,
   updatePlan,
   deletePlan,
+  getTransactions,
+  // THÊM: Import các controller cho Wiki
+  getWikiBreeds,
+  createWikiBreed,
+  updateWikiBreed,
+  deleteWikiBreed,
 } from '../controllers/bff_admin.controller';
 import { uploadSingle } from '../middlewares/upload.middleware';
 
@@ -42,7 +48,7 @@ router.put('/users/:id', updateUser);
 router.get('/model/config', getModelConfig);
 router.put('/model/config', updateModelConfig);
 router.get('/alerts', getAlerts);
-router.post('/models/upload', uploadSingle, uploadModel);
+router.post('/models/upload', uploadSingle, uploadModel); // Giả sử uploadSingle là middleware phù hợp
 router.get('/usage', getUsageStats);
 router.get('/histories', getHistories);
 router.get('/histories/browse', browseHistories);
@@ -152,8 +158,103 @@ router.put('/plans/:id', updatePlan);
  */
 router.delete('/plans/:id', deletePlan);
 
+// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ WIKI ---
+
+/**
+ * @swagger
+ * /bff/admin/wiki:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách các bài viết trong Wiki
+ *     tags: [BFF-Admin-Wiki]
+ *     description: Lấy danh sách phân trang các giống chó trong Wiki.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema: { type: integer, default: 1 }
+ *       - in: query
+ *         name: limit
+ *         schema: { type: integer, default: 10 }
+ *       - in: query
+ *         name: search
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công.
+ */
+router.get('/wiki', getWikiBreeds);
+
+/**
+ * @swagger
+ * /bff/admin/wiki:
+ *   post:
+ *     summary: (BFF-Admin) Tạo một bài viết Wiki mới
+ *     tags: [BFF-Admin-Wiki]
+ *     description: Tạo một bài viết mới về giống chó, có thể đính kèm ảnh.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             $ref: '#/components/schemas/DogBreedWikiCreatePayload' # Cần định nghĩa schema này
+ *     responses:
+ *       201:
+ *         description: Tạo bài viết thành công.
+ */
+router.post('/wiki', createWikiBreed); // Sử dụng middleware upload riêng cho wiki
+
+/**
+ * @swagger
+ * /bff/admin/wiki/{slug}:
+ *   put:
+ *     summary: (BFF-Admin) Cập nhật một bài viết Wiki
+ *     tags: [BFF-Admin-Wiki]
+ *     description: Cập nhật thông tin một bài viết về giống chó.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             $ref: '#/components/schemas/DogBreedWikiUpdatePayload' # Cần định nghĩa schema này
+ *     responses:
+ *       200:
+ *         description: Cập nhật thành công.
+ */
+router.put('/wiki/:slug', updateWikiBreed);
+
+/**
+ * @swagger
+ * /bff/admin/wiki/{slug}:
+ *   delete:
+ *     summary: (BFF-Admin) Xóa (mềm) một bài viết Wiki
+ *     tags: [BFF-Admin-Wiki]
+ *     description: Xóa mềm một bài viết về giống chó.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: slug
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Xóa thành công.
+ */
+router.delete('/wiki/:slug', deleteWikiBreed);
 
 // --- CÁC ROUTE CÒN LẠI GIỮ NGUYÊN ---
 router.get('/subscriptions', getSubscriptions);
+router.get('/transactions', getTransactions);
+
 
 export default router;

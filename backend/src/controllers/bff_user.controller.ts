@@ -9,7 +9,7 @@ import { BadRequestError, AppError, NotFoundError } from '../errors';
 import { subscriptionService } from '../services/subscription.service';
 import { redisClient } from '../utils/redis.util';
 import { tokenConfig } from '../config/token.config';
-
+import { NextFunction } from 'express-serve-static-core';
 export const login = async (req: Request, res: Response) => {
   const { user, accessToken, refreshToken } = await authService.login(req.body.email, req.body.password);
   
@@ -147,3 +147,18 @@ export const createCheckoutSession = async (req: Request, res: Response) => {
   const session = await subscriptionService.createCheckoutSession(userId, planId, billingPeriod);
   res.status(200).json(session);
 };
+
+
+export const handleMomoIpn = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // Phản hồi ngay cho MoMo để tránh việc MoMo gửi lại yêu cầu do timeout.
+      res.status(204).send();
+
+      // Sau khi đã phản hồi, tiếp tục xử lý logic cập nhật trong nền.
+      // Việc này đảm bảo MoMo không bị treo trong khi server của bạn đang xử lý DB.
+      await subscriptionService.handleMomoIpn(req.body);
+
+    } catch (error) {
+      next(error);
+    }
+  }

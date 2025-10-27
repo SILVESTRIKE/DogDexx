@@ -1,168 +1,164 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { useI18n } from "@/lib/i18n-context"
-import { apiClient } from "@/lib/api-client"
-import { ProtectedRoute } from "@/components/protected-route"
-import { Loader2, Trash2, Edit2 } from "lucide-react"
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query"; 
+import { apiClient } from "@/lib/api-client";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Subscription } from "@/lib/types"; // Ensure this type is defined in @/lib/types
+import { format } from "date-fns";
 
-interface Subscription {
-  id: string; // Subscription ID
-  user: {
-    _id: string;
-    username: string;
-    email: string;
-  };
-  plan: { name: string };
-  planSlug: string;
-  status: string
-  currentPeriodEnd: string;
-}
-
-export default function SubscriptionsPage() {
-  const { t } = useI18n()
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState("")
-  const [selectedPlan, setSelectedPlan] = useState<string>("")
-  const [editingUserId, setEditingUserId] = useState<string | null>(null)
-
-  useEffect(() => {
-    loadSubscriptions()
-  }, [])
-
-  const loadSubscriptions = async () => {
-    try {
-      setLoading(true)
-      const response = await apiClient.getAdminSubscriptions()
-      setSubscriptions(response.data || [])
-    } catch (err: any) {
-      setError(err.message || "Failed to load subscriptions")
-    } finally {
-      setLoading(false)
+const SubscriptionStatusBadge = ({ status }: { status: string }) => {
+  const variant = useMemo(() => {
+    switch (status) {
+      case "active":
+        return "default"; // FIX: Changed from "success"
+      case "pending":
+        return "secondary";
+      case "cancelled":
+      case "expired":
+        return "destructive"; // FIX: Changed from "warning" for 'cancelled'
+      default:
+        return "outline";
     }
-  }
-
-  // Sửa tên tham số từ planId thành planSlug để rõ ràng hơn
-  const handleUpdateSubscription = async (subscriptionId: string, planSlug: string) => {
-    try {
-      await apiClient.updateUserSubscription(subscriptionId, { planSlug }) // Gửi planSlug thay vì planId
-      setEditingUserId(null)
-      loadSubscriptions()
-    } catch (err: any) {
-      setError(err.message || "Failed to update subscription")
-    }
-  }
-
-  const handleCancelSubscription = async (subscriptionId: string) => {
-    if (!confirm(t("admin.confirmCancel") || "Are you sure?")) return
-
-    try {
-      await apiClient.cancelUserSubscription(subscriptionId)
-      loadSubscriptions()
-    } catch (err: any) {
-      setError(err.message || "Failed to cancel subscription")
-    }
-  }
+  }, [status]);
 
   return (
-    <ProtectedRoute requireAdmin>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">{t("admin.subscriptions") || "Subscriptions"}</h1>
-          <p className="text-muted-foreground">{t("admin.manageUserSubscriptions") || "Manage user subscriptions"}</p>
-        </div>
+    <Badge variant={variant} className="capitalize">
+      {status}
+    </Badge>
+  );
+};
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">{error}</div>}
+export default function AdminSubscriptionsPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-4">{t("admin.user") || "User"}</th>
-                  <th className="text-left py-3 px-4">{t("admin.email") || "Email"}</th>
-                  <th className="text-left py-3 px-4">{t("admin.plan") || "Plan"}</th>
-                  <th className="text-left py-3 px-4">{t("admin.status") || "Status"}</th>
-                  <th className="text-left py-3 px-4">{t("admin.expiresAt") || "Expires At"}</th>
-                  <th className="text-left py-3 px-4">{t("admin.actions") || "Actions"}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {subscriptions.map((sub) => (
-                  <tr key={sub.id} className="border-b hover:bg-muted/50">
-                    <td className="py-3 px-4">{sub.user.username}</td>
-                    <td className="py-3 px-4">{sub.user.email}</td>
-                    <td className="py-3 px-4">
-                      {editingUserId === sub.id ? (
-                        <select
-                          value={selectedPlan}
-                          onChange={(e) => setSelectedPlan(e.target.value)}
-                          className="px-2 py-1 border rounded"
-                        >
-                          <option value="free">Free</option>
-                          <option value="starter">Starter</option>
-                          <option value="professional">Professional</option>
-                          <option value="enterprise">Enterprise</option>
-                        </select>
-                      ) : (
-                        <span className="capitalize">{sub.planSlug}</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`px-2 py-1 rounded text-sm ${sub.status === "active" ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-800"}`}
-                      >
-                        {sub.status}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4">{new Date(sub.currentPeriodEnd).toLocaleDateString()}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex gap-2">
-                        {editingUserId === sub.id ? (
-                          <>
-                            <Button size="sm" onClick={() => handleUpdateSubscription(sub.id, selectedPlan)}>
-                              {t("common.save") || "Save"}
-                            </Button>
-                            <Button size="sm" variant="outline" onClick={() => setEditingUserId(null)}>
-                              {t("common.cancel") || "Cancel"}
-                            </Button>
-                          </>
-                        ) : (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingUserId(sub.id)
-                                setSelectedPlan(sub.planSlug)
-                              }}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleCancelSubscription(sub.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+  const page = searchParams.get("page") ?? "1";
+  const limit = searchParams.get("limit") ?? "10";
+  const search = searchParams.get("search") ?? "";
+
+  const [searchTerm, setSearchTerm] = useState(search);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["admin-subscriptions", { page, limit, search }],
+    queryFn: () => apiClient.getAdminSubscriptions({ page: Number(page), limit: Number(limit), search }),
+  });
+
+  const handleSearch = () => {
+    const params = new URLSearchParams(searchParams);
+    params.set("page", "1");
+    params.set("search", searchTerm);
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const handlePageChange = (newPage: number) => {
+    const params = new URLSearchParams(searchParams);
+    params.set("page", String(newPage));
+    router.push(`${pathname}?${params.toString()}`);
+  };
+
+  const subscriptions = data?.data ?? [];
+  const pagination = data?.pagination;
+
+  const renderPagination = () => {
+    if (!pagination || pagination.totalPages <= 1) return null;
+
+    const pageNumbers = [];
+    const currentPage = pagination.page;
+    const totalPages = pagination.totalPages;
+    const pageRange = 2; // Number of pages to show around the current page
+
+    for (let i = 1; i <= totalPages; i++) {
+      if (
+        i === 1 ||
+        i === totalPages ||
+        (i >= currentPage - pageRange && i <= currentPage + pageRange)
+      ) {
+        pageNumbers.push(i);
+      }
+    }
+
+    const paginationItems = [];
+    let lastPage = 0;
+    for (const pageNum of pageNumbers) {
+      if (lastPage !== 0 && pageNum > lastPage + 1) {
+        paginationItems.push(<PaginationItem key={`ellipsis-${lastPage}`}><PaginationEllipsis /></PaginationItem>);
+      }
+      paginationItems.push(<PaginationItem key={pageNum}><PaginationLink href="#" onClick={(e) => { e.preventDefault(); handlePageChange(pageNum); }} isActive={currentPage === pageNum}>{pageNum}</PaginationLink></PaginationItem>);
+      lastPage = pageNum;
+    }
+    return paginationItems;
+  };
+
+  return (
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Manage Subscriptions</h1>
+
+      <div className="flex items-center mb-4">
+        <Input
+          placeholder="Search by user email or name..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="max-w-sm mr-2"
+          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+        />
+        <Button onClick={handleSearch}>Search</Button>
       </div>
-    </ProtectedRoute>
-  )
+
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>User</TableHead>
+              <TableHead>Plan</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Start Date</TableHead>
+              <TableHead>End Date</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading && <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>}
+            {isError && <TableRow><TableCell colSpan={5} className="text-center text-red-500">Failed to load data.</TableCell></TableRow>}
+            {!isLoading && !isError && subscriptions.map((sub: Subscription) => (
+              <TableRow key={sub.id}>
+                <TableCell>{sub.user.name} ({sub.user.email})</TableCell>
+                <TableCell>{sub.plan.name}</TableCell>
+                <TableCell>
+                  <SubscriptionStatusBadge status={sub.status} />
+                </TableCell>
+                <TableCell>{format(new Date(sub.startDate), "PPP")}</TableCell>
+                <TableCell>{sub.endDate ? format(new Date(sub.endDate), "PPP") : "N/A"}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {pagination && pagination.totalPages > 1 && (
+        <div className="mt-4 flex justify-center">
+          <Pagination>
+            <PaginationContent>
+              <PaginationItem><PaginationPrevious href="#" onClick={(e) => { e.preventDefault(); if (pagination.page > 1) handlePageChange(pagination.page - 1); }} /></PaginationItem>
+              {renderPagination()}
+              <PaginationItem><PaginationNext href="#" onClick={(e) => { e.preventDefault(); if (pagination.page < pagination.totalPages) handlePageChange(pagination.page + 1); }} /></PaginationItem>
+            </PaginationContent>
+          </Pagination>
+        </div>
+      )}
+    </div>
+  );
 }

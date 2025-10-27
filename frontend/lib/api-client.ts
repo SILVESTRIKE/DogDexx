@@ -931,6 +931,26 @@ class ApiClient {
     );
   }
 
+  // THÊM MỚI: Lấy danh sách GIAO DỊCH cho Admin
+  async getAdminTransactions(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    status?: string;
+    planId?: string;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== undefined && value !== "")
+          queryParams.append(key, String(value));
+      });
+    }
+    const query = queryParams.toString();
+    // Giả sử route là /bff/admin/transactions
+    return this.request<any>(`/bff/admin/transactions${query ? `?${query}` : ""}`, {}, true);
+  }
+
   async approveUserSubscription(subscriptionId: string) {
     return this.request<any>(
       `/bff/admin/subscriptions/${subscriptionId}/approve`,

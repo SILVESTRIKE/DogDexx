@@ -2,11 +2,8 @@ import type React from "react";
 import type { Metadata } from "next";
 
 import "./globals.css";
-import { CollectionProvider } from "@/lib/collection-context";
-import { AuthProvider } from "@/lib/auth-context";
-import { AnalyticsProvider } from "@/lib/analytics-context";
-import { I18nProvider } from "@/lib/i18n-context";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AppProviders } from "@/lib/app-providers";
 import { AppLayout } from "@/components/app-layout";
 
 const geistSans = Geist({
@@ -79,15 +76,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <I18nProvider>
-            <AuthProvider>
-              <AnalyticsProvider>
-                <CollectionProvider>
-                  <AppLayout>{children}</AppLayout>
-                </CollectionProvider>
-              </AnalyticsProvider>
-            </AuthProvider>
-          </I18nProvider>
+          <AppProviders>
+            <AppLayout>{children}</AppLayout>
+          </AppProviders>
         </ThemeProvider>
       </body>
     </html>

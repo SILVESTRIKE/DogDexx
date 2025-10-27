@@ -12,18 +12,13 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:3001";
 const BACKEND_URL = process.env.BACKEND_URL || "http://localhost:3000";
 
 export const momoService = {
-  /**
-   * Creates a MoMo payment request for the "Capture Wallet" method.
-   * @param amount The amount to be paid.
-   * @param orderInfo Information about the order.
-   * @param orderId A unique ID for the order.
-   * @param requestId A unique ID for the request.
-   * @returns A promise that resolves with the payment response from MoMo, including the payUrl.
-   */
+
   async createPaymentRequest(amount: number, orderInfo: string, orderId: string, requestId: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      const redirectUrl = `${FRONTEND_URL}/profile?upgrade_status=success&orderId=${orderId}`;
-      const ipnUrl = `${BACKEND_URL}/api/v1/webhooks/momo`; // URL để MoMo gọi lại server của bạn
+      // Thêm các tham số MoMo sẽ trả về vào redirectUrl để frontend có thể xử lý
+      // MoMo sẽ tự động nối các tham số như: partnerCode, orderId, requestId, amount, orderInfo, orderType, transId, resultCode, message, payType, responseTime, extraData
+      const redirectUrl = `${FRONTEND_URL}/profile?upgrade_status=true`; // Giữ URL đơn giản, MoMo sẽ tự thêm tham số
+      const ipnUrl = `${BACKEND_URL}/bff/user/momo-ipn`; // URL để MoMo gọi lại server của bạn
       const requestType = "captureWallet";
       const extraData = ""; // Base64 encoded JSON object, if needed
 
@@ -68,6 +63,8 @@ export const momoService = {
         res.on('end', () => {
           try {
             const response = JSON.parse(body);
+            // SỬA LỖI: Chuyển đổi object thành chuỗi JSON để đảm bảo log hiển thị đầy đủ
+            logger.info(`[MoMo] Full response from createPaymentRequest for orderId ${orderId}: ${JSON.stringify(response, null, 2)}`);
             if (response.resultCode === 0) {
               logger.info(`[MoMo] Payment request created successfully for orderId: ${orderId}`);
               resolve(response);
@@ -90,5 +87,41 @@ export const momoService = {
       req.write(requestBody);
       req.end();
     });
+  },
+
+  /**
+   * Verifies the signature of a MoMo IPN (Instant Payment Notification).
+   * @param ipnPayload The payload received from MoMo's IPN request.
+   * @returns True if the signature is valid, false otherwise.
+   */
+  verifyIpnSignature(ipnPayload: any): boolean {
+    const { signature, ...payload } = ipnPayload;
+    if (!signature) {
+      logger.warn('[MoMo IPN] Missing signature in IPN payload.');
+      return false;
+    }
+    const {
+      partnerCode,
+      orderId,
+      requestId,
+      amount,
+      orderInfo,
+      orderType,
+      transId,
+      resultCode,
+      message,
+      payType,
+      responseTime,
+      extraData,
+    } = ipnPayload;
+
+    const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&message=${message}&orderId=${orderId}&orderInfo=${orderInfo}&orderType=${orderType}&partnerCode=${partnerCode}&payType=${payType}&requestId=${requestId}&responseTime=${responseTime}&resultCode=${resultCode}&transId=${transId}`;
+
+    const expectedSignature = crypto.createHmac('sha256', secretkey)
+      .update(rawSignature)
+      .digest('hex');
+
+    logger.info(`[MoMo IPN] Verifying signature. Expected: ${expectedSignature}, Received: ${signature}`);
+    return signature === expectedSignature;
   }
 };
