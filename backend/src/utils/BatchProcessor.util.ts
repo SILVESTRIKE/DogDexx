@@ -221,3 +221,6 @@ export class BatchProcessor extends EventEmitter {
     }
   }
 }
+
+// Tạo và export một instance duy nhất (singleton) để toàn bộ app sử dụng
+export const batchProcessor = new BatchProcessor();

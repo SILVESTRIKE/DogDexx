@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar, createCheckoutSession, getSessionStatus } from '../controllers/bff_user.controller';
+import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar, createCheckoutSession, getSessionStatus, handleMomoIpn} from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
@@ -240,6 +240,8 @@ router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
  * @access Public
  */
 router.get('/session-status', optionalAuthMiddleware, getSessionStatus);
+
+router.post('/momo-ipn', handleMomoIpn);
 
 
 export default router;

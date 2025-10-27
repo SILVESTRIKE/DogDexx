@@ -6,9 +6,14 @@ import { AppError, NotFoundError} from '../errors';
 import { predictionHistoryService } from '../services/prediction_history.service';
 import { PlanService } from '../services/plan.service';
 import { transformMediaURLs } from '../utils/media.util';
+// THÊM: Import subscriptionService
+import { subscriptionService } from '../services/subscription.service';
 import { ConfigService } from '../services/config.service';
 import { AIModelService } from '../services/ai_models.service';
 import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
+// THÊM: Import wikiService và các kiểu dữ liệu cần thiết
+import { wikiService } from '../services/dogs_wiki.service'; // Sửa tên file zod
+import { CreateBreedSchema, UpdateBreedSchema } from '../types/zod/dog_wiki.zod';
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -263,6 +268,81 @@ export const deletePlan = async (req: Request, res: Response, next: NextFunction
   res.status(200).json({ message: "Yêu cầu xóa gói cước đã được xử lý." });
 };
 
+// --- THÊM MỚI: CÁC CONTROLLER CHO WIKI ---
+
+export const getWikiBreeds = async (req: Request, res: Response, next: NextFunction) => {
+    const { page = 1, limit = 10, search, lang = 'vi' } = req.query as any;
+    const result = await wikiService.getAllBreeds({
+        page: Number(page),
+        limit: Number(limit),
+        search,
+        lang
+    });
+    res.status(200).json(result);
+};
+
+export const createWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const breedData = CreateBreedSchema.parse(req.body);
+    const { lang = 'vi' } = req.query as any;
+    const newBreed = await wikiService.createBreed(breedData, lang);
+    res.status(201).json({ message: "Giống chó đã được thêm vào Wiki.", data: newBreed });
+};
+
+export const updateWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const { slug } = req.params;
+    const { lang = 'vi' } = req.query as any;
+    const breedData = UpdateBreedSchema.parse(req.body);
+    const updatedBreed = await wikiService.updateBreed(slug, breedData, lang);
+    res.status(200).json({ message: "Thông tin giống chó đã được cập nhật.", data: updatedBreed });
+};
+
+export const deleteWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const { slug } = req.params;
+    const { lang = 'vi' } = req.query as any;
+    await wikiService.softDeleteBreed(slug, lang);
+    res.status(200).json({ message: "Giống chó đã được xóa (mềm)." });
+};
+
+/**
+ * [Admin] Lấy danh sách các GIAO DỊCH (Transactions).
+ */
+export const getTransactions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      status, 
+      planId 
+    } = req.query as any;
+
+    const options = { page: Number(page), limit: Number(limit), search, status, planId };
+
+    const transactionsData = await subscriptionService.getAllTransactions(options);
+    res.status(200).json(transactionsData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [Admin] Lấy danh sách các ĐĂNG KÝ (Subscriptions).
+ */
 export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
-  res.status(501).json({ message: "Chức năng đang được phát triển" });
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      status, 
+      planId 
+    } = req.query as any;
+
+    const options = { page: Number(page), limit: Number(limit), search, status, planId };
+
+    const subscriptionsData = await subscriptionService.getAllSubscriptions(options);
+    res.status(200).json(subscriptionsData);
+  } catch (error) {
+    next(error);
+  }
 };
