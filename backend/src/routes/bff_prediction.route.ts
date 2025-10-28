@@ -249,7 +249,7 @@ router.post(
  *       400:
  *         description: Dữ liệu gửi lên không hợp lệ.
  */
-router.post("/:id/feedback", optionalAuthMiddleware, bffPredictionController.submitFeedback);
+router.post("/:id/feedback", authMiddleware, bffPredictionController.submitFeedback);
 
 /**
  * @swagger

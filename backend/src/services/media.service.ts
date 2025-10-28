@@ -7,6 +7,7 @@ import { FilterQuery } from "mongoose";
 import { z } from "zod";
 import path from "path";
 import fs from "fs/promises";
+import { v4 as uuidv4 } from 'uuid';
 
 export interface FindMediasOptions {
   page?: number;
@@ -53,6 +54,49 @@ export class MediaService {
     return media;
   }
 
+  /**
+   * Di chuyển một media sang một thư mục logic khác, đồng thời di chuyển file vật lý.
+   * @param mediaId ID của media cần di chuyển.
+   * @param newDirectoryId ID của thư mục đích (có thể là null để chuyển ra thư mục gốc).
+   * @returns Media đã được cập nhật hoặc null nếu không tìm thấy.
+   */
+  static async moveMedia(
+    mediaId: string,
+    newDirectoryId: string | null
+  ): Promise<MediaDoc | null> {
+    const media = await MediaModel.findById(mediaId);
+    if (!media) {
+      return null;
+    }
+
+    const oldPath = path.resolve(media.mediaPath);
+
+    // Tạo đường dẫn vật lý mới dựa trên ngày hiện tại
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const fileExtension = path.extname(media.mediaPath);
+    const newFilename = `${uuidv4()}${fileExtension}`;
+    
+    // Giả định thư mục upload có cấu trúc uploads/<type>/<year>/<month>
+    // media.type có thể là 'image/jpeg', ta chỉ cần 'image'
+    const mediaTypeFolder = media.type ? media.type.split('/')[0] : 'unknown';
+    const newDir = path.join(process.cwd(), 'uploads', mediaTypeFolder, year, month);
+    const newPath = path.join(newDir, newFilename);
+    const newRelativePath = path.join('uploads', mediaTypeFolder, year, month, newFilename).replace(/\\/g, '/');
+
+    // Đảm bảo thư mục đích tồn tại
+    await fs.mkdir(newDir, { recursive: true });
+
+    // Di chuyển file vật lý
+    await fs.rename(oldPath, newPath);
+
+    // Cập nhật lại media trong DB
+    media.directory_id = newDirectoryId as any;
+    media.mediaPath = newRelativePath;
+    return media.save();
+  }
+  
   static async findAndPaginate(
     options: FindMediasOptions
   ): Promise<{ data: MediaDoc[]; pagination: any }> {

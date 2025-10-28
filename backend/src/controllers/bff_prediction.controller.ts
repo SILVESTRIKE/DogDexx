@@ -467,10 +467,7 @@ export const bffPredictionController = {
     ];
     const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
     const wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
-    const transformedPrediction = transformMediaURLs(
-      req,
-      historyItem.toObject()
-    );
+    const transformedPrediction = transformMediaURLs(req, historyItem);
     const detections = transformedPrediction.predictions.map((p: any) => {
       const slug = p.class.toLowerCase().replace(/\s+/g, "-");
       return {
@@ -490,6 +487,7 @@ export const bffPredictionController = {
       processedMediaUrl: transformedPrediction.processedMediaUrl,
       detections,
       collectionStatus: null,
+      hasFeedback: (historyItem as any).hasFeedback, 
     };
     res.status(200).json(finalResponse);
   },
