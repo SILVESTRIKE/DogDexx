@@ -15,16 +15,17 @@ interface FeedbackFormProps {
   detectedBreed: string
   confidence: number
   imageUrl: string
-  predictionId?: string | null
+  predictionId?: string | null,
+  initialSubmitted?: boolean
 }
 
-export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId }: FeedbackFormProps) {
+export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId, initialSubmitted = false }: FeedbackFormProps) {
   const { t } = useI18n();
-  const { user } = useAuth()
+  const { user, isAuthenticated, setAuthModalOpen, setAuthModalMode } = useAuth()
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null)
   const [correctBreed, setCorrectBreed] = useState("")
   const [notes, setNotes] = useState("")
-  const [submitted, setSubmitted] = useState(false)
+  const [submitted, setSubmitted] = useState(initialSubmitted)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const handleSubmit = async () => {
@@ -65,6 +66,25 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Card className="border-2 border-primary">
+        <CardContent className="pt-6">
+          <div className="text-center py-8">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
+              <ThumbsUp className="h-8 w-8 text-primary" />
+            </div>
+            <h3 className="text-xl font-bold mb-2">{t('feedback.loginRequiredTitle')}</h3>
+            <p className="text-muted-foreground mb-4">{t('feedback.loginRequiredDescription')}</p>
+            <Button onClick={() => { setAuthModalMode('login'); setAuthModalOpen(true); }}>
+              {t('feedback.loginToFeedback')}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
   }
 
   if (submitted) {

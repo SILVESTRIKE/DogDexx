@@ -78,8 +78,8 @@ export const predictionService = {
       const mediaBuffer = Buffer.from(base64Data, 'base64');
       
       const uniqueFilename = `${uuidv4()}.jpg`;
-      const publicDir = path.join(__dirname, `../../public/processed-images`);
-      const publicUrl = `/public/processed-images/${uniqueFilename}`;
+      const publicDir = path.join(__dirname, `../../public/processed/images`);
+      const publicUrl = `/public/processed/images/${uniqueFilename}`;
 
       fs.mkdirSync(publicDir, { recursive: true });
       fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);
@@ -151,7 +151,7 @@ export const predictionService = {
     const base64Data = predictionResult.processed_media_base64;
     const mediaBuffer = Buffer.from(base64Data, 'base64');
     const fileExtension = type === 'video' ? 'mp4' : 'jpg';
-    const publicFolder = type === 'video' ? 'processed-videos' : 'processed-images';
+    const publicFolder = type === 'video' ? 'processed/videos' : 'processed/images';
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
     const publicDir = path.join(__dirname, `../../public/${publicFolder}`);
     const publicUrl = `/public/${publicFolder}/${uniqueFilename}`;
@@ -186,8 +186,8 @@ export const predictionService = {
     const base64Data = payload.processed_media_base64;
     const mediaBuffer = Buffer.from(base64Data, 'base64');
     const uniqueFilename = `${uuidv4()}.jpg`;
-    const publicDir = path.join(__dirname, `../../public/processed-images`);
-    const publicUrl = `/public/processed-images/${uniqueFilename}`;
+    const publicDir = path.join(__dirname, `../../public/processed/images`);
+    const publicUrl = `/public/processed/images/${uniqueFilename}`;
 
     fs.mkdirSync(publicDir, { recursive: true });
     fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);

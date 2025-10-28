@@ -36,12 +36,14 @@ function ResultsContent() {
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
+  const [hasFeedback, setHasFeedback] = useState(false); // State mới để lưu trạng thái feedback
 
   useEffect(() => {
     const historyId = searchParams.get('id');
 
     // Hàm helper để xử lý dữ liệu kết quả và cập nhật state
     const processResultData = (result: BffPredictionResponse) => {
+      setHasFeedback(result.hasFeedback ?? false); // Cập nhật state từ response
       setProcessedMediaUrl(result.processedMediaUrl);
       
       if (!result.detections || result.detections.length === 0) {
@@ -321,6 +323,7 @@ function ResultsContent() {
           confidence={selectedConfidence}
           imageUrl={""} 
           predictionId={predictionId}
+          initialSubmitted={hasFeedback} // Truyền trạng thái ban đầu xuống form
         />
 
         <div className="mt-12">

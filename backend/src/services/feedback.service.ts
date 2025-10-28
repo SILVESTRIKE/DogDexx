@@ -1,6 +1,6 @@
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
-import { NotFoundError, BadRequestError } from '../errors';
+import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
 import { Types } from 'mongoose';
 import { UserModel, UserDoc } from '../models/user.model';
 import { sendEmail } from './email.service';
@@ -16,20 +16,16 @@ interface QueryFilters {
 
 export const feedbackService = {
   // --- Dành cho USER ---
-  async submitFeedback(userId: Types.ObjectId | undefined, data: { predictionId: string; isCorrect: boolean; submittedLabel?: string; notes?: string; }) {
+  async submitFeedback(userId: Types.ObjectId, data: { predictionId: string; isCorrect: boolean; submittedLabel?: string; notes?: string; }) {
     const { predictionId, isCorrect, submittedLabel, notes } = data;
-    const prediction = await PredictionHistoryModel.findById(predictionId);
 
+    // Yêu cầu người dùng phải đăng nhập
+    if (!userId) throw new NotAuthorizedError('Bạn phải đăng nhập để gửi phản hồi.');
+
+    const prediction = await PredictionHistoryModel.findById(predictionId);
     if (!prediction) throw new NotFoundError('Không tìm thấy lịch sử dự đoán.');
 
-    // Logic kiểm tra quyền sở hữu được cập nhật:
-    // 1. Nếu là người dùng đã đăng nhập (userId tồn tại), họ phải sở hữu dự đoán.
-    // 2. Nếu là người dùng thử (userId không tồn tại), dự đoán cũng phải là của người dùng thử (prediction.user không tồn tại).
-    const isUserLoggedIn = !!userId;
-    const isPredictionFromUser = !!prediction.user;
-
-    if (isUserLoggedIn && prediction.user?.toString() !== userId.toString()) throw new BadRequestError('Bạn không có quyền đánh giá kết quả này.');
-    if (!isUserLoggedIn && isPredictionFromUser) throw new BadRequestError('Người dùng thử không thể đánh giá kết quả của người dùng đã đăng nhập.');
+    if (prediction.user?.toString() !== userId.toString()) throw new BadRequestError('Bạn không có quyền đánh giá kết quả này.');
 
     if (prediction.isCorrect !== null) throw new BadRequestError('Kết quả này đã được đánh giá.');
 

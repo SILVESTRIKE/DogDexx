@@ -163,7 +163,7 @@ class Config:
 
 # Define the save directory relative to this script's location
 SAVE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "public", "processed-images")
+    os.path.join(os.path.dirname(__file__), "..", "public", "processed/images")
 )
 
 
