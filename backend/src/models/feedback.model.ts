@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export interface FeedbackDoc extends Document {
   prediction_id: Types.ObjectId;
   user_id: Types.ObjectId;
-  user_submitted_label?: string;
+  user_submitted_label: string;
   notes?: string;
   file_path: string;
   admin_id: Types.ObjectId;
@@ -23,8 +23,11 @@ const feedbackSchema = new Schema<FeedbackDoc>(
       unique: true,
     }, // Cho phép guest gửi feedback
     user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    user_submitted_label: { type: String, trim: true },
+    user_submitted_label: { type: String, trim: true, required: true },
     notes: { type: String, trim: true },
+    file_path: { type: String, required: true },
+    admin_id: { type: Schema.Types.ObjectId, ref: "User" }, // ref tới User để sau này có thể populate
+    reason: { type: String, trim: true },
     status: {
       type: String,
       enum: ["pending", "approved", "rejected"],

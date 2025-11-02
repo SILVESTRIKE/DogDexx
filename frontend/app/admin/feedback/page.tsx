@@ -27,7 +27,7 @@ import { DateRange } from "react-day-picker"
 import { format } from "date-fns"
 
 const initialData: AdminFeedbackResponse = {
-  stats: { pending_review: 0, approved_for_training: 0, rejected: 0 },
+  stats: { pending: 0, approved: 0, rejected: 0 },
   userStats: [],
   feedbacks: { data: [], total: 0, page: 1, limit: 10, totalPages: 1 },
 }
@@ -85,9 +85,9 @@ export default function FeedbackManagement() {
   }, [page, statusFilter, debouncedSearchQuery, dateRange, fetchFeedback])
 
   const { stats, userStats, feedbacks } = data
-  const totalFeedback = stats.pending_review + stats.approved_for_training + stats.rejected
+  const totalFeedback = stats.pending + stats.approved + stats.rejected
   const accuracy =
-    totalFeedback > 0 ? ((stats.approved_for_training / totalFeedback) * 100).toFixed(1) : "0.0"
+    totalFeedback > 0 ? ((stats.approved / totalFeedback) * 100).toFixed(1) : "0.0"
 
   const handleApprove = async (feedbackId: string) => {
     const toastId = toast.loading(t('admin.feedback.actions.approving'));
@@ -97,8 +97,8 @@ export default function FeedbackManagement() {
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
         const newStats = { ...prevData.stats };
-        newStats.pending_review = Math.max(0, newStats.pending_review - 1);
-        newStats.approved_for_training += 1;
+        newStats.pending = Math.max(0, newStats.pending - 1);
+        newStats.approved += 1;
 
         return {
           ...prevData,
@@ -106,7 +106,7 @@ export default function FeedbackManagement() {
           feedbacks: {
             ...prevData.feedbacks,
             data: prevData.feedbacks.data.map(f => 
-              f.id === feedbackId ? { ...f, status: 'approved_for_training' } : f
+              f.id === feedbackId ? { ...f, status: 'approved' } : f
             )
           }
         };
@@ -124,7 +124,7 @@ export default function FeedbackManagement() {
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
         const newStats = { ...prevData.stats };
-        newStats.pending_review = Math.max(0, newStats.pending_review - 1);
+        newStats.pending = Math.max(0, newStats.pending - 1);
         newStats.rejected += 1;
 
         return {
@@ -157,7 +157,7 @@ export default function FeedbackManagement() {
             <Hourglass className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            {loading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats.pending_review}</div>}
+            {loading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold">{stats.pending}</div>}
           </CardContent>
         </Card>
 
@@ -167,7 +167,7 @@ export default function FeedbackManagement() {
             <Check className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            {loading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold text-green-600">{stats.approved_for_training}</div>}
+            {loading ? <Skeleton className="h-8 w-16" /> : <div className="text-2xl font-bold text-green-600">{stats.approved}</div>}
           </CardContent>
         </Card>
 
@@ -298,13 +298,13 @@ export default function FeedbackManagement() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {f.status === 'pending_review' && (
+                          {f.status === 'pending' && (
                             <Badge variant="outline" className="border-yellow-500 text-yellow-600">
                               <Hourglass className="h-3 w-3 mr-1" />
                               {t('admin.feedback.filters.pending')}
                             </Badge>
                           )}
-                          {f.status === 'approved_for_training' && (
+                          {f.status === 'approved' && (
                             <Badge variant="default" className="bg-green-600 hover:bg-green-700">
                               <Check className="h-3 w-3 mr-1" />
                               {t('admin.feedback.filters.approved')}
@@ -356,7 +356,7 @@ export default function FeedbackManagement() {
                                 )}
                               </div>
                               <div className="flex justify-end gap-2 pt-4 border-t">
-                                {f.status === 'pending_review' && (
+                                {f.status === 'pending' && (
                                   <>
                                     <Button variant="destructive" size="sm" onClick={() => handleReject(f.id)}>
                                       <X className="h-4 w-4 mr-2" />{t('admin.feedback.actions.reject')}
@@ -366,7 +366,7 @@ export default function FeedbackManagement() {
                                     </Button>
                                   </>
                                 )}
-                                {f.status === 'approved_for_training' && (
+                                {f.status === 'approved' && (
                                     <Badge variant="default" className="bg-green-600 gap-1"><Check className="h-3 w-3" />{t('admin.feedback.status.approved')}</Badge>
                                 )}
                                 {f.status === 'rejected' && (

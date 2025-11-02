@@ -14,6 +14,7 @@ import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
 // THÊM: Import wikiService và các kiểu dữ liệu cần thiết
 import { wikiService } from '../services/dogs_wiki.service'; // Sửa tên file zod
 import { CreateBreedSchema, UpdateBreedSchema } from '../types/zod/dog_wiki.zod';
+import { BadRequestError } from '../errors';
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -101,13 +102,21 @@ export const getFeedback = async (req: Request, res: Response, next: NextFunctio
 
 export const approveFeedback = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const updatedFeedback = await feedbackService.approveFeedback(id);
+  const adminId = (req as any).user.id; 
+  const updatedFeedback = await feedbackService.approveFeedback(id, adminId);
   res.status(200).json({ message: 'Feedback đã được duyệt thành công.', data: transformFeedbackForAdmin(req, updatedFeedback) });
 };
 
 export const rejectFeedback = async (req: Request, res: Response, next: NextFunction) => {
   const { id } = req.params;
-  const updatedFeedback = await feedbackService.rejectFeedback(id);
+  const { reason } = req.body; 
+  const adminId = (req as any).user.id;
+
+  if (!reason) {
+      throw new BadRequestError('Vui lòng cung cấp lý do từ chối.');
+  }
+
+  const updatedFeedback = await feedbackService.rejectFeedback(id, adminId, reason);
   res.status(200).json({ message: 'Feedback đã bị từ chối.', data: transformFeedbackForAdmin(req, updatedFeedback) });
 };
 

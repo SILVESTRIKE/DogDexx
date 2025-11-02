@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import WebSocket from "ws";
-import crypto from 'crypto';
+import crypto from "crypto";
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
 import { wikiService } from "../services/dogs_wiki.service";
@@ -15,7 +15,7 @@ import { predictionHistoryService } from "../services/prediction_history.service
 import { askGemini } from "../services/geminiAI.service";
 import { redisClient } from "../utils/redis.util";
 import { tokenConfig } from "../config/token.config";
-import { batchProcessor } from '../utils/BatchProcessor.util';
+import { batchProcessor } from "../utils/BatchProcessor.util";
 import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
@@ -359,18 +359,19 @@ export const bffPredictionController = {
   submitFeedback: async (req: Request, res: Response) => {
     const userId = (req as any).user?._id;
     const { id: predictionId } = req.params;
-    const { isCorrect, submittedLabel, notes } = req.body;
-    const result = await feedbackService.submitFeedback(userId, {
+    // const { isCorrect, submittedLabel, notes } = req.body;
+    const { submittedLabel, notes } = req.body; 
+    const feedbackDocument = await feedbackService.submitFeedback(userId, {
       predictionId,
-      isCorrect,
+      // isCorrect, // <- XÓA DÒNG NÀY
       submittedLabel,
       notes,
     });
-    const newBreedAlert = !isCorrect && submittedLabel;
+    // const newBreedAlert = !isCorrect && submittedLabel;
     res.status(201).json({
-      feedbackId: (result as any)._id,
+      feedbackId: feedbackDocument._id, 
       message: "Feedback submitted successfully",
-      newBreedAlert,
+      newBreedAlert: true,
     });
   },
 
@@ -487,7 +488,7 @@ export const bffPredictionController = {
       processedMediaUrl: transformedPrediction.processedMediaUrl,
       detections,
       collectionStatus: null,
-      hasFeedback: (historyItem as any).hasFeedback, 
+      hasFeedback: (historyItem as any).hasFeedback,
     };
     res.status(200).json(finalResponse);
   },
@@ -499,12 +500,15 @@ export const bffPredictionController = {
 
     // SỬA LỖI: Ưu tiên định danh do client cung cấp (đã được gán trong wsOptionalAuthMiddleware)
     // Điều này đảm bảo tính nhất quán với các request HTTP khác.
-    const guestIdentifier = !user ? ((req as any).fingerprint?.hash || req.ip) : undefined;
-
+    const guestIdentifier = !user
+      ? (req as any).fingerprint?.hash || req.ip
+      : undefined;
 
     // BƯỚC 2: KIỂM TRA TÍNH TOÀN VẸN SESSION (giữ nguyên)
     if (!userId && !guestIdentifier) {
-      logger.error("[BFF-WS] Critical: Could not determine identifier for WebSocket session. Closing connection.");
+      logger.error(
+        "[BFF-WS] Critical: Could not determine identifier for WebSocket session. Closing connection."
+      );
       ws.close(1011, "Could not determine user identity.");
       return;
     }
@@ -525,20 +529,32 @@ export const bffPredictionController = {
           await redisClient.set(key, remainingTokens, {
             EX: tokenConfig.guest.expirationSeconds,
           });
-          logger.info(`[BFF-WS] Initialized ${remainingTokens} tokens for new guest ${guestIdentifier}.`);
+          logger.info(
+            `[BFF-WS] Initialized ${remainingTokens} tokens for new guest ${guestIdentifier}.`
+          );
         } else {
           remainingTokens = parseInt(currentTokensStr, 10);
         }
 
         // Kiểm tra xem họ có đủ token để bắt đầu stream không
         if (remainingTokens < streamCost) {
-          logger.warn(`[BFF-WS] Guest ${guestIdentifier} has insufficient tokens for stream. Required: ${streamCost}, Remaining: ${remainingTokens}. Closing connection.`);
-          ws.send(JSON.stringify({ type: 'error', message: 'Not enough tokens for streaming session.' }));
+          logger.warn(
+            `[BFF-WS] Guest ${guestIdentifier} has insufficient tokens for stream. Required: ${streamCost}, Remaining: ${remainingTokens}. Closing connection.`
+          );
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              message: "Not enough tokens for streaming session.",
+            })
+          );
           ws.close(1008, "Insufficient tokens");
           return; // Dừng thực thi
         }
       } catch (error) {
-        logger.error(`[BFF-WS] Redis error during token check for guest ${guestIdentifier}:`, error);
+        logger.error(
+          `[BFF-WS] Redis error during token check for guest ${guestIdentifier}:`,
+          error
+        );
         ws.close(1011, "Server error during token check.");
         return;
       }
@@ -554,7 +570,7 @@ export const bffPredictionController = {
     const lang =
       req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
         ? "vi"
-        : "en"; 
+        : "en";
     const aiServiceUrl = (
       process.env.AI_SERVICE_URL || "http://localhost:8000"
     ).replace(/^http/, "ws");
@@ -584,7 +600,7 @@ export const bffPredictionController = {
           header.toLowerCase() === "host"
             ? host
             : req.headers[header.toLowerCase()],
-      } as unknown as Request; 
+      } as unknown as Request;
     };
 
     // --- XỬ LÝ KẾT NỐI ĐẾN AI SERVICE (BFF <-> AI Service) ---
@@ -669,16 +685,27 @@ export const bffPredictionController = {
           // Chỉ trừ token KHI có kết quả cuối cùng và chỉ trừ MỘT LẦN.
           if (!tokensDeducted) {
             tokensDeducted = true;
-            deductTokensForRequest(mockReq, {} as Response, tokenConfig.costs.streamSession, 'stream')
-              .then(() => logger.info(
-                `[BFF-WS] Token deduction processed for session of ${userId || guestIdentifier} after final result.`
-              ))
-              .catch((err) => logger.error(
-                `[BFF-WS] Failed to process token deduction after stream final result:`, err
-              ));
+            deductTokensForRequest(
+              mockReq,
+              {} as Response,
+              tokenConfig.costs.streamSession,
+              "stream"
+            )
+              .then(() =>
+                logger.info(
+                  `[BFF-WS] Token deduction processed for session of ${
+                    userId || guestIdentifier
+                  } after final result.`
+                )
+              )
+              .catch((err) =>
+                logger.error(
+                  `[BFF-WS] Failed to process token deduction after stream final result:`,
+                  err
+                )
+              );
           }
           // ==========================================================================
-
 
           ws.send(JSON.stringify({ type: "final_result", ...enrichedResult }));
           ws.send(
@@ -707,7 +734,9 @@ export const bffPredictionController = {
 
     aiServiceWs.on("close", (code, reason) => {
       logger.info(
-        `[BFF-WS] AI Service connection closed. Code: ${code}, Reason: ${reason.toString()}`
+        `[BFF-WS] AI Service connection closed. Code: ${code}, Reason: ${
+          reason?.toString?.() || JSON.stringify(reason)
+        }`
       );
       if (!finalResultSent && ws.readyState === WebSocket.OPEN) {
         ws.close(code, reason.toString());
@@ -718,8 +747,14 @@ export const bffPredictionController = {
 
     ws.on("message", (message) => {
       if (aiServiceWs.readyState === WebSocket.OPEN) {
-
-        aiServiceWs.send(message.toString());
+        logger.info(
+          `[BFF-WS] Received message from client: ${message.toString()}`
+        );
+        try {
+          aiServiceWs.send(message.toString());
+        } catch (error) {
+          logger.error("[BFF-WS] Error sending message to AI Service:", error);
+        }
       } else {
         logger.warn(
           "[BFF-WS] Client sent a message, but AI service is not connected. Dropping frame."
@@ -745,7 +780,6 @@ export const bffPredictionController = {
       }
     });
   },
-  
 
   chatWithGemini: async (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user as UserDoc | undefined;
@@ -764,7 +798,9 @@ export const bffPredictionController = {
       : (req as any).fingerprint?.hash || req.ip;
 
     if (!userId && !guestIdentifier) {
-      throw new Error("Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện.");
+      throw new Error(
+        "Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện."
+      );
     }
 
     const result = await askGemini(

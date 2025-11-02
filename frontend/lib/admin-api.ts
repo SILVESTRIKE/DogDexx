@@ -101,12 +101,12 @@ export interface Feedback {
   aiPrediction: { class: string; confidence: number } | null;
   originalMediaUrl: string;
   processedMediaUrl: string;
-  status: "pending_review" | "approved_for_training" | "rejected";
+  status: "pending" | "approved" | "rejected";
 }
 
 export interface FeedbackStats {
-  pending_review: number
-  approved_for_training: number
+  pending: number
+  approved: number
   rejected: number
 }
 

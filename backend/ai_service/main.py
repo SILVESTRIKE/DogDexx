@@ -17,6 +17,7 @@ import imageio
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from ultralytics.utils.plotting import Annotator, colors
+import torch
 
 # ==============================================================================
 # 1. CONFIGURATION
@@ -155,7 +156,7 @@ class Config:
         self.VIDEO_CONF_THRESHOLD = 0.5
         self.STREAM_CONF_THRESHOLD = 0.4
         self.STREAM_HIGH_CONF_THRESHOLD = 0.8
-        self.DEVICE = "cpu"
+        self.DEVICE = "cuda"
         self.MODEL_PATH = "models/epoch90.pt"
         self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
         self.LABELS_PATH = "labels.json"
