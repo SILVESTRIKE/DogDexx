@@ -1,10 +1,13 @@
+import dotenv from "dotenv";
+dotenv.config();
+import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import path from "path";
 import cookieParser from "cookie-parser";
-import Fingerprint from "express-fingerprint";
+import Fingerprint from 'express-fingerprint';
+
 import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
 import { configureViewEngine } from "./config/viewEngine";
 import authRoutes from "./routes/auth.route";
@@ -16,57 +19,87 @@ import { collectionRoutes } from "./routes/user_collection.route";
 import { adminFeedbackRouter } from "./routes/feedback.route";
 import { predictionHistoryRouter } from "./routes/prediction_history.route";
 import { adminPredictionHistoryRouter } from "./routes/admin_prediction_history.route";
-import swaggerUi from "swagger-ui-express";
+import aiModelsRoutes from "./routes/ai_models.route";
+import analyticsRoutes from "./routes/analytics.route";
+import "./utils/redis.util";
 
 import bffUserRoutes from './routes/bff_user.route';
 import bffPredictionRoutes from './routes/bff_prediction.route';
 import bffCollectionRoutes from './routes/bff_collection.route';
 import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
-import bffRealtimeRoutes from './routes/bff_realtime.route';
+import bffPublicRoutes from './routes/bff_public.route';
 
-// @ts-ignore - 
-import swaggerSpec from '../swaggerConfig';
+import achievementRoute from './routes/achievement.route';
+import swaggerUi from "swagger-ui-express";
+import swaggerJSDoc from "swagger-jsdoc";
+import { options as swaggerOptions } from "../swaggerConfig.js";
 
-dotenv.config();
+const swaggerSpec = swaggerJSDoc(swaggerOptions);
 const app = express();
-app.use(cors({
-  origin: process.env.FRONTEND_URL || "http://localhost:5173", // URL của frontend
-  credentials: true, // Cho phép gửi credentials (cookies, headers xác thực)
-}));
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL || "http://localhost:3001",
+  "http://localhost:3000",
+];
+
+const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization",
+};
+
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
-app.use(Fingerprint());
+app.use((Fingerprint as any)({
+  parameters: [
+    (Fingerprint as any).useragent,
+    (Fingerprint as any).geoip,
+  ]
+}));
 
-configureViewEngine(app);
-app.use("/uploads", express.static(path.join(__dirname, "..", "uploads")));
-app.use(
-  "/processed-images",
-  express.static(path.join(__dirname, "..", "public", "processed-images"))
-);
-app.use(
-  "/processed-videos",
-  express.static(path.join(__dirname, "..", "public", "processed-videos"))
-);
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+// --- Swagger Routes ---
+
 app.get('/api-docs.json', (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   res.send(swaggerSpec);
 });
+
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(undefined, {
+  swaggerUrl: '/api-docs.json',
+  swaggerOptions: { tryItOutEnabled: true }
+}));
+
 app.get("/test", (req, res) => {
+  configureViewEngine(app);
   res.render("test");
 });
-import achievementRoute from './routes/achievement.route';
 
-// BFF Routes
+// 1. Middleware phục vụ file tĩnh
+const publicDirectory = path.join(__dirname, "..", "public");
+app.use('/public', express.static(publicDirectory));
+
+app.use(apiLimiter);
+
+// 2. BFF (Backend-for-Frontend) Routes
 app.use('/bff/user', bffUserRoutes);
 app.use('/bff/predict', bffPredictionRoutes);
 app.use('/bff/collection', bffCollectionRoutes);
 app.use('/bff/content', bffContentRoutes);
 app.use('/bff/admin', bffAdminRoutes);
-app.use('/bff/live', bffRealtimeRoutes);
-
+app.use('/bff/public', bffPublicRoutes);
+ 
+// 3. Core API Routes
+app.use(analyticsRoutes);
 app.use(authRoutes);
 app.use(achievementRoute);
 app.use(userRoutes);
@@ -75,7 +108,10 @@ app.use(mediasRouter);
 app.use(wikiRoutes);
 app.use(collectionRoutes);
 app.use(adminFeedbackRouter);
+app.use(aiModelsRoutes);
 app.use(predictionHistoryRouter);
 app.use(adminPredictionHistoryRouter);
+
+// 4. Middleware xử lý lỗi cuối cùng
 app.use(errorHandlerMiddleware);
 export default app;

@@ -13,7 +13,8 @@ export const feedbackController = {
   async getFeedbacks(req: Request, res: Response) {
     // Dữ liệu đã được Zod parse và gắn vào req.query
     const { page, limit, status, search } = req.query as any;
-    const result = await feedbackService.getFeedbacks({ status, search }, { page, limit });
+    // SỬA LỖI: Đổi tên 'search' thành 'username' để khớp với interface QueryFilters trong service
+    const result = await feedbackService.getFeedbacks({ status, username: search }, { page, limit });
     res.status(200).json(result);
   },
 

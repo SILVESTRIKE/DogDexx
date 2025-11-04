@@ -1,0 +1,410 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Camera, CameraOff, Loader2, Wifi, WifiOff } from "lucide-react";
+import { useCollection } from "@/lib/collection-context"; // THAY ĐỔI
+import { apiClient } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
+import { Detection } from "@/lib/types";
+import { toast } from "sonner";
+
+export default function LiveDetectionPage() {
+  const router = useRouter();
+  const { t } = useI18n();
+  const { isAuthenticated, refetchUser } = useAuth();
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const streamRef = useRef<MediaStream | null>(null); // SỬ DỤNG REF THAY CHO STATE
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  const [detections, setDetections] = useState<Detection[]>([]);
+  const { refreshCollection, isCollected } = useCollection();
+  const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [isConnecting, setIsConnecting] = useState(false); // State mới để quản lý trạng thái kết nối
+
+  const initializeWebSocket = async () => {
+    try {
+      const ws = await apiClient.connectStreamPrediction(); // SỬ DỤNG HÀM MỚI
+
+      ws.onopen = () => {
+        console.log("[BFF-WS] WebSocket connected");
+        setIsConnected(true);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+
+          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "final_result"
+          if (data.type === "final_result") {
+            console.log(
+              "[BFF-WS] Captured final result, redirecting...",
+              data // Toàn bộ object data chính là payload của bạn
+            );
+            
+            // Dữ liệu bây giờ nằm trực tiếp trong 'data', không có 'payload' lồng vào nữa
+            if (data.predictionId) {
+              // Chuyển hướng trước, hàm stopCamera sẽ được gọi trong useEffect cleanup
+              router.push(`/results?id=${data.predictionId}`);
+            } else {
+              console.error("[BFF-WS] Final result missing predictionId:", data);
+              toast.error(t("live.redirectError") || "Failed to get prediction ID for redirect.");
+              router.push("/"); // Fallback to home
+            }
+          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "endOfStream" để dừng camera
+          } else if (data.type === "endOfStream") {
+            console.log("[BFF-WS] Stream ended by server:", data.message);
+            // Dừng camera và đóng kết nối một cách an toàn
+            stopCamera("Stream Completed");
+          } else if (data && Array.isArray(data.detections)) {
+            // Xử lý các frame có bounding box trung gian
+            setDetections(data.detections);
+            drawBoundingBoxes(data.detections);
+          } else if (data.error) {
+            const errorMessage = data.error || "An unknown error occurred.";
+            console.error("[BFF-WS] Error from server:", errorMessage);
+            toast.error(t("live.serverError") || "Server error", {
+              description: errorMessage,
+            });
+          }
+        } catch (error) {
+          console.error("[v0] Error parsing WebSocket message:", error);
+        }
+      };
+
+      ws.onerror = () => {
+        console.error(
+          "[BFF-WS] A WebSocket error occurred. See the 'onclose' event for details."
+        );
+        setIsConnected(false);
+      };
+
+      ws.onclose = (event) => {
+        console.log(
+          `[BFF-WS] WebSocket disconnected: Code=${event.code}, Reason=${event.reason}`
+        );
+        // Luôn dừng camera khi kết nối bị đóng, bất kể lý do gì
+        setIsConnected(false);
+        stopCamera("Connection Closed");
+        if (event.code !== 1000 && event.code !== 1005) { // 1000 = Normal Closure, 1005 = No Status Rcvd
+          toast.info(t("live.disconnectedError") || "Connection to server closed.", {
+            description: "Please check your internet connection and try again.",
+          });
+        }
+      };
+
+      wsRef.current = ws;
+    } catch (error) {
+      console.error("[v0] Error connecting WebSocket:", error);
+      toast.error(t("live.connectError") || "Failed to connect", {
+        description: "Could not connect to the detection service. Please try again later.",
+      });
+    }
+  };
+
+  const sendFrameToWebSocket = () => {
+    const video = videoRef.current;
+    const canvas = document.createElement("canvas");
+
+    if (
+      !video ||
+      !wsRef.current ||
+      wsRef.current.readyState !== WebSocket.OPEN
+    ) {
+      return;
+    }
+
+    // Prevent sending empty frames
+    if (video.videoWidth === 0 || video.videoHeight === 0) {
+      console.warn("[v0] Video frame has zero dimensions, skipping send.");
+      return;
+    }
+
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Giảm chất lượng (0.6) để tăng tốc độ truyền tải
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(dataUrl);
+    }
+  };
+
+  const startCamera = async () => {
+    if (isStreaming) stopCamera();
+
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        streamRef.current = mediaStream; // Cập nhật ref
+        setIsStreaming(true);
+        setDetections([]);
+
+        // Kết nối WebSocket
+        setIsConnecting(true);
+        initializeWebSocket().finally(() => setIsConnecting(false));
+
+        // Gửi khung hình mỗi 200ms (5 FPS)
+        frameIntervalRef.current = setInterval(() => {
+          sendFrameToWebSocket();
+        }, 200);
+      }
+    } catch (err) {
+      console.error("[v0] Error accessing camera:", err);
+      toast.error(t("live.cameraError") || "Cannot access camera", {
+        description: "Please check your browser permissions and try again.",
+      });
+    }
+  };
+
+  // FIX: Đảm bảo stopCamera dừng tất cả các track
+  const stopCamera = (reason: string = "Client initiated close") => {
+    // Luôn truy cập phiên bản mới nhất của stream qua ref
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop()); // ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT
+      streamRef.current = null;
+      setIsStreaming(false);
+      setDetections([]);
+
+      if (frameIntervalRef.current) {
+        clearInterval(frameIntervalRef.current);
+        frameIntervalRef.current = null;
+      }
+
+      if (wsRef.current) {
+        if (wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.close(1000, reason);
+        }
+        wsRef.current = null;
+      }
+
+      clearCanvas();
+
+      // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+      if (isAuthenticated) {
+        refetchUser();
+      }
+    }
+  };
+
+  // FIX: Hàm vẽ Bounding Box
+  const drawBoundingBoxes = (results: Detection[]) => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const canvasWidth = video.videoWidth || canvas.width;
+    const canvasHeight = video.videoHeight || canvas.height;
+
+    if (canvasWidth === 0 || canvasHeight === 0) return;
+
+    if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
+      canvas.width = canvasWidth;
+      canvas.height = canvasHeight;
+    }
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    results.forEach((result) => {
+      if (!result.boundingBox) return;
+
+      const boxX = result.boundingBox.x;
+      const boxY = result.boundingBox.y;
+      const boxWidth = result.boundingBox.width;
+      const boxHeight = result.boundingBox.height;
+
+      ctx.strokeStyle = "#3b82f6";
+      ctx.lineWidth = 3;
+      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+      const breedName = result.detectedBreed.replace(/-/g, " ");
+      const confidenceText = (result.confidence * 100).toFixed(0);
+      const labelText = `${breedName} (${confidenceText}%)`;
+      ctx.font = "bold 16px sans-serif";
+
+      const textMetrics = ctx.measureText(labelText);
+      const labelPadding = 8;
+      const labelHeight = 24;
+
+      const labelY = Math.max(boxY - labelHeight, 0);
+
+      ctx.fillStyle = "#3b82f6";
+      ctx.fillRect(
+        boxX,
+        labelY,
+        textMetrics.width + labelPadding * 2,
+        labelHeight
+      );
+
+      ctx.fillStyle = "#ffffff";
+      ctx.fillText(labelText, boxX + labelPadding, labelY + labelHeight - 6);
+    });
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCamera("Component Unmount");
+    };
+  }, []);
+
+  return (
+    <main className="min-h-screen bg-background">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">
+            {t("live.title") || "Live Detection"}
+          </h1>
+          <p className="text-muted-foreground">
+            {t("live.subtitle") ||
+              "Use camera for real-time dog breed detection"}
+          </p>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Video Feed */}
+          <div className="lg:col-span-2">
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    {t("nav.live") || "Camera"}
+                    {isStreaming &&
+                      (isConnected ? (
+                        <Badge variant="default" className="gap-1">
+                          <Wifi className="h-3 w-3" />
+                          {t('live.connected') || 'Connected'}
+                        </Badge>
+                      ) : isConnecting ? (
+                        <Badge variant="secondary" className="gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" />
+                          {t('live.connecting') || 'Connecting...'}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="gap-1">
+                          <WifiOff className="h-3 w-3" />
+                          Connecting...
+                        </Badge>
+                      ))}
+                  </span>
+                  {isStreaming ? (
+                    <Button
+                      onClick={() => stopCamera()}
+                      variant="destructive"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <CameraOff className="h-4 w-4" />
+                      {t("live.stopCamera") || "Stop Camera"}
+                    </Button>
+                  ) : (
+                    <Button onClick={startCamera} size="sm" className="gap-2">
+                      <Camera className="h-4 w-4" />
+                      {t("live.startCamera") || "Start Camera"}
+                    </Button>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                    width={1280}
+                    height={720}
+                  />
+                  <canvas
+                    ref={canvasRef}
+                    className="absolute inset-0 w-full h-full"
+                  />
+                  {!isStreaming && (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center">
+                        <Camera className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+                        <p className="text-muted-foreground">
+                          {t("live.clickToStart") ||
+                            'Click "Start Camera" to begin'}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <Card className="border-2 bg-muted/50">
+              <CardHeader>
+                <CardTitle className="text-base">
+                  {t("live.instructions") || "Instructions"}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm space-y-2">
+                <p>• {t("live.instruction1") || "Ensure good lighting"}</p>
+                <p>• {t("live.instruction2") || "Keep camera steady"}</p>
+                <p>• {t("live.instruction3") || "Center the dog in frame"}</p>
+                <p>• {t("live.instruction4") || "System will auto-detect"}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2 mt-6">
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  Real-time Detections ({detections.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2 max-h-64 overflow-y-auto">
+                {detections.length === 0 && isStreaming ? (
+                  <p className="text-muted-foreground">Looking for a dog...</p>
+                ) : (
+                  detections.map((det, index) => (
+                    <div
+                      key={index}
+                      className="flex justify-between items-center text-sm border-b pb-1 last:border-b-0"
+                    >
+                      <span className="font-medium capitalize">
+                        {det.detectedBreed.replace(/-/g, " ")}
+                      </span>
+                      <Badge variant="outline" className="text-xs">
+                        {(det.confidence * 100).toFixed(1)}%
+                      </Badge>
+                    </div>
+                  ))
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}

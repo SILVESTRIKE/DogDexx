@@ -5,7 +5,10 @@ export interface FeedbackDoc extends Document {
   user_id: Types.ObjectId;
   user_submitted_label?: string;
   notes?: string;
-  status: "pending_review" | "approved_for_training" | "rejected";
+  file_path: string;
+  admin_id: Types.ObjectId;
+  reason?: string;
+  status: "pending" | "approved" | "rejected";
   isDeleted: boolean; // <-- THÊM MỚI
   createdAt: Date;
   updatedAt: Date;
@@ -18,14 +21,14 @@ const feedbackSchema = new Schema<FeedbackDoc>(
       ref: "PredictionHistory",
       required: true,
       unique: true,
-    },
+    }, // Cho phép guest gửi feedback
     user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
     user_submitted_label: { type: String, trim: true },
     notes: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["pending_review", "approved_for_training", "rejected"],
-      default: "pending_review",
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
     },
     isDeleted: {
       type: Boolean,

@@ -1,5 +1,12 @@
 import mongoose from "mongoose";
-import app from "./app";
+import http from 'http';
+import expressWs from 'express-ws';
+import app from "./app"; 
+import { bffPredictionController } from './controllers/bff_prediction.controller';
+import { wsOptionalAuthMiddleware } from './middlewares/wsOptionalAuth.middleware';
+import { logger } from './utils/logger.util';
+import { startSchedulers } from "./utils/scheduler.util";
+import { startCleanupJob } from "./utils/cleanupafter30days.util";
 
 const startServer = async () => {
   if (!process.env.MONGO_URI) {
@@ -11,17 +18,32 @@ const startServer = async () => {
 
   try {
     await mongoose.connect(process.env.MONGO_URI);
-    console.log("Đã kết nối thành công tới MongoDB tại:", process.env.MONGO_URI);
+    logger.info("[MongoDB] Connected on " + process.env.MONGO_URI + "");
+
   } catch (error) {
-    console.error("Lỗi kết nối MongoDB:", error);
+    logger.error("[MongoDB] Connection error:", error);
     process.exit(1);
   }
   const PORT = process.env.PORT || 3000;
-  const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-  console.log(`AI Service URL: ${AI_SERVICE_URL}`);
-  app.listen(PORT, () => {
-    console.log(`AI Service đang chạy tại: ${process.env.AI_SERVICE_URL || 'http://localhost:8000'}`);
-    console.log(`HTTP Server đang chạy trên cổng: http://localhost:${PORT}`);
+
+  // THAY ĐỔI 3: Khởi tạo server và express-ws
+  const server = http.createServer(app);
+  // Khởi tạo express-ws và lấy lại đối tượng app đã được "vá"
+  const wsInstance = expressWs(app, server);
+  const { app: wsApp } = wsInstance;
+
+  // THAY ĐỔI 4: Định nghĩa các route WebSocket bằng app.ws
+  // Middleware (optionalAuthMiddleware) được thêm vào giống như route HTTP thông thường.
+  // Middleware Fingerprint() đã chạy toàn cục trong app.ts nên không cần thêm ở đây.
+  wsApp.ws('/bff/predict/stream', wsOptionalAuthMiddleware, bffPredictionController.handleStreamPrediction);
+  wsApp.ws('/bff/live', wsOptionalAuthMiddleware, bffPredictionController.handleStreamPrediction);
+
+  // Khởi động server (giữ nguyên)
+  server.listen(PORT, () => {
+    logger.info(`[Express] Connect on http://localhost:${PORT}`);
+    startSchedulers();
+    startCleanupJob();
+
   });
 };
 

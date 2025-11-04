@@ -803,82 +803,62 @@
         return;
       }
 
-      const WS_URL = `ws://${window.location.host}/api/predict/stream`;
-      realtimeSocket = new WebSocket(WS_URL);
+      // 1. Xây dựng URL WebSocket chính xác, bao gồm cả token nếu có
+      const token = api.getAccessToken();
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      // THAY ĐỔI: Kết nối đến proxy trực tiếp thay vì BFF để test
+      let wsUrl = `${wsProtocol}//${window.location.host}/api/predict/stream`;
+      if (token) {
+        wsUrl += `?token=${token}`;
+      }
+      
+      realtimeSocket = new WebSocket(wsUrl);
 
       realtimeSocket.onopen = () => {
-        realtimeResultEl.textContent = "Status: Connected. Searching for a high-confidence prediction...";
-        const FPS = 10;
+        realtimeResultEl.textContent = "Status: Connected. Sending frames...";
+        const FPS = 2; // Gửi 2 frame mỗi giây để test
         frameInterval = setInterval(() => sendFrame(), 1000 / FPS);
       };
 
       realtimeSocket.onmessage = (event) => {
-        const data = JSON.parse(event.data);
+        try {
+          const data = JSON.parse(event.data);
+          
+          // 2. Hiển thị toàn bộ payload nhận được
+          realtimeResultEl.textContent = `[${new Date().toLocaleTimeString()}] Received:\n${JSON.stringify(data, null, 2)}`;
 
-        if (data.status === "captured") {
-          captureOccurred = true;
-          console.log("Capture successful! Forwarding to backend for saving.", data);
+          // 3. Vẽ bounding box nếu có
+          if (data.detections && Array.isArray(data.detections)) {
+            drawBoxes(data.detections);
+          }
 
-          // 1. Thay thế kết quả trung gian bằng một thông báo tạm thời
-          realtimeResultEl.textContent = "Capture successful! Saving to history...";
-
-          // Vẫn hiển thị ảnh đã chụp
-          const img = document.createElement('img');
-          img.id = 'capturedImage';
-          img.src = `data:${data.media_type};base64,${data.processed_media_base64}`;
-          img.style.maxWidth = '100%';
-          img.style.marginTop = '10px';
-          realtimeContainer.after(img);
-
-          // 2. Gửi kết quả đến backend Node.js để lưu
-          (async () => {
-            try {
-              const saveResponse = await api.fetch('/api/predictions/stream-result', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  detections: data.detections,
-                  processed_media_base64: data.processed_media_base64,
-                  media_type: data.media_type
-                })
-              });
-              const savedResult = await saveResponse.json();
-              if (!saveResponse.ok) throw savedResult;
-
-              console.log("History saved successfully:", savedResult);
-
-              // 3. Chỉ hiển thị KẾT QUẢ CUỐI CÙNG, ghi đè lên thông báo tạm thời
-              realtimeResultEl.textContent = JSON.stringify(savedResult, null, 2);
-
-            } catch (err) {
-              console.error("Failed to save stream result:", err);
-              realtimeResultEl.textContent = `Error saving history: ${JSON.stringify(err, null, 2)}`;
-            }
-          })();
-        } else if (data.status === "ok") {
-          drawBoxes(data.detections);
+          // Nếu nhận được kết quả cuối cùng từ AI service, đánh dấu và dừng
+          if (data.status === 'redirect') {
+            captureOccurred = true;
+            stopRealtimePrediction(); // Tự động dừng khi có kết quả
+          }
+        } catch (e) {
+            realtimeResultEl.textContent = `Error parsing message: ${event.data}`;
         }
       };
 
       realtimeSocket.onclose = () => {
         console.log("WebSocket connection closed.");
-        // This event handles all cleanup, whether initiated by client or server.
         if (frameInterval) clearInterval(frameInterval);
         if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
         ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
 
-        // Only change text if a capture did NOT occur (e.g., user clicked "Stop")
         if (!captureOccurred) {
-          realtimeResultEl.textContent = "Status: Idle / Connection closed.";
+          realtimeResultEl.textContent = "Status: Connection closed.";
         }
 
         startBtn.disabled = false;
         stopBtn.disabled = true;
       };
 
-      realtimeSocket.onerror = (err) => {
-        realtimeResultEl.textContent = "Status: WebSocket Error.";
-        console.error("WebSocket Error:", err);
+      realtimeSocket.onerror = (event) => {
+        realtimeResultEl.textContent = "Status: WebSocket Error. Check console for details.";
+        console.error("WebSocket Error:", event);
       };
 
       startBtn.disabled = true;
@@ -886,31 +866,54 @@
     };
 
     const stopRealtimePrediction = () => {
-      // This function is now only for *initiating* the closure from the client side (e.g., stop button).
       if (realtimeSocket && realtimeSocket.readyState < 2) { // If OPEN or CONNECTING
         realtimeSocket.close();
       }
     };
 
     const sendFrame = () => {
-      if (realtimeSocket?.readyState === WebSocket.OPEN) {
-        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-        realtimeSocket.send(canvasEl.toDataURL("image/jpeg", 0.7));
+      if (realtimeSocket?.readyState === WebSocket.OPEN && videoEl.readyState >= 2) { // readyState 2 (HAVE_CURRENT_DATA) là đủ
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = videoEl.videoWidth;
+        tempCanvas.height = videoEl.videoHeight;
+        const tempCtx = tempCanvas.getContext('2d');
+        if (tempCtx) {
+            tempCtx.drawImage(videoEl, 0, 0, tempCanvas.width, tempCanvas.height);
+            realtimeSocket.send(tempCanvas.toDataURL("image/jpeg", 0.7)); // Giảm chất lượng một chút để gửi nhanh hơn
+        }
       }
     };
 
     const drawBoxes = (detections) => {
       ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
-      ctx.strokeStyle = "#00FF00";
+      ctx.strokeStyle = "#3b82f6"; // Blue color
       ctx.lineWidth = 3;
-      ctx.font = "18px sans-serif";
-      ctx.fillStyle = "#00FF00";
+      
       detections.forEach((det) => {
+        // THAY ĐỔI: AI service trả về 'box' chứ không phải 'boundingBox'
+        if (!det.box) return;
+        
+        // 4. Sử dụng đúng định dạng tọa độ từ AI service (pixel tuyệt đối)
         const [x1, y1, x2, y2] = det.box;
-        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
-        const label = `${det.class} (${(det.confidence * 100).toFixed(1)}%)`;
-        ctx.fillText(label, x1, y1 > 20 ? y1 - 10 : y1 + 20);
+        const boxX = x1;
+        const boxY = y1;
+        const boxWidth = x2 - x1;
+        const boxHeight = y2 - y1;
+
+        ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+        // THAY ĐỔI: AI service trả về 'class' và 'confidence'
+        const label = `${det.class.replace(/-/g, ' ')} (${(det.confidence * 100).toFixed(0)}%)`;
+        ctx.font = "bold 16px sans-serif";
+        const textMetrics = ctx.measureText(label);
+        const labelPadding = 8;
+        const labelHeight = 24;
+
+        ctx.fillStyle = "#3b82f6";
+        ctx.fillRect(boxX, boxY - labelHeight, textMetrics.width + labelPadding * 2, labelHeight);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(label, boxX + labelPadding, boxY - 6);
       });
     };
 

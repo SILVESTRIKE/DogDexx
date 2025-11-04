@@ -1,6 +1,12 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
-import { DirectoryDoc } from "./directory.model";
-export type UserRole = "user" | "premium" | "admin";
+
+export type UserRole = "user" | "de" | "admin";
+export type Plan = "free" | "starter" | "professional" | "enterprise";
+
+export interface UnlockedAchievement {
+  key: string;
+  unlockedAt: Date;
+}
 
 export type UserDoc = Document & {
   // TK
@@ -12,18 +18,26 @@ export type UserDoc = Document & {
   // Thông tin cá nhân
   firstName?: string;
   lastName?: string;
-  avatarUrl?: string;
+  avatarPath?: string;
 
-  //bao Mat
+  // bao Mat
   verify: boolean;
   isDeleted: boolean;
 
+  // Thư mục gốc của người dùng
   directory_id: Types.ObjectId;
 
-  //gioi han
-  photoUploadsThisWeek: number;
-  videoUploadsThisWeek: number;
+  // THAY ĐỔI: Cơ chế giới hạn mới dựa trên token
+  remainingTokens: number;
   lastUsageResetAt: Date;
+  plan: Plan;
+
+  // Stripe-related fields
+  stripeCustomerId?: string;
+  subscriptionId?: string;
+
+  // Thành tích đã mở khóa
+  achievements: UnlockedAchievement[];
 
   //timestamp
   createdAt: Date;
@@ -32,81 +46,77 @@ export type UserDoc = Document & {
 
 const userSchema = new Schema<UserDoc>(
   {
-    username: {
-      type: String,
-      required: true,
-      trim: true,
-    },
+    username: { type: String, required: true, unique: true, trim: true },
     email: {
       type: String,
       required: true,
       unique: true,
       trim: true,
-      lowercase: true
+      lowercase: true,
     },
-    password: {
-      type: String,
-      required: true,
-      select: false,
-    },
+    password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["user", "premium", "admin"],
+      enum: ["user", "de", "admin"],
       default: "user",
       required: true,
     },
-
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
-    avatarUrl: { type: String, trim: true },
-    
-    directory_id: {
-      type: Schema.Types.ObjectId,
-      ref: "Directory",
+    avatarPath: { type: String, trim: true },
+    verify: { type: Boolean, default: false },
+    isDeleted: { type: Boolean, default: false, select: false },
+
+    // THAY ĐỔI: Thêm trường token
+    remainingTokens: {
+      type: Number,
+      default: 10, // Mặc định 10 token "chào mừng" cho người dùng mới
+      min: [0, "Số token không thể là số âm."], // THÊM DÒNG NÀY
     },
-    verify: {
-      type: Boolean,
-      default: false,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-      select: false,
+    lastUsageResetAt: { type: Date, default: () => new Date() },
+    plan: {
+      type: String,
+      enum: ["free", "starter", "professional", "enterprise"],
+      default: "free",
     },
 
-    photoUploadsThisWeek: {
-      type: Number,
-      default: 0,
-    },
-    videoUploadsThisWeek: {
-      type: Number,
-      default: 0,
-    },
-    lastUsageResetAt: {
-      type: Date,
-      default: () => new Date(),
-    },
+    stripeCustomerId: { type: String, unique: true, sparse: true },
+    subscriptionId: { type: String, unique: true, sparse: true },
+    achievements: [
+      {
+        _id: false,
+        key: { type: String, required: true },
+        unlockedAt: { type: Date, required: true, default: Date.now },
+      },
+    ],
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "users",
     toJSON: {
+      virtuals: true,
       transform: (doc: any, ret: any) => {
         ret.id = ret._id.toString();
-        delete ret._id;
+        ret._id = ret._id.toString();
+
+        if (ret.directory_id) {
+          ret.directory_id = ret.directory_id.toString();
+        }
+
         delete ret.__v;
         delete ret.password;
         delete ret.isDeleted;
       },
     },
     toObject: {
-      virtuals: true,
       transform(doc: any, ret: any) {
         ret.id = ret._id.toString();
-        if (ret.directory_id instanceof Types.ObjectId) {
+        ret._id = ret._id.toString();
+
+        if (ret.directory_id) {
           ret.directory_id = ret.directory_id.toString();
         }
-        delete ret._id;
+
         delete ret.__v;
         delete ret.password;
         delete ret.isDeleted;

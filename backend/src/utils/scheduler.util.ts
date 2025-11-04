@@ -1,0 +1,27 @@
+import cron from "node-cron";
+import { usageService } from "../services/usage.service";
+import { AnalyticsAggregatorService } from "../services/analytics_summary.service";
+
+export const startSchedulers = () => {
+  // Chạy vào 00:00 Chủ Nhật hàng tuần
+  cron.schedule(
+    "0 0 * * 0",
+    () => {
+      usageService.resetAllUsersTokens();
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ho_Chi_Minh", 
+    }
+  );
+  cron.schedule(
+    "0 1 1 * *", // 01:00 ngày 1 hàng tháng
+    () => {
+      AnalyticsAggregatorService.runMonthlyRollup();
+    },
+    {
+      scheduled: true,
+      timezone: "Asia/Ho_Chi_Minh",
+    }
+  );
+};

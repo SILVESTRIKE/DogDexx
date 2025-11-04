@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { userService } from "./user.service";
+import { userService, EnrichedUser } from "./user.service";
 import { UserModel } from "../models/user.model";
 import { tokenService } from "./token.service";
 import { RefreshTokenModel } from "../models/refreshToken.model";
@@ -29,19 +29,28 @@ async function sendOtpEmail(
 }
 
 export const authService = {
-  async login(email: string, password: string) {
-    const user = await userService.getByEmail(email, true);
-    if (!user || !user.password) {
+  async login(
+    email: string,
+    password: string
+  ): Promise<{
+    user: EnrichedUser;
+    accessToken: string;
+    refreshToken: string;
+  }> {
+    // SỬA LỖI: Lấy trực tiếp Mongoose document để đảm bảo có trường password
+    const userDoc = await UserModel.findOne({ email, isDeleted: false }).select('+password');
+    if (!userDoc || !userDoc.password) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, userDoc.password);
+    // Sau khi so sánh, xóa trường password khỏi bộ nhớ để bảo mật
     if (!isMatch) {
       throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
     }
 
-    if (!user.verify) {
-      await this.resendVerificationOtp(user.email).catch((err) =>
+    if (!userDoc.verify) {
+      await this.resendVerificationOtp(userDoc.email).catch((err) =>
         console.log(err.message)
       );
       throw new BadRequestError(
@@ -49,9 +58,16 @@ export const authService = {
       );
     }
 
-    const tokens = await tokenService.createTokens(user);
-    const { password: _, ...userWithoutPassword } = user;
-    return { user: userWithoutPassword, ...tokens };
+    const tokens = await tokenService.createTokens(userDoc);
+
+    // LÀM GIÀU DỮ LIỆU: Sau khi xác thực thành công, gọi service để làm giàu thông tin user
+    const enrichedUser = await userService.getById(userDoc.id);
+
+    if (!enrichedUser) {
+      throw new NotAuthorizedError("Không thể lấy thông tin chi tiết người dùng sau khi đăng nhập.");
+    }
+
+    return { user: enrichedUser as EnrichedUser, ...tokens };
   },
 
   async logout(refreshToken: string): Promise<void> {

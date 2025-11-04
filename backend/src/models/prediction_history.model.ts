@@ -22,12 +22,14 @@ export type PredictionHistoryDoc = Document & {
   media: MediaDoc;
   mediaPath: string; // Đường dẫn của file media gốc
   modelUsed: string;
+  source: 'image_upload' | 'video_upload' | 'stream_capture';
   predictions: IYoloPrediction[];
   processedMediaPath?: string; // Đường dẫn của file media đã được xử lý (có vẽ bounding box)
   isCorrect: boolean | null;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
+  feedback?: Types.ObjectId; // Thêm trường ảo để populate
 };
 
 const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
@@ -46,6 +48,11 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     },
     mediaPath: { type: String, required: true },
     modelUsed: { type: String, required: true },
+    source: {
+      type: String,
+      enum: ['image_upload', 'video_upload', 'stream_capture'],
+      required: true,
+    },
     predictions: [
       {
         _id: false, // Không tạo _id cho các sub-document trong mảng
@@ -58,7 +65,7 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     ],
     processedMediaPath: { type: String, required: false },
     isCorrect: { type: Boolean, default: null },
-    isDeleted: { type: Boolean, default: false, index: true },
+    isDeleted: { type: Boolean, default: false, index: true, select: false },
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
@@ -82,6 +89,16 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     },
   }
 );
+
+// --- VIRTUALS ---
+// Thêm một trường ảo 'feedback' để tạo mối quan hệ hai chiều với FeedbackModel
+// Điều này cho phép chúng ta populate('feedback') trên một PredictionHistory.
+predictionHistorySchema.virtual('feedback', {
+  ref: 'Feedback', // Model để tham chiếu
+  localField: '_id', // Trường trên model này (PredictionHistory)
+  foreignField: 'prediction_id', // Trường trên model kia (Feedback)
+  justOne: true, // Chỉ tìm một bản ghi feedback duy nhất cho mỗi prediction
+});
 
 export const PredictionHistoryModel = mongoose.model<PredictionHistoryDoc>(
   "PredictionHistory",

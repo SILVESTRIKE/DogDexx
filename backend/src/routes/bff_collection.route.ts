@@ -5,6 +5,8 @@ import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 
 const router = Router();
 
+router.use(optionalAuthMiddleware);
+
 /**
  * @swagger
  * /bff/collection/pokedex:
@@ -81,31 +83,83 @@ router.post('/add/:slug', authMiddleware, addBreed);
  * @swagger
  * /bff/collection/achievements:
  *   get:
- *     summary: Lấy danh sách achievements của user
+ *     summary: (BFF) Lấy danh sách thành tích và tiến trình của người dùng
  *     tags: [BFF-Collection]
+ *     description: Lấy thông tin tổng quan về thành tích, thành tích tiếp theo, và danh sách chi tiết tất cả thành tích của người dùng đã đăng nhập.
+ *     security:
+ *       - bearerAuth: []
  *     parameters:
  *       - in: query
- *         name: userId
+ *         name: lang
  *         schema:
  *           type: string
- *         required: true
- *         description: ID của user
+ *           enum: [vi, en]
+ *         description: Ngôn ngữ trả về (mặc định sẽ tự phát hiện từ header `Accept-Language`).
  *     responses:
  *       200:
- *         description: Danh sách achievements
+ *         description: Lấy danh sách thành tích và tiến trình thành công.
  *         content:
  *           application/json:
  *             schema:
  *               type: object
  *               properties:
+ *                 stats:
+ *                   type: object
+ *                   properties:
+ *                     totalAchievements:
+ *                       type: integer
+ *                       example: 8
+ *                     totalBreeds:
+ *                       type: integer
+ *                       example: 120
+ *                     unlockedAchievements:
+ *                       type: integer
+ *                       example: 3
+ *                     totalCollected:
+ *                       type: integer
+ *                       example: 25
+ *                 nextAchievement:
+ *                   type: object
+ *                   nullable: true
+ *                   properties:
+ *                     name:
+ *                       type: string
+ *                       example: "Expert Trainer"
+ *                     requirement:
+ *                       type: integer
+ *                       example: 30
+ *                     progress:
+ *                       type: integer
+ *                       example: 25
  *                 achievements:
  *                   type: array
  *                   items:
  *                     type: object
- *       400:
- *         description: Thiếu userId
- *       500:
- *         description: Lỗi server
+ *                     properties:
+ *                       id:
+ *                         type: string
+ *                         example: "expert-trainer"
+ *                       title:
+ *                         type: string
+ *                         example: "Expert Trainer"
+ *                       description:
+ *                         type: string
+ *                         example: "Collect 30 different dog breeds"
+ *                       icon:
+ *                         type: string
+ *                         example: "🏆"
+ *                       requiredCount:
+ *                         type: integer
+ *                         example: 30
+ *                       unlocked:
+ *                         type: boolean
+ *                         example: false
+ *                       unlockedAt:
+ *                         type: string
+ *                         format: date-time
+ *                         nullable: true
+ *       401:
+ *         description: Chưa đăng nhập.
  */
 router.get('/achievements', authMiddleware, getAchievements);
 

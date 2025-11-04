@@ -34,7 +34,15 @@ const otp = z
 
 // --- AUTH SCHEMAS ---
 export const RegisterSchema = z.object({
-  body: z.object({ username, email, password }).strict(),
+  body: z
+    .object({
+      username,
+      email,
+      password,
+      firstName: z.string().optional(),
+      lastName: z.string().optional(),
+    })
+    .strict(),
 });
 export type RegisterType = z.infer<typeof RegisterSchema.shape.body>;
 
