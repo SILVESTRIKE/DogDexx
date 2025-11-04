@@ -162,3 +162,107 @@ Yêu cầu:
     return { reply: errorMessage };
   }
 }
+
+/**
+ * Lấy khuyến nghị chăm sóc sức khỏe từ Gemini AI dựa trên các vấn đề sức khỏe phổ biến.
+ * @param breed Tên giống chó
+ * @param healthIssues Mảng các vấn đề sức khỏe
+ * @param lang Ngôn ngữ
+ * @returns Một chuỗi chứa các khuyến nghị.
+ */
+export async function getHealthRecommendations(
+  breed: string,
+  healthIssues: string[],
+  lang: "vi" | "en" = "vi"
+): Promise<string> {
+  try {
+    const issuesString = healthIssues.join(", ");
+
+    const prompt = lang === "en"
+      ? `As a veterinary expert, provide practical and easy-to-understand care recommendations for a ${breed} dog owner. This breed may be prone to the following health issues: ${issuesString}.
+
+Focus on preventative care, early detection signs, and home care tips. Structure the advice clearly. For example, for skin issues like mange, recommend regular grooming, diet adjustments, and what symptoms to watch for.
+
+Your tone should be empathetic, professional, and reassuring. Start with a general encouraging sentence.`
+      : `Với vai trò là một chuyên gia thú y, hãy đưa ra các khuyến nghị chăm sóc thiết thực và dễ hiểu cho người nuôi chó giống ${breed}. Giống chó này có thể gặp các vấn đề sức khỏe sau: ${issuesString}.
+
+Hãy tập trung vào các biện pháp phòng ngừa, dấu hiệu phát hiện sớm và các mẹo chăm sóc tại nhà. Sắp xếp lời khuyên một cách rõ ràng. Ví dụ, đối với các vấn đề về da như ghẻ, rận, hãy đề xuất lịch trình chải chuốt thường xuyên, điều chỉnh chế độ ăn và những triệu chứng cần chú ý.
+
+Sử dụng giọng văn đồng cảm, chuyên nghiệp và trấn an. Bắt đầu bằng một câu động viên chung.`;
+
+    const result = await model.generateContent(prompt);
+    const reply = result.response.text();
+    return reply;
+  } catch (error) {
+    logger.error(`[Gemini Service Error] Failed to get health recommendations for breed '${breed}':`, error);
+    const errorMessage = lang === "en"
+      ? "I'm having a little trouble thinking of recommendations right now. Please try again in a moment."
+      : "Mình đang gặp chút sự cố khi lấy khuyến nghị, bạn thử lại sau nhé.";
+    return errorMessage;
+  }
+}
+
+/**
+ * Lấy danh sách sản phẩm đề xuất từ Gemini AI cho một giống chó cụ thể.
+ * @param breed Tên giống chó
+ * @param lang Ngôn ngữ
+ * @returns Một chuỗi JSON chứa danh sách sản phẩm.
+ */
+export async function getRecommendedProducts(
+  breed: string,
+  lang: "vi" | "en" = "vi"
+): Promise<string> {
+  try {
+    const prompt = lang === "en"
+      ? `Based on the characteristics of the ${breed} dog breed, recommend a list of about 10 essential products for a new owner.
+
+Include products from these categories:
+- Food (e.g., specific brand or type suitable for the breed)
+- Grooming tools (e.g., brush type for their coat)
+- Health supplements (e.g., for joints or skin)
+- Toys (e.g., for their energy level)
+- Training aids
+
+For each product, provide a "productName" and a brief "reason" why it's suitable for a ${breed}.
+
+Return the result ONLY as a single JSON array string. Do not include any other text or markdown formatting. The JSON should look like this:
+[
+  {"productName": "Example Product Name 1", "reason": "Reason why this is good for a ${breed}."},
+  {"productName": "Example Product Name 2", "reason": "Another reason for this product."}
+]`
+      : `Dựa trên đặc điểm của giống chó ${breed}, hãy đề xuất một danh sách khoảng 10 sản phẩm thiết yếu cho người mới nuôi.
+
+Bao gồm các sản phẩm từ những danh mục sau:
+- Thức ăn (ví dụ: nhãn hiệu hoặc loại cụ thể phù hợp với giống chó)
+- Dụng cụ chải chuốt (ví dụ: loại lược cho bộ lông của chúng)
+- Thực phẩm chức năng (ví dụ: cho khớp hoặc da)
+- Đồ chơi (ví dụ: phù hợp với mức năng lượng của chúng)
+- Dụng cụ huấn luyện
+
+Với mỗi sản phẩm, hãy cung cấp "productName" (tên sản phẩm) và "reason" (lý do ngắn gọn tại sao nó phù hợp với chó ${breed}).
+
+Chỉ trả về kết quả dưới dạng một chuỗi mảng JSON duy nhất. Không bao gồm bất kỳ văn bản hay định dạng markdown nào khác. JSON phải có dạng như sau:
+[
+  {"productName": "Tên sản phẩm ví dụ 1", "reason": "Lý do tại sao sản phẩm này tốt cho chó ${breed}."},
+  {"productName": "Tên sản phẩm ví dụ 2", "reason": "Một lý do khác cho sản phẩm này."}
+]`;
+
+    const result = await model.generateContent(prompt);
+    let reply = result.response.text();
+
+    // Đảm bảo chuỗi trả về là một JSON hợp lệ
+    const jsonStartIndex = reply.indexOf('[');
+    const jsonEndIndex = reply.lastIndexOf(']');
+    if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
+      reply = reply.substring(jsonStartIndex, jsonEndIndex + 1);
+    }
+
+    return reply;
+  } catch (error) {
+    logger.error(`[Gemini Service Error] Failed to get recommended products for breed '${breed}':`, error);
+    const errorMessage = lang === "en"
+      ? '[]' // Trả về mảng rỗng nếu có lỗi
+      : '[]';
+    return errorMessage;
+  }
+}
