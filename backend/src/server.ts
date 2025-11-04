@@ -1,4 +1,3 @@
-
 import mongoose from "mongoose";
 import http from 'http';
 import expressWs from 'express-ws';
@@ -20,11 +19,11 @@ const startServer = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI);
     logger.info("[MongoDB] Connected on " + process.env.MONGO_URI + "");
+
   } catch (error) {
     logger.error("[MongoDB] Connection error:", error);
     process.exit(1);
   }
-
   const PORT = process.env.PORT || 3000;
 
   // THAY ĐỔI 3: Khởi tạo server và express-ws
@@ -44,6 +43,7 @@ const startServer = async () => {
     logger.info(`[Express] Connect on http://localhost:${PORT}`);
     startSchedulers();
     startCleanupJob();
+
   });
 };
 
