@@ -1,5 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
+import { apiLimiter } from "./middlewares/rateLimiter.middleware";
 import "express-async-errors";
 import express from "express";
 import cors from "cors";
@@ -85,6 +86,8 @@ app.get("/test", (req, res) => {
 // 1. Middleware phục vụ file tĩnh
 const publicDirectory = path.join(__dirname, "..", "public");
 app.use('/public', express.static(publicDirectory));
+
+app.use(apiLimiter);
 
 // 2. BFF (Backend-for-Frontend) Routes
 app.use('/bff/user', bffUserRoutes);

@@ -2,9 +2,8 @@
 import mongoose from "mongoose";
 import http from 'http';
 import expressWs from 'express-ws';
-import app from "./app"; // Import Express app của bạn
+import app from "./app"; 
 import { bffPredictionController } from './controllers/bff_prediction.controller';
-// THAY ĐỔI: Import middleware xác thực dành riêng cho WebSocket
 import { wsOptionalAuthMiddleware } from './middlewares/wsOptionalAuth.middleware';
 import { logger } from './utils/logger.util';
 import { startSchedulers } from "./utils/scheduler.util";
