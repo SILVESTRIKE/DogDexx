@@ -104,7 +104,7 @@ export const feedbackService = {
             // Thống kê top người dùng gửi feedback
             userStats: [
               { $match: { isDeleted: false } },
-              { $group: { _id: "$user_id", total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ["$status", "approved_for_training"] }, 1, 0] } }, rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } } } },
+              { $group: { _id: "$user_id", total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] } }, rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } } } },
               { $sort: { total: -1 } },
               { $limit: 10 },
               { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
@@ -118,8 +118,8 @@ export const feedbackService = {
   
     // Định dạng lại overallStats
     const stats = {
-      pending_review: 0,
-      approved_for_training: 0,
+      pending: 0,
+      approved: 0,
       rejected: 0,
     };
     (statsResult[0]?.overallStats || []).forEach((stat: { _id: keyof typeof stats, count: number }) => {
@@ -166,11 +166,11 @@ export const feedbackService = {
   async approveFeedback(id: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id); // Reuse getById to get populated data
 
-    if (feedback.status !== 'pending_review') {
+    if (feedback.status !== 'pending') {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
-    feedback.status = 'approved_for_training';
+    feedback.status = 'approved';
     await feedback.save();
 
     // Gửi email cảm ơn nếu có thông tin người dùng
@@ -191,7 +191,7 @@ export const feedbackService = {
   async rejectFeedback(id: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id);
 
-    if (feedback.status !== 'pending_review') {
+    if (feedback.status !== 'pending') {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
