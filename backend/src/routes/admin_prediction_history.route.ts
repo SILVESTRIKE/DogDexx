@@ -11,9 +11,6 @@ import {
 
 const router = Router();
 
-// Tất cả các route trong file này đều yêu cầu đăng nhập và có vai trò ADMIN
-router.use(authMiddleware, checkAllowedRoles(['admin']));
-
 /**
  * @swagger
  * /api/admin/histories:
@@ -64,6 +61,8 @@ router.use(authMiddleware, checkAllowedRoles(['admin']));
  */
 router.get(
   '/api/admin/histories',
+  authMiddleware,
+  checkAllowedRoles(['admin']),
   validateData(GetAdminHistoriesQuerySchema, 'query'),
   predictionHistoryController.getAllHistory
 );
@@ -118,6 +117,8 @@ router.get(
  */
 router.get(
   '/api/admin/histories/:id',
+  authMiddleware,
+  checkAllowedRoles(['admin']),
   validateData(HistoryIdParamsSchema, 'params'),
   predictionHistoryController.getHistoryById
 );
@@ -182,6 +183,8 @@ router.get(
  */
 router.delete(
   '/api/admin/histories/:id',
+  authMiddleware,
+  checkAllowedRoles(['admin']),
   validateData(HistoryIdParamsSchema, 'params'),
   validateData(DeleteHistoryQuerySchema, 'query'),
   predictionHistoryController.deleteHistory

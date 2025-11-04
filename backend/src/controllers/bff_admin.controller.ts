@@ -1,153 +1,348 @@
-// BFF Admin Controller
-import { Request, Response } from 'express';
-import { configService } from '../services/config.service';
-import { UserModel } from '../models/user.model';
-import { PredictionHistoryModel } from '../models/prediction_history.model';
-import { FeedbackModel } from '../models/feedback.model';
+import { Request, Response, NextFunction } from 'express';
+import { AdminService } from '../services/admin.service';
 import { feedbackService } from '../services/feedback.service';
 import { userService } from '../services/user.service';
-import { UserCollectionModel, UserCollectionDoc } from '../models/user_collection.model';
+import { AppError, NotFoundError} from '../errors';
+import { predictionHistoryService } from '../services/prediction_history.service';
+import { PlanService } from '../services/plan.service';
+import { transformMediaURLs } from '../utils/media.util';
+// THÊM: Import subscriptionService
+import { subscriptionService } from '../services/subscription.service';
+import { ConfigService } from '../services/config.service';
+import { AIModelService } from '../services/ai_models.service';
+import { CreateAIModelSchema } from '../types/zod/ai_model.zod';
+// THÊM: Import wikiService và các kiểu dữ liệu cần thiết
+import { wikiService } from '../services/dogs_wiki.service'; // Sửa tên file zod
+import { CreateBreedSchema, UpdateBreedSchema } from '../types/zod/dog_wiki.zod';
 
-export const getDashboard = async (req: Request, res: Response) => {
-  const sevenDaysAgo = new Date();
-  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+/**
+ * Hàm transform để định dạng lại dữ liệu feedback cho admin.
+ */
+function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
+  const prediction = feedbackDoc.prediction_id;
+  const user = feedbackDoc.user_id;
 
-  const [
-    totalUsers,
-    totalPredictions,
-    totalFeedback,
-    correctFeedbackCount,
-    weeklyActivity,
-    topBreeds,
-  ] = await Promise.all([
-    UserModel.countDocuments({ isDeleted: false }),
-    PredictionHistoryModel.countDocuments({ isDeleted: false }),
-    FeedbackModel.countDocuments({ isDeleted: false }),
-    FeedbackModel.countDocuments({ isCorrect: true, isDeleted: false }),
-    PredictionHistoryModel.aggregate([
-      { $match: { createdAt: { $gte: sevenDaysAgo } } },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          predictions: { $sum: 1 }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]),
-    PredictionHistoryModel.aggregate([
-      { $unwind: "$predictions" },
-      { $group: { _id: "$predictions.class", count: { $sum: 1 } } },
-      { $sort: { count: -1 } },
-      { $limit: 5 },
-      { $project: { breed: "$_id", count: 1, _id: 0 } }
-    ])
-  ]);
+  const transformedPrediction = prediction ? transformMediaURLs(req, prediction.toObject()) : null;
 
-  const accuracy = totalFeedback > 0 ? (correctFeedbackCount / totalFeedback) * 100 : 0;
-
-  res.status(200).json({
-    stats: {
-      totalUsers,
-      totalPredictions,
-      totalFeedback,
-      accuracy: parseFloat(accuracy.toFixed(2)),
-      // todayVisits and todayPredictions would require a more complex analytics service
-      todayVisits: 0,
-      todayPredictions: 0,
+  return {
+    id: feedbackDoc._id,
+    predictionId: prediction?._id,
+    feedbackTimestamp: feedbackDoc.createdAt,
+    predictionTimestamp: prediction?.createdAt,
+    user: user ? { name: user.username, email: user.email } : { name: 'Guest', email: null },
+    feedbackContent: {
+      isCorrect: feedbackDoc.is_correct,
+      userSubmittedLabel: feedbackDoc.user_submitted_label,
+      notes: feedbackDoc.notes,
     },
-    charts: {
-      weeklyActivity: weeklyActivity.map((item: any) => ({ day: item._id, predictions: item.predictions, visits: 0 })),
-      topBreeds,
-      accuracyTrend: [], // Requires historical accuracy data
-    }
+    aiPrediction: prediction?.predictions?.[0] 
+      ? { class: prediction.predictions[0].class, confidence: prediction.predictions[0].confidence } 
+      : null,
+    originalMediaUrl: transformedPrediction?.mediaUrl,
+    processedMediaUrl: transformedPrediction?.processedMediaUrl,
+    status: feedbackDoc.status,
+  };
+}
+
+function transformHistoryForAdmin(req: Request, historyDoc: any) {
+  const user = historyDoc.user;
+  const transformedHistory = transformMediaURLs(req, historyDoc.toObject ? historyDoc.toObject() : historyDoc);
+
+  return {
+    id: transformedHistory.id,
+    user: user ? { id: user._id, name: user.username, email: user.email } : { id: null, name: 'Guest', email: null },
+    media: {
+      type: transformedHistory.media.type,
+      url: transformedHistory.media.mediaUrl,
+      name: transformedHistory.media.name,
+    },
+    processedMediaUrl: transformedHistory.processedMediaUrl,
+    predictions: (transformedHistory.predictions || []).map((p: any) => ({
+      class: p.class,
+      confidence: p.confidence,
+    })),
+    createdAt: transformedHistory.createdAt,
+    source: transformedHistory.source,
+    feedback: transformedHistory.feedback ? { id: transformedHistory.feedback.toString() } : null,
+  };
+}
+
+function transformMediaForAdmin(req: Request, mediaDoc: any) {
+  const transformedMedia = transformMediaURLs(req, mediaDoc.toObject ? mediaDoc.toObject() : mediaDoc);
+  return {
+    id: transformedMedia._id,
+    name: transformedMedia.mediaUrl.split('/').pop(),
+    type: transformedMedia.type.startsWith('image') ? 'image' : 'video',
+    url: transformedMedia.mediaUrl,
+    size: transformedMedia.size,
+    createdAt: transformedMedia.createdAt,
+  };
+}
+
+const configService = new ConfigService();
+const adminService = new AdminService();
+
+export const getDashboard = async (req: Request, res: Response, next: NextFunction) => {
+  const dashboardData = await adminService.getDashboardData();
+  res.status(200).json(dashboardData);
+};
+
+export const getFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  const { page = 1, limit = 10, status, search, startDate, endDate } = req.query as any;
+  const pagination = { page: Number(page), limit: Number(limit) };
+  const filters = { status, username: search, startDate, endDate };
+  const feedbackData = await feedbackService.getAdminFeedbackPageData(filters, pagination);
+  const transformedFeedbacks = feedbackData.feedbacks.data.map(fb => transformFeedbackForAdmin(req, fb));
+  res.status(200).json({
+    ...feedbackData,
+    feedbacks: { ...feedbackData.feedbacks, data: transformedFeedbacks },
   });
 };
 
-export const getFeedback = async (req: Request, res: Response) => {
-  // The core feedback service already populates the necessary data.
-  // We can enrich it further if needed, but for now, it's sufficient.
-  const { getFeedbacks } = require('./feedback.controller');
-  return getFeedbacks(req, res);
+export const approveFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const updatedFeedback = await feedbackService.approveFeedback(id);
+  res.status(200).json({ message: 'Feedback đã được duyệt thành công.', data: transformFeedbackForAdmin(req, updatedFeedback) });
 };
 
-export const getUsers = async (req: Request, res: Response) => {
-  const options = {
+export const rejectFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const updatedFeedback = await feedbackService.rejectFeedback(id);
+  res.status(200).json({ message: 'Feedback đã bị từ chối.', data: transformFeedbackForAdmin(req, updatedFeedback) });
+};
+
+export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
+  const usersData = await adminService.getEnrichedUsers({
     page: parseInt(req.query.page as string, 10) || 1,
     limit: parseInt(req.query.limit as string, 10) || 10,
     search: req.query.search as string | undefined,
-  };
-  const usersResult = await userService.getAll(options);
+  });
+  res.status(200).json(usersData);
+};
 
-  // Use aggregation for better performance
-  const collectionCounts = await UserCollectionModel.aggregate([
-    { $group: { _id: "$user_id", count: { $sum: 1 } } }
-  ]);
-  const predictionCounts = await PredictionHistoryModel.aggregate([
-    { $match: { user: { $ne: null } } },
-    { $group: { _id: "$user", count: { $sum: 1 } } }
-  ]);
-
-  const collectionMap = new Map(collectionCounts.map(item => [item._id.toString(), item.count]));
-  const predictionMap = new Map(predictionCounts.map(item => [item._id.toString(), item.count]));
-
-  const enrichedUsers = usersResult.data.map(user => ({
-    id: user._id,
-    name: user.username,
-    email: user.email,
-    isAdmin: user.role === 'admin',
-    createdAt: user.createdAt,
-    stats: {
-      predictions: predictionMap.get(user._id.toString()) || 0,
-      collected: collectionMap.get(user._id.toString()) || 0,
-      accuracy: 0, // Calculating per-user accuracy is expensive, can be a separate call
-    },
-    status: (user as any).isVerified ? 'active' : 'pending_verification',
-  }));
-
+export const browseMedia = async (req: Request, res: Response, next: NextFunction) => {
+  const path = req.query.path as string || "";
+  const result = await adminService.browseMedia(path);
   res.status(200).json({
-    pagination: {
-      total: usersResult.total, page: usersResult.page, limit: usersResult.limit, totalPages: usersResult.totalPages
-    },
-    users: enrichedUsers,
+    directories: result.directories,
+    media: result.media.map(m => transformMediaForAdmin(req, m)),
   });
 };
 
-export const getModelConfig = async (req: Request, res: Response) => {
-  const config = await configService.getModelConfig();
+export const deleteMedia = async (req: Request, res: Response, next: NextFunction) => {
+  const result = await adminService.deleteMedia(req.params.id);
+  res.status(200).json(result);
+};
+
+export const createUser = async (req: Request, res: Response, next: NextFunction) => {
+  const { username, email, password, role, verify } = req.body;
+  const verifyStatus = verify === 'active';
+  const newUser = await userService.createUserByAdmin({ username, email, password, role, verify: verifyStatus });
+  res.status(201).json({
+      success: true,
+      message: 'User created successfully',
+      data: newUser,
+  });
+};
+
+export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const { username, email, role, status } = req.body;
+  const updateData: any = { username, email, role };
+  if (status !== undefined) {
+      updateData.verify = status === 'active';
+  }
+  const updatedUser = await userService.updateUserById(id, updateData);
+  res.status(200).json({
+      success: true,
+      message: 'User updated successfully',
+      data: updatedUser,
+  });
+};
+
+export const getUsageStats = async (req: Request, res: Response, next: NextFunction) => {
+  const usageData = await adminService.getUsageStats();
+  res.status(200).json(usageData);
+};
+
+export const getModelConfig = async (req: Request, res: Response, next: NextFunction) => {
+  const config = await configService.getAiConfig();
   res.status(200).json({
     message: 'Lấy cấu hình model thành công.',
     data: config,
   });
 };
 
-export const updateModelConfig = async (req: Request, res: Response) => {
-
-  const updatedConfig = await configService.updateModelConfig(req.body);  res.status(200).json({ message: 'Cập nhật cấu hình model thành công.', data: updatedConfig });
+export const getHistories = async (req: Request, res: Response, next: NextFunction) => {
+  const { page = 1, limit = 10, search } = req.query as any;
+  const result = await predictionHistoryService.getAllHistory({
+    page: Number(page),
+    limit: Number(limit),
+    search,
+  });
+  const transformedHistories = result.histories.map(h => transformHistoryForAdmin(req, h));
+  res.status(200).json({
+    data: transformedHistories,
+    pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages },
+  });
 };
 
-export const getAlerts = async (req: Request, res: Response) => {
-  // Find feedbacks for new breeds that have been submitted more than N times
-  const NEW_BREED_THRESHOLD = 3;
+export const browseHistories = async (req: Request, res: Response, next: NextFunction) => {
+  const path = req.query.path as string;
+  const result = await adminService.browseDirectory(path || "", req.query);
+  const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
+  res.status(200).json({
+    directories: result.directories,
+    histories: transformedHistories,
+  });
+};
 
-  const potentialNewBreeds = await FeedbackModel.aggregate([
-    { $match: { isCorrect: false, user_submitted_label: { $nin: [null, ""] } } },
-    { $group: { _id: "$user_submitted_label", count: { $sum: 1 }, lastReported: { $max: "$createdAt" } } },
-    { $match: { count: { $gte: NEW_BREED_THRESHOLD } } },
-    { $sort: { count: -1 } }
-  ]);
+export const updateModelConfig = async (req: Request, res: Response, next: NextFunction) => {
+  const { modelId, ...otherConfigData } = req.body;
+  const promises = [];
+  if (modelId) {
+    promises.push(AIModelService.activateModel(modelId));
+  }
+  if (Object.keys(otherConfigData).length > 0) {
+    promises.push(configService.updateAiConfig(otherConfigData));
+  }
+  await Promise.all(promises);
+  const reloadResult = await configService.reloadAiService();
+  res.status(200).json({
+    message: 'AI configuration updated and reload triggered successfully.',
+    details: reloadResult.details,
+  });
+};
 
-  const alerts = potentialNewBreeds.map((item: any) => ({
-    id: item._id, // Using breed name as ID for simplicity
-    type: 'new_breed',
-    severity: 'high',
-    message: `Breed '${item._id}' has ${item.count} incorrect reports`,
-    data: {
-      breedName: item._id,
-      incorrectCount: item.count,
-      threshold: NEW_BREED_THRESHOLD,
-    },
-    createdAt: item.lastReported,
-  }));
-
+export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
+  const alerts = await adminService.getSystemAlerts();
   res.status(200).json({ alerts });
+};
+
+export const uploadModel = async (req: Request, res: Response, next: NextFunction) => {
+  const files = req.files;
+  if (!files || typeof files !== 'object' || !('modelFile' in files) || !Array.isArray(files.modelFile)) {
+    throw new AppError("Model file is required.");
+  }
+  const data = CreateAIModelSchema.parse(req.body);
+  const newModel = await AIModelService.uploadAndCreateModel(
+    files as { modelFile: Express.Multer.File[] },
+    data,
+    (req as any).user.id
+  );
+  res.status(201).json({ message: "Model uploaded and created successfully.", data: newModel });
+};
+
+export const getPlans = async (req: Request, res: Response, next: NextFunction) => {
+  const plansData = await PlanService.getAllPaginated({
+      page: parseInt(req.query.page as string, 10) || 1,
+      limit: parseInt(req.query.limit as string, 10) || 10,
+      search: req.query.search as string | undefined,
+  });
+  res.status(200).json(plansData);
+};
+
+// THÊM: Hàm controller để tạo Plan mới
+export const createPlan = async (req: Request, res: Response, next: NextFunction) => {
+  // Trong một ứng dụng thực tế, bạn nên có một lớp validation (ví dụ: Zod) ở đây
+  const newPlan = await PlanService.create(req.body);
+  res.status(201).json({ message: "Gói cước đã được tạo thành công.", data: newPlan });
+};
+
+// THÊM: Hàm controller để cập nhật Plan
+export const updatePlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  const updatedPlan = await PlanService.update(id, req.body);
+  if (!updatedPlan) {
+    // Vẫn cần kiểm tra này để trả về 404 một cách tường minh
+    throw new NotFoundError("Không tìm thấy gói cước để cập nhật.");
+  }
+  res.status(200).json({ message: "Gói cước đã được cập nhật thành công.", data: updatedPlan });
+};
+
+// THÊM: Hàm controller để xóa Plan
+export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
+  const { id } = req.params;
+  // Lưu ý: PlanService nên xử lý soft delete (đặt isDeleted = true) thay vì xóa cứng
+  await PlanService.softDelete(id);
+  res.status(200).json({ message: "Yêu cầu xóa gói cước đã được xử lý." });
+};
+
+// --- THÊM MỚI: CÁC CONTROLLER CHO WIKI ---
+
+export const getWikiBreeds = async (req: Request, res: Response, next: NextFunction) => {
+    const { page = 1, limit = 10, search, lang = 'vi' } = req.query as any;
+    const result = await wikiService.getAllBreeds({
+        page: Number(page),
+        limit: Number(limit),
+        search,
+        lang
+    });
+    res.status(200).json(result);
+};
+
+export const createWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const breedData = CreateBreedSchema.parse(req.body);
+    const { lang = 'vi' } = req.query as any;
+    const newBreed = await wikiService.createBreed(breedData, lang);
+    res.status(201).json({ message: "Giống chó đã được thêm vào Wiki.", data: newBreed });
+};
+
+export const updateWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const { slug } = req.params;
+    const { lang = 'vi' } = req.query as any;
+    const breedData = UpdateBreedSchema.parse(req.body);
+    const updatedBreed = await wikiService.updateBreed(slug, breedData, lang);
+    res.status(200).json({ message: "Thông tin giống chó đã được cập nhật.", data: updatedBreed });
+};
+
+export const deleteWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+    const { slug } = req.params;
+    const { lang = 'vi' } = req.query as any;
+    await wikiService.softDeleteBreed(slug, lang);
+    res.status(200).json({ message: "Giống chó đã được xóa (mềm)." });
+};
+
+/**
+ * [Admin] Lấy danh sách các GIAO DỊCH (Transactions).
+ */
+export const getTransactions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      status, 
+      planId 
+    } = req.query as any;
+
+    const options = { page: Number(page), limit: Number(limit), search, status, planId };
+
+    const transactionsData = await subscriptionService.getAllTransactions(options);
+    res.status(200).json(transactionsData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * [Admin] Lấy danh sách các ĐĂNG KÝ (Subscriptions).
+ */
+export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      search, 
+      status, 
+      planId 
+    } = req.query as any;
+
+    const options = { page: Number(page), limit: Number(limit), search, status, planId };
+
+    const subscriptionsData = await subscriptionService.getAllSubscriptions(options);
+    res.status(200).json(subscriptionsData);
+  } catch (error) {
+    next(error);
+  }
 };

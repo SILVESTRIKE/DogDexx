@@ -14,11 +14,10 @@ import {
 } from "../types/zod/medias.zod";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { deleteMedia as adminDeleteMedia } from '../controllers/bff_admin.controller';
+import { bffPredictionController } from '../controllers/bff_prediction.controller';
 
 const router = Router();
-
-// Tất cả các route media và directory đều yêu cầu đăng nhập
-router.use(authMiddleware);
 
 // =================================================================
 // I. MEDIA UPLOAD ROUTES
@@ -65,6 +64,7 @@ router.use(authMiddleware);
  */
 router.post(
   "/api/medias/upload/single",
+  authMiddleware,
   uploadSingle,
   MediaController.uploadSingle
 );
@@ -114,6 +114,7 @@ router.post(
  */
 router.post(
   "/api/medias/upload/multiple",
+  authMiddleware,
   uploadMultiple,
   MediaController.uploadMultiple
 );
@@ -163,6 +164,7 @@ router.post(
  */
 router.post(
   "/api/medias/upload-url",
+  authMiddleware,
   uploadSingle,
   MediaController.uploadAndGetUrl
 );
@@ -322,6 +324,7 @@ router.get(
  */
 router.patch(
   "/api/medias/:id",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   validateData(UpdateMediaInfoZodSchema, "body"),
   MediaController.updateMediaInfo
@@ -375,6 +378,7 @@ router.patch(
  */
 router.delete(
   "/api/medias/:id",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   MediaController.deleteMedia
 );
@@ -420,6 +424,7 @@ router.delete(
  */
 router.post(
   "/api/directories",
+  authMiddleware,
   validateData(CreateDirectoryZodSchema, "body"),
   DirectoryController.create
 );
@@ -457,6 +462,7 @@ router.post(
  */
 router.get(
   "/api/directories",
+  authMiddleware,
   DirectoryController.getAll
 );
 
@@ -500,6 +506,7 @@ router.get(
  */
 router.get(
   "/api/directories/content",
+  authMiddleware,
   DirectoryController.getContent
 );
 
@@ -556,6 +563,7 @@ router.get(
  */
 router.get(
   "/api/directories/content/:id",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   DirectoryController.getContent
 );
@@ -606,6 +614,7 @@ router.get(
  */
 router.get(
   "/api/directories/:id/breadcrumb",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   DirectoryController.getBreadcrumb
 );
@@ -658,6 +667,7 @@ router.get(
  */
 router.delete(
   "/api/directories/:id",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   DirectoryController.softDelete
 );
@@ -712,6 +722,7 @@ router.delete(
  */
 router.patch(
   "/api/directories/:id/rename",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   validateData(RenameDirectoryZodSchema, "body"),
   DirectoryController.rename
@@ -767,6 +778,7 @@ router.patch(
  */
 router.patch(
   "/api/directories/:id/move",
+  authMiddleware,
   validateData(GetByIdParamsSchema, "params"),
   validateData(MoveDirectoryZodSchema, "body"),
   DirectoryController.move
@@ -815,6 +827,7 @@ router.patch(
  */
 router.get(
   "/api/admin/media-folders",
+  authMiddleware,
   MediaController.getFileTypeFolders
 );
 
@@ -864,6 +877,7 @@ router.get(
  */
 router.get(
   "/api/admin/media-folders/:fileType",
+  authMiddleware,
   MediaController.getYearFolders
 );
 
@@ -919,6 +933,7 @@ router.get(
  */
 router.get(
   "/api/admin/media-folders/:fileType/:year",
+  authMiddleware,
   MediaController.getMonthFolders
 );
 
@@ -980,7 +995,27 @@ router.get(
  */
 router.get(
   "/api/admin/media-folders/:fileType/:year/:month",
+  authMiddleware,
   MediaController.getMediaByPhysicalPath
+);
+
+// Route mới cho admin xóa media
+router.delete(
+  "/bff/admin/media/:id",
+  authMiddleware,
+  (req, res, next) => { // Middleware kiểm tra quyền admin
+    if (req.user?.role !== 'admin') return res.status(403).json({ message: 'Không có quyền truy cập' });
+    next();
+  },
+  adminDeleteMedia
+);
+
+// Route for user to delete their own prediction history
+router.delete(
+  "/bff/predict/history/:id",
+  authMiddleware,
+  validateData(GetByIdParamsSchema, "params"),
+  bffPredictionController.deletePredictionHistory
 );
 
 export { router as mediasRouter };

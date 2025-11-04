@@ -2,10 +2,8 @@ import { Request, Response, NextFunction} from "express";
 import { MediaService, FindMediasOptions } from "../services/media.service";
 import { BadRequestError, ConflictError } from "../errors";
 import { DirectoryService } from "../services/directory.service";
-import { MediaDoc } from "../models/medias.model";
 import { transformMediaURLs } from "../utils/media.util";
-import fs from "fs";
-import path from "path";
+
 
 export class MediaController {
   // Xử lý upload 1 file

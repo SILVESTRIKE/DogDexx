@@ -10,9 +10,6 @@ import {
 
 const router = Router();
 
-// Tất cả các route trong file này đều yêu cầu đăng nhập
-router.use(authMiddleware);
-
 /**
  * @swagger
  * /api/histories:
@@ -86,6 +83,7 @@ router.use(authMiddleware);
  */
 router.get(
   "/api/histories",
+  authMiddleware,
   validateData(GetHistoriesQuerySchema, "query"),
   predictionHistoryController.getHistoryForCurrentUser
 );
@@ -134,6 +132,7 @@ router.get(
  */
 router.get(
   '/api/histories/:id',
+  authMiddleware,
   validateData(HistoryIdParamsSchema, 'params'),
   predictionHistoryController.getHistoryByIdForCurrentUser
 );
@@ -211,6 +210,7 @@ router.get(
  */
 router.delete(
   "/api/histories/:id",
+  authMiddleware,
   validateData(HistoryIdParamsSchema, "params"),
   predictionHistoryController.deleteHistoryForCurrentUser
 );

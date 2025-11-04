@@ -1,8 +1,15 @@
 import { Router } from "express";
 import { bffPredictionController } from "../controllers/bff_prediction.controller";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
-import { createProxyMiddleware } from "http-proxy-middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
+import { authMiddleware } from "../middlewares/auth.middleware";
+// THAY ĐỔI: Import các middleware token mới
+import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware"; // Giữ lại để kiểm tra
+import { tokenConfig } from "../config/token.config";
+// XÓA: Các import middleware cũ không còn cần thiết
+// import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
+// import { setMediaType } from "../middlewares/setMediaType.middleware";
+// import { checkStreamUsageLimit } from "../middlewares/wsUsageLimiter.middleware";
 
 const router = Router();
 
@@ -10,9 +17,11 @@ const router = Router();
  * @swagger
  * /bff/predict/image:
  *   post:
- *     summary: (BFF) Dự đoán từ một ảnh
+ *     summary: "(BFF) Dự đoán từ một ảnh (Chi phí: 2 token)"
  *     tags: [BFF-Prediction]
- *     description: Tải lên một ảnh, hệ thống sẽ dự đoán, cập nhật collection (nếu đăng nhập), và trả về kết quả dự đoán kèm thông tin chi tiết các giống chó.
+ *     description: |
+ *       Tải lên một file ảnh để nhận diện giống chó. 
+ *       Endpoint này sử dụng `optionalAuthMiddleware` nên có thể được gọi bởi cả người dùng đã đăng nhập và khách.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -25,19 +34,40 @@ const router = Router();
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: File ảnh cần dự đoán.
  *     responses:
  *       200:
- *         description: Dự đoán thành công, trả về kết quả tổng hợp.
+ *         description: Dự đoán thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BffPredictionResponse'
+ *       400:
+ *         description: Bad Request - Không có file nào được tải lên.
+ *       402:
+ *         description: Payment Required - Người dùng đã đăng nhập nhưng không đủ token.
+ *       429:
+ *         description: Too Many Requests - Người dùng thử (guest) đã hết token.
+ *       500:
+ *         description: Lỗi máy chủ nội bộ.
+ *
  */
-router.post("/image", optionalAuthMiddleware, uploadSingle, bffPredictionController.predictImage);
-
+router.post(
+    "/image", 
+    optionalAuthMiddleware,
+    uploadSingle,
+    checkTokenLimit(tokenConfig.costs.imagePrediction, 'single'),
+    bffPredictionController.predictImage
+);
 /**
  * @swagger
  * /bff/predict/video:
  *   post:
- *     summary: (BFF) Dự đoán từ một video
+ *     summary: "(BFF) Dự đoán từ một video (Chi phí: 10 token)"
  *     tags: [BFF-Prediction]
- *     description: Tải lên một video, hệ thống sẽ dự đoán, cập nhật collection (nếu đăng nhập), và trả về kết quả dự đoán kèm thông tin chi tiết các giống chó.
+ *     description: |
+ *       Tải lên một file video để nhận diện giống chó. 
+ *       Endpoint này sử dụng `optionalAuthMiddleware` nên có thể được gọi bởi cả người dùng đã đăng nhập và khách.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -50,19 +80,42 @@ router.post("/image", optionalAuthMiddleware, uploadSingle, bffPredictionControl
  *               file:
  *                 type: string
  *                 format: binary
+ *                 description: File video cần dự đoán.
  *     responses:
  *       200:
- *         description: Dự đoán thành công, trả về kết quả tổng hợp.
+ *         description: Dự đoán thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BffPredictionResponse'
+ *       400:
+ *         description: Bad Request - Không có file nào được tải lên.
+ *       402:
+ *         description: Payment Required - Người dùng đã đăng nhập nhưng không đủ token.
+ *       429:
+ *         description: Too Many Requests - Người dùng thử (guest) đã hết token.
+ *       500:
+ *         description: Lỗi máy chủ nội bộ.
+ *
  */
-router.post("/video", optionalAuthMiddleware, uploadSingle, bffPredictionController.predictVideo);
+router.post(
+    "/video", 
+    optionalAuthMiddleware,
+    uploadSingle,
+    checkTokenLimit(tokenConfig.costs.videoPrediction, 'single'),
+    bffPredictionController.predictVideo
+);
+
 
 /**
  * @swagger
  * /bff/predict/batch:
  *   post:
- *     summary: (BFF) Dự đoán từ nhiều ảnh
+ *     summary: "(BFF) Dự đoán từ nhiều ảnh (Chi phí: 2 token/ảnh)"
  *     tags: [BFF-Prediction]
- *     description: Tải lên nhiều ảnh cùng lúc để dự đoán hiệu quả hơn.
+ *     description: |
+ *       Tải lên nhiều file ảnh để nhận diện hàng loạt. 
+ *       Endpoint này yêu cầu đăng nhập và sẽ tính phí token dựa trên số lượng ảnh tải lên.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -77,39 +130,90 @@ router.post("/video", optionalAuthMiddleware, uploadSingle, bffPredictionControl
  *                 items:
  *                   type: string
  *                   format: binary
+ *                 description: Mảng các file ảnh cần dự đoán.
  *     responses:
  *       200:
  *         description: Dự đoán thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 $ref: '#/components/schemas/BffPredictionResponse'
+ *       400:
+ *         description: Bad Request - Không có file nào được tải lên.
+ *       402:
+ *         description: Payment Required - Không đủ token để xử lý toàn bộ batch.
+ *       500:
+ *         description: Lỗi máy chủ nội bộ.
  */
-router.post("/batch", optionalAuthMiddleware, uploadMultiple, bffPredictionController.predictBatch);
+router.post(
+    "/batch", 
+    authMiddleware, // Batch prediction yêu cầu đăng nhập
+    uploadMultiple, 
+    checkTokenLimit(tokenConfig.costs.imagePrediction, 'batch'),
+    bffPredictionController.predictBatch
+);
 
 /**
  * @swagger
- * /bff/predict/stream:
- *   get:
- *     summary: (BFF) Kết nối WebSocket cho dự đoán streaming
+ * /bff/predict/chat/{breedSlug}:
+ *   post:
+ *     summary: "(BFF) Trò chuyện với AI về một giống chó (Chi phí: 1 token)"
  *     tags: [BFF-Prediction]
- *     description: Endpoint này là một proxy cho kết nối WebSocket đến AI service. Sử dụng client WebSocket để kết nối.
+ *     description: Gửi một tin nhắn để hỏi AI về một giống chó cụ thể.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Slug của giống chó để trò chuyện.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               message:
+ *                 type: string
+ *                 description: Nội dung câu hỏi của người dùng.
+ *             example:
+ *               message: "Giống chó này có thân thiện với trẻ em không?"
  *     responses:
- *       101:
- *         description: Chuyển đổi giao thức sang WebSocket thành công.
+ *       200:
+ *         description: AI trả lời thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 reply:
+ *                   type: string
+ *       402:
+ *         description: Payment Required - Người dùng đã đăng nhập nhưng không đủ token.
+ *       429:
+ *         description: Too Many Requests - Người dùng thử (guest) đã hết token.
  */
-router.use('/stream', createProxyMiddleware({
-    target: process.env.AI_SERVICE_URL || 'http://localhost:8000',
-    ws: true,
-    pathRewrite: { '^/bff/predict/stream': '/predict-stream' },
-}));
+router.post(
+    "/chat/:breedSlug", 
+    optionalAuthMiddleware,
+    checkTokenLimit(tokenConfig.costs.chatMessage),
+    bffPredictionController.chatWithGemini
+);
 
-
-export default router;
+// --- CÁC ROUTE KHÔNG TỐN TOKEN GIỮ NGUYÊN ---
 
 /**
  * @swagger
  * /bff/predict/{id}/feedback:
  *   post:
- *     summary: (BFF) Gửi phản hồi cho một dự đoán
+ *     summary: "(BFF) Gửi phản hồi cho một dự đoán (Miễn phí)"
  *     tags: [BFF-Prediction]
- *     description: Người dùng gửi phản hồi về tính chính xác của một kết quả dự đoán.
+ *     description: Gửi phản hồi về tính chính xác của một kết quả dự đoán. Có thể được gọi bởi cả người dùng đăng nhập và khách.
  *     security:
  *       - bearerAuth: []
  *     parameters:
@@ -118,7 +222,7 @@ export default router;
  *         required: true
  *         schema:
  *           type: string
- *         description: ID của lịch sử dự đoán (PredictionHistory).
+ *         description: ID của kết quả dự đoán.
  *     requestBody:
  *       required: true
  *       content:
@@ -128,27 +232,97 @@ export default router;
  *             properties:
  *               isCorrect:
  *                 type: boolean
+ *                 description: Kết quả dự đoán có đúng không?
  *               submittedLabel:
  *                 type: string
+ *                 description: "Nhãn (giống chó) đúng, nếu isCorrect là false."
  *               notes:
  *                 type: string
+ *                 description: Ghi chú thêm.
+ *             example:
+ *               isCorrect: false
+ *               submittedLabel: "Poodle"
+ *               notes: "Tôi chắc chắn đây là giống Poodle."
  *     responses:
  *       201:
  *         description: Gửi phản hồi thành công.
+ *       400:
+ *         description: Dữ liệu gửi lên không hợp lệ.
  */
-router.post("/:id/feedback", optionalAuthMiddleware, bffPredictionController.submitFeedback);
+router.post("/:id/feedback", authMiddleware, bffPredictionController.submitFeedback);
 
 /**
  * @swagger
  * /bff/predict/history:
  *   get:
- *     summary: (BFF) Lấy lịch sử dự đoán của người dùng
+ *     summary: "(BFF) Lấy lịch sử dự đoán của người dùng (Miễn phí)"
  *     tags: [BFF-Prediction]
+ *     description: Lấy danh sách lịch sử dự đoán của người dùng đã đăng nhập. Yêu cầu xác thực.
  *     security:
  *       - bearerAuth: []
- *     description: Lấy danh sách lịch sử dự đoán của người dùng đã đăng nhập.
+ *     parameters:
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Số trang.
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 10
+ *         description: Số lượng kết quả mỗi trang.
  *     responses:
  *       200:
  *         description: Lấy lịch sử thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 histories:
+ *                   type: array
+ *                   items:
+ *                     $ref: '#/components/schemas/PredictionHistoryItem'
+ *                 total:
+ *                   type: integer
+ *                 page:
+ *                   type: integer
+ *                 limit:
+ *                   type: integer
+ *                 totalPages:
+ *                   type: integer
+ *       401:
+ *         description: Unauthorized - Yêu cầu đăng nhập.
  */
-router.get("/history", optionalAuthMiddleware, bffPredictionController.getPredictionHistory);
+router.get("/history", authMiddleware, bffPredictionController.getPredictionHistory);
+
+/**
+ * @swagger
+ * /bff/predict/history/{id}:
+ *   get:
+ *     summary: "(BFF) Lấy chi tiết một lịch sử dự đoán (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy thông tin chi tiết của một mục trong lịch sử dự đoán bằng ID. Endpoint này không yêu cầu xác thực.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID của lịch sử dự đoán.
+ *     responses:
+ *       200:
+ *         description: Lấy chi tiết thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/BffPredictionResponse'
+ *       404:
+ *         description: Not Found - Không tìm thấy lịch sử dự đoán.
+ */
+router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
+
+
+export default router;

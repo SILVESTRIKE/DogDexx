@@ -4,12 +4,15 @@ import fs from "fs";
 import crypto from "crypto";
 import { Request } from "express";
 
-const UPLOADS_DIR = "uploads";
+// --- Cấu hình chung ---
+const PUBLIC_DIR = "public";
+const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
 
-if (!fs.existsSync(UPLOADS_DIR)) {
-  fs.mkdirSync(UPLOADS_DIR);
+if (!fs.existsSync(PUBLIC_DIR)) {
+  fs.mkdirSync(PUBLIC_DIR);
 }
 const getFileTypeDir = (mimetype: string): string => {
+  // Chỉ xử lý các loại file ảnh cho avatar
   if (mimetype.startsWith("image/")) return "images";
   if (mimetype.startsWith("video/")) return "videos";
   if (mimetype.startsWith("audio/")) return "audios";
@@ -25,7 +28,8 @@ const getWeekOfMonth = (date: Date) => {
   return Math.ceil((dayOfMonth + dayOfWeek) / 7);
 };
 
-const storage = multer.diskStorage({
+// --- Storage cho các file dự đoán ---
+const predictionStorage = multer.diskStorage({
   /**
    * Cấu hình nơi lưu file theo cấu trúc: uploads/TYPE/YYYY/MM
    */
@@ -36,7 +40,7 @@ const storage = multer.diskStorage({
 
     let fullPath: string;
 
-    if (req.user && req.user.isGuest !== true) {
+    if (req.user) {
       // Logged-in user
       const fileTypeDir = getFileTypeDir(file.mimetype);
       fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
@@ -47,6 +51,9 @@ const storage = multer.diskStorage({
     }
 
     fs.mkdirSync(fullPath, { recursive: true });
+
+    // Lưu đường dẫn thư mục đích vào request để có thể sử dụng lại trong hàm `filename`
+    (req as any).uploadDestinationPath = fullPath;
 
     cb(null, fullPath);
   },
@@ -63,42 +70,59 @@ const storage = multer.diskStorage({
   },
 });
 
-const allowedMimeTypes = [
-  "image/jpeg",
-  "image/jpg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "video/mp4",
-  "video/avi",
-  "video/webm",
-  "video/mov",
-  "video/mkv",
-  "application/pdf",
-];
+// --- Storage cho avatar người dùng ---
+const avatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const fullPath = path.join(PUBLIC_DIR, "useravatar");
+    fs.mkdirSync(fullPath, { recursive: true });
+    cb(null, fullPath);
+  },
+  filename: (req, file, cb) => {
+    // Tạo tên file duy nhất để tránh ghi đè: userId_timestamp.ext
+    const userId = req.user?._id || "temp";
+    const timestamp = Date.now();
+    const extension = path.extname(file.originalname);
+    const newFilename = `${userId}_${timestamp}${extension}`;
+    cb(null, newFilename);
+  },
+});
 
 const fileFilter = (
   req: Request,
   file: Express.Multer.File,
   cb: multer.FileFilterCallback
 ) => {
-  if (allowedMimeTypes.includes(file.mimetype)) {
-    // Tự động phát hiện và gán loại media
-    if (file.mimetype.startsWith("image/")) {
-      (req as any).mediaType = "image";
-    } else if (file.mimetype.startsWith("video/")) {
-      (req as any).mediaType = "video";
-    }
+  // Cho phép cả ảnh và video cho các route dự đoán
+  if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
+    // Gán mediaType đã được thực hiện trong middleware setMediaType,
+    // nhưng chúng ta có thể để ở đây để dự phòng hoặc xóa đi nếu setMediaType luôn chạy trước.
+    // Để an toàn, cứ giữ lại.
+    if (file.mimetype.startsWith("image/")) (req as any).mediaType = "image";
+    else (req as any).mediaType = "video";
     cb(null, true);
   } else {
     cb(new Error("Định dạng file không được hỗ trợ!"));
   }
 };
+
+const avatarFileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  // Chỉ cho phép file ảnh cho avatar
+  if (file.mimetype.startsWith("image/")) {
+    cb(null, true);
+  } else {
+    cb(new Error("Chỉ hỗ trợ định dạng file ảnh cho avatar!"));
+  }
+};
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 const MAX_FILES = 10; // Maximum number of files in a single upload
 
 const multerOptions = {
-  storage: storage,
+  storage: predictionStorage,
   fileFilter: fileFilter,
   limits: { 
     fileSize: MAX_FILE_SIZE,
@@ -115,3 +139,19 @@ const multerMultipleOptions = {
 
 export const uploadSingle = multer(multerOptions).single("file");
 export const uploadMultiple = multer(multerMultipleOptions).array("files", MAX_FILES);
+
+// Middleware mới cho việc upload avatar
+export const uploadAvatar = multer({
+  storage: avatarStorage,
+  fileFilter: avatarFileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // Giới hạn 5MB cho avatar
+}).single("avatar");
+
+
+// Middleware mới cho việc upload model
+export const uploadModelFiles = multer({
+  storage: multer.memoryStorage(), // Lưu file vào bộ nhớ đệm thay vì ghi ra đĩa
+  limits: {
+    fileSize: 500 * 1024 * 1024, // Tăng giới hạn lên 500MB cho file model
+  }
+}).fields([{ name: 'modelFile', maxCount: 1 }]);

@@ -1,166 +1,225 @@
+// bff_collection.controller.ts
 import { Request, Response } from 'express';
 import { wikiService } from '../services/dogs_wiki.service';
 import { collectionService } from '../services/user_collections.service';
-import { Types } from 'mongoose';
 import { achievementService } from '../services/achievement.service';
-import { UserCollectionModel } from '../models/user_collection.model';
-import { DogBreedWikiModel, DogBreedWikiDoc } from '../models/dogs_wiki.model';
+import { transformMediaURLs } from '../utils/media.util';
+import { userService } from '../services/user.service';
+import { logger } from '../utils/logger.util';
+import { BadRequestError, NotFoundError } from '../errors';
+import { Types } from 'mongoose';
+
+// Define a type for the enriched breed object sent to the frontend
+export type PokedexBreed = {
+  slug: string;
+  breed: string;
+  group?: string;
+  pokedexNumber?: number;
+  origin?: string;
+  mediaUrl?: string;
+  rarity_level?: number;
+  isCollected: boolean;
+  collectedAt: Date | null;
+  source: string | null;
+};
 
 export const getPokedex = async (req: Request, res: Response) => {
   const userId = req.user?._id;
+  const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
 
-  // 1. Lấy các tham số query để lọc và phân trang
-  const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for, sort } = req.query;
-  const options = { page: Number(page), limit: Number(limit), search, group, energy_level: Number(energy_level) || undefined, trainability: Number(trainability) || undefined, shedding_level: Number(shedding_level) || undefined, suitable_for, sort } as any;
+  // 1. Lấy và chuẩn bị các tham số query
+  const {
+    page = 1,
+    limit = 20,
+    search,
+    group,
+    energy_level,
+    trainability,
+    shedding_level,
+    suitable_for,
+    sort,
+    isCollected
+  } = req.query;
 
-  // 2. Lấy danh sách breeds đã được lọc từ wikiService
-  const filteredBreedsResult = await wikiService.getAllBreeds(options);
+  const options: any = {
+    page: Number(page),
+    limit: Number(limit),
+    search,
+    group,
+    energy_level: energy_level ? Number(energy_level) : undefined,
+    trainability: trainability ? Number(trainability) : undefined,
+    shedding_level: shedding_level ? Number(shedding_level) : undefined,
+    suitable_for,
+    sort,
+    lang,
+  };
 
-  const totalBreedsInSystem = filteredBreedsResult.total;
-  let collectedBreeds = 0;
-  let breedsResponse = [];
+  let collectedBreedsCount = 0;
+  const userCollectionMap = new Map<string, { collectedAt: Date; source: string }>();
 
+  // 2. Nếu user đã đăng nhập, LUÔN LUÔN lấy dữ liệu bộ sưu tập của họ
   if (userId) {
-    let userCollectionMap = new Map();
-    const userCollection = await collectionService.getUserCollection(userId);
-    collectedBreeds = userCollection.length;
-    userCollection.forEach(item => {
-      userCollectionMap.set(item.breed_id._id.toString(), item.first_collected_at);
-    });
+    const userCollection = await collectionService.getUserCollection(userId, lang); // Đã sửa ở các lượt trước, đảm bảo đúng
+    collectedBreedsCount = userCollection.length;
 
-    breedsResponse = filteredBreedsResult.data.map(breed => {
-      const breedObj = breed.toObject() as DogBreedWikiDoc;
-      const collectedAt = userCollectionMap.get((breedObj._id as Types.ObjectId).toString());
-      return {
-        id: breedObj._id,
-        name: breedObj.display_name,
-        slug: breedObj.slug,
-        group: breedObj.group,
-        origin: (breedObj as any).origin, // Cần thêm trường origin
-        imageUrl: (breedObj as any).image_url, // Cần thêm trường image_url
-        isCollected: !!collectedAt,
-        collectedAt: collectedAt || null,
-      };
+    userCollection.forEach((item: any) => {
+      // Dữ liệu đã được populate và lean()
+      if (item.breed_id?.slug && item.first_prediction_id) {
+        userCollectionMap.set(item.breed_id.slug, {
+          collectedAt: item.first_prediction_id?.createdAt,
+          source: item.first_prediction_id?.source
+        });
+      }
     });
-  } else {
-    // User is not logged in
-    breedsResponse = filteredBreedsResult.data.map(breed => {
-      const breedObj = breed.toObject() as DogBreedWikiDoc;
-      return {
-        id: breedObj._id,
-        name: breedObj.display_name,
-        slug: breedObj.slug,
-        group: breedObj.group,
-        origin: (breedObj as any).origin,
-        imageUrl: (breedObj as any).image_url,
-        isCollected: false,
-        collectedAt: null,
-      };
-    });
+    
+    // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
+    const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
+    // SỬA LỖI: Nếu không có user, isCollected=true sẽ không hoạt động.
+    // Chỉ áp dụng filter này nếu có user.
+    if (userId && isCollected === 'true') {
+      // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
+      options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
+    } else if (isCollected === 'false') {
+      options.excludeIds = collectedBreedIds;
+    }
   }
 
+  // 4. Gọi Wiki Service MỘT LẦN DUY NHẤT với tất cả các options
+  const [breedsResult, totalBreedsInSystem] = await Promise.all([
+    wikiService.getAllBreeds(options),
+    wikiService.getTotalBreedsCount(lang) // Lấy tổng số theo ngôn ngữ, đã sửa ở service
+  ]);
+
+  // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
+  let breedsResponse: PokedexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
+    const collectionInfo = userCollectionMap.get(breed.slug);
+    return {
+      slug: breed.slug,
+      breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
+      group: breed.group,
+      pokedexNumber: breed.pokedexNumber,
+      origin: breed.origin,
+      mediaUrl: breed.mediaUrl,
+      rarity_level: breed.rarity_level,
+      isCollected: !!collectionInfo,
+      collectedAt: collectionInfo?.collectedAt || null,
+      source: collectionInfo?.source || null,
+    };
+  });
+
+  // 5.5. Sắp xếp ở tầng ứng dụng bằng cách gọi service
+  breedsResponse = collectionService.sortPokedex(breedsResponse, sort as string);
+
+  // 6. Trả về kết quả cuối cùng
   res.status(200).json({
     stats: {
       totalBreeds: totalBreedsInSystem,
-      collectedBreeds: collectedBreeds,
-      progress: totalBreedsInSystem > 0 ? (collectedBreeds / totalBreedsInSystem) * 100 : 0,
+      collectedBreeds: collectedBreedsCount,
+      progress: totalBreedsInSystem > 0 ? (collectedBreedsCount / totalBreedsInSystem) * 100 : 0,
     },
     breeds: breedsResponse,
-    // Include pagination info
-    pagination: {
-      total: filteredBreedsResult.total,
-      page: filteredBreedsResult.page,
-      limit: filteredBreedsResult.limit,
-      totalPages: filteredBreedsResult.totalPages,
-    },
+    pagination: breedsResult.pagination,
   });
 };
 
 export const addBreed = async (req: Request, res: Response) => {
   const userId = req.user!._id;
-  const { slug } = req.params;
 
-  // 1. Add breed to collection
-  const { collection, isNew } = await collectionService.addOrUpdateCollection(userId, slug) as unknown as { collection: any, isNew: boolean };
+  // Với kiến trúc mới, việc thêm thủ công không được hỗ trợ
+  throw new BadRequestError("Manual collection is not supported in this version.");
 
-  // 2. Check for new achievements
-  const userCollections = await UserCollectionModel.find({ user_id: userId });
-  const achievements = await achievementService.getUserAchievements(userId.toString(), userCollections);
+  /*
+  // Logic dưới đây sẽ không được thực thi, nhưng đã được sửa lỗi để tham khảo
+  const userCollections = await collectionService.getUserCollection(userId);
+  const user = await userService.getById(userId.toString());
+
+  // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
+  if (!user) {
+    throw new NotFoundError('User not found');
+  }
+
+  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+  // Bây giờ `user` chắc chắn không phải là null
+  const achievements = await achievementService.processUserAchievements(user, userCollections, lang);
   const unlockedAchievements = achievements.filter(a => a.unlocked);
 
-  // 3. Find next achievement
   const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
 
   res.status(200).json({
     success: true,
+    isNew: false,
     totalCollected: userCollections.length,
     achievementsUnlocked: unlockedAchievements.map(a => a.key),
-    nextAchievement: nextAchievement ? {
-      name: nextAchievement.name,
-      requirement: nextAchievement.condition.value,
-      progress: userCollections.length,
-    } : null
+    // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
+    nextAchievement: nextAchievement
+      ? {
+          name: nextAchievement.name,
+          requirement: nextAchievement.condition.value,
+          progress: userCollections.length,
+        }
+      : null,
   });
+  */
 };
 
 export const getAchievements = async (req: Request, res: Response) => {
-  try {
-    const userId = req.user!._id;
-    if (!userId) return res.status(400).json({ message: 'Missing userId' });
+  const userId = req.user!._id;
+  const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
+    ? req.query.lang as 'vi' | 'en'
+    : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
-    const userCollections = await UserCollectionModel.find({ user_id: userId });
-    const achievementsResult = await achievementService.getUserAchievements(userId.toString(), userCollections);
+  const [user, userCollections, totalBreedsInSystem] = await Promise.all([
+    userService.getById(userId.toString()),
+    collectionService.getUserCollection(userId, lang),
+    wikiService.getTotalBreedsCount(lang), // Sửa ở đây: truyền lang vào
+  ]);
 
-    const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
-    const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
-
-    res.json({
-      stats: {
-        totalAchievements: achievementsResult.length,
-        unlockedAchievements: unlockedCount,
-        totalCollected: userCollections.length,
-      },
-      nextAchievement: nextAchievement ? {
-        name: nextAchievement.name,
-        requirement: nextAchievement.condition.value,
-        progress: userCollections.length,
-      } : null,
-      achievements: achievementsResult.map(ach => ({
-        id: ach.key,
-        name: ach.name,
-        description: ach.description,
-        icon: ach.icon || '🐕', // Cần thêm trường icon vào model
-        requirement: ach.condition.value,
-        isUnlocked: ach.unlocked,
-        unlockedAt: ach.unlocked ? (
-          ach.condition.type === 'collection_count' 
-            ? userCollections[ach.condition.value - 1]?.first_collected_at // Lấy ngày của breed thứ N
-            : userCollections.find(uc => (uc.breed_id as any).slug === ach.condition.breedSlug)?.first_collected_at
-        ) || null : null,
-      }))
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Error fetching achievements', error: err });
+  // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
+  if (!user) {
+    throw new NotFoundError('User not found');
   }
+
+  const achievementsResult = await achievementService.processUserAchievements(user, userCollections, lang);
+  const unlockedMap = new Map(user.achievements.map((ua: any) => [ua.key, ua.unlockedAt]));
+  const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
+  const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
+
+  res.json({
+    stats: {
+      totalAchievements: achievementsResult.length,
+      totalBreeds: totalBreedsInSystem,
+      unlockedAchievements: unlockedCount,
+      totalCollected: userCollections.length,
+    },
+    // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
+    nextAchievement: nextAchievement
+      ? {
+          name: nextAchievement.name,
+          requirement: nextAchievement.condition.value,
+          progress: userCollections.length,
+        }
+      : null,
+    achievements: achievementsResult.map(ach => ({
+      id: ach.key,
+      title: ach.name,
+      description: ach.description,
+      icon: ach.icon || '🏆',
+      requiredCount: ach.condition.value,
+      unlocked: ach.unlocked,
+      unlockedAt: unlockedMap.get(ach.key) || null,
+    }))
+  });
 };
 
 export const getStats = async (req: Request, res: Response) => {
   const userId = req.user!._id;
-
-  const [totalCollected, totalCount, topBreeds] = await Promise.all([
-    UserCollectionModel.countDocuments({ user_id: userId }),
-    UserCollectionModel.aggregate([
-      { $match: { user_id: userId } },
-      { $group: { _id: null, total: { $sum: "$collection_count" } } }
-    ]),
-    UserCollectionModel.find({ user_id: userId }).sort({ collection_count: -1 }).limit(5).populate('breed_id', 'display_name slug')
-  ]);
+  const stats = await collectionService.getCollectionStats(userId);
 
   res.status(200).json({
     data: {
-      unique_breeds_collected: totalCollected,
-      total_predictions_in_collection: totalCount[0]?.total || 0,
-      top_5_collected_breeds: topBreeds,
+      unique_breeds_collected: stats.totalCollected,
+      total_predictions_in_collection: stats.totalPredictionsInCollection,
+      top_5_collected_breeds: stats.topBreeds,
     }
   });
 };

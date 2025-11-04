@@ -7,3 +7,4 @@ export * from "./TooMuchReqError";
 export * from "./AppError";
 export * from "./ConflictError";
 export * from "./ForbiddenError";
+export * from "./PaymentRequiredError";
