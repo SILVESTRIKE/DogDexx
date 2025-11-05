@@ -1,12 +1,18 @@
+// src/models/ai_models.model.ts
+
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { IConfiguration } from "./config.model";
 
 export type ModelTaskType =
   | "DOG_BREED_CLASSIFICATION"
   | "CAT_BREED_CLASSIFICATION"
   | "OBJECT_DETECTION";
-export type ModelFormatType = "ONNX" | "TENSORFLOW_JS" | "PYTORCH";
-export type ModelStatusType = "ACTIVE" | "INACTIVE" | "ARCHIVED";
+export type ModelFormatType = "ONNX" | "PYTORCH";
+export type ModelStatusType = "ACTIVE" | "INACTIVE";
 
+/**
+ * AIModelDoc: Đóng vai trò là một "catalog" chứa thông tin nhận dạng của model.
+ */
 export type AIModelDoc = Document & {
   name: string;
   description: string;
@@ -14,56 +20,31 @@ export type AIModelDoc = Document & {
   format: ModelFormatType;
   huggingFaceRepo: string;
   fileName: string;
-  labelsFileName: string; // THÊM
+  path: string;
   version: string;
   status: ModelStatusType;
-  tags: string[];
   creator_id: Types.ObjectId;
   isDeleted: boolean;
+  configId: Types.ObjectId | IConfiguration;
 };
 
 const aiModelSchema = new Schema<AIModelDoc>(
   {
     name: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
-    taskType: {
-      type: String,
-      enum: [
-        "DOG_BREED_CLASSIFICATION",
-        "CAT_BREED_CLASSIFICATION",
-        "OBJECT_DETECTION",
-      ],
-      required: true,
-      index: true,
-    },
-    format: {
-      type: String,
-      enum: ["ONNX", "TENSORFLOW_JS", "PYTORCH"],
-      required: true,
-    },
+    taskType: { type: String, enum: ["DOG_BREED_CLASSIFICATION", "CAT_BREED_CLASSIFICATION", "OBJECT_DETECTION"], required: true, index: true },
+    format: { type: String, enum: ["ONNX", "PYTORCH"], required: true },
     huggingFaceRepo: { type: String, required: true, trim: true },
     fileName: { type: String, required: true, trim: true },
-    labelsFileName: { type: String, required: true, default: "labels.json" }, // THÊM
+    path: { type: String, required: true, trim: true },
     version: { type: String, required: true, trim: true },
-    status: {
-      type: String,
-      enum: ["ACTIVE", "INACTIVE", "ARCHIVED"],
-      default: "INACTIVE",
-      index: true,
-    },
-    tags: [{ type: String }],
-    creator_id: {
-      type: Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    isDeleted: {
-      type: Boolean,
-      default: false,
-    },
+    status: { type: String, enum: ["ACTIVE", "INACTIVE"], default: "INACTIVE", index: true },
+    creator_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    isDeleted: { type: Boolean, default: false },
+    configId: { type: Schema.Types.ObjectId, ref: 'Configuration', default: null }
   },
   {
-    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
+    timestamps: true,
     collection: "ai_models",
     toJSON: {
       transform: (doc: any, ret: any) => {
