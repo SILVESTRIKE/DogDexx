@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { AdminApiClient } from "./admin-api-client";
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
 // Token management
@@ -44,7 +46,7 @@ export const TokenManager = {
 };
 
 // API Client with automatic token refresh
-class ApiClient {
+export class ApiClient {
   private baseUrl: string;
   // THAY ĐỔI 1: Tạo một callback duy nhất, mạnh mẽ hơn
   private onTokenUpdate:
@@ -602,213 +604,6 @@ class ApiClient {
       false // Không yêu cầu auth bắt buộc
     );
   }
-  // BFF-Admin endpoints
-  async getAdminDashboard() {
-    return this.request<any>("/bff/admin/dashboard", {}, true);
-  }
-
-  async getAdminFeedback(params?: {
-    page?: number;
-    limit?: number;
-    status?: string;
-    search?: string;
-  }) {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined) queryParams.append(key, String(value));
-      });
-    }
-    const query = queryParams.toString();
-    return this.request<any>(
-      `/bff/admin/feedback${query ? `?${query}` : ""}`,
-      {},
-      true
-    );
-  }
-
-  async adminApproveFeedback(feedbackId: string) {
-    return this.request<any>(
-      `/bff/admin/feedback/${feedbackId}/approve`,
-      {
-        method: "POST",
-      },
-      true
-    );
-  }
-
-  async adminRejectFeedback(feedbackId: string) {
-    return this.request<any>(
-      `/bff/admin/feedback/${feedbackId}/reject`,
-      {
-        method: "POST",
-      },
-      true
-    );
-  }
-
-  async getAdminUsers(params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-  }) {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== "")
-          queryParams.append(key, String(value));
-      });
-    }
-    const query = queryParams.toString();
-    return this.request<any>(
-      `/bff/admin/users${query ? `?${query}` : ""}`,
-      {},
-      true
-    );
-  }
-
-  async getModelConfig() {
-    return this.request<any>("/bff/admin/model/config", {}, true);
-  }
-
-  async updateModelConfig(config: any) {
-    return this.request<any>(
-      "/bff/admin/model/config",
-      {
-        method: "PUT",
-        body: JSON.stringify(config),
-      },
-      true
-    );
-  }
-
-  async getAlerts() {
-    return this.request<any>("/bff/admin/alerts", {}, true);
-  }
-
-  async getAdminUsageStats() {
-    return this.request<any>("/bff/admin/usage", {}, true);
-  }
-
-  async getAdminHistories(params?: {
-    page?: number;
-    limit?: number;
-    search?: string;
-  }) {
-    const queryParams = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== "")
-          queryParams.append(key, String(value));
-      });
-    }
-    const query = queryParams.toString();
-    return this.request<any>(
-      `/bff/admin/histories${query ? `?${query}` : ""}`,
-      {},
-      true
-    );
-  }
-
-  async browseAdminHistories(
-    path: string,
-    params?: { breed?: string; startDate?: string; endDate?: string }
-  ) {
-    const queryParams = new URLSearchParams();
-    if (path) queryParams.append("path", path);
-    if (params?.breed && params.breed !== "all")
-      queryParams.append("breed", params.breed);
-    if (params?.startDate) queryParams.append("startDate", params.startDate);
-    if (params?.endDate) queryParams.append("endDate", params.endDate);
-    return this.request<any>(
-      `/bff/admin/histories/browse?${queryParams.toString()}`,
-      {},
-      true
-    );
-  }
-
-  async browseAdminMedia(path: string, options: RequestInit = {}) {
-    const queryParams = new URLSearchParams();
-    if (path) queryParams.append("path", path);
-    return this.request<any>(
-      `/bff/admin/media/browse?${queryParams.toString()}`,
-      options,
-      true
-    );
-  }
-
-  async adminDeleteMedia(mediaId: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(
-      `/bff/admin/media/${mediaId}`,
-      {
-        method: "DELETE",
-      },
-      true
-    );
-  }
-
-  // Core User Management (Admin)
-  async deleteUser(userId: string) {
-    return this.request<void>(
-      `/api/users/${userId}`,
-      { method: "DELETE" },
-      true
-    );
-  }
-
-  async adminCreateUser(data: {
-    username: string;
-    email: string;
-    password: string;
-    role: string;
-    verify: string;
-  }) {
-    return this.request<any>(
-      "/bff/admin/users",
-      {
-        method: "POST",
-        body: JSON.stringify(data),
-      },
-      true
-    );
-  }
-
-  async adminUpdateUser(
-    userId: string,
-    data: { username?: string; email?: string; role?: string; status?: string }
-  ) {
-    return this.request<any>(
-      `/bff/admin/users/${userId}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(data),
-      },
-      true
-    );
-  }
-
-  async adminUploadModel(formData: FormData) {
-    return this.requestWithFormData<any>(
-      "/bff/admin/models/upload",
-      formData,
-      true
-    );
-  }
-
-  // Core AI Model Management (Admin)
-  async getAIModels() {
-    return this.request<any>("/api/ai-models", {}, true);
-  }
-
-  async activateAIModel(modelId: string) {
-    return this.request<any>(
-      `/api/ai-models/${modelId}/activate`,
-      {
-        method: "POST",
-      },
-      true
-    );
-  }
 
   // WebSocket connection methods for real-time detection
   createWebSocketConnection(endpoint: string): WebSocket {
@@ -994,3 +789,6 @@ class ApiClient {
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);
+
+// Tạo một instance riêng cho các API của Admin
+export const adminApiClient = new AdminApiClient(apiClient);
