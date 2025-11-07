@@ -1,4 +1,4 @@
-node_modules
+node_modules/
 .env
-public/
-
+public/*
+!public/dog-data-img

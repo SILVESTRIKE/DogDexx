@@ -67,7 +67,7 @@ export default function RootLayout({
       <body
         className="antialiased"
         // className="antialiased select-none"
-
+        suppressHydrationWarning={true}
         style={{ "--navbar-height": "69px" } as React.CSSProperties}
       >
         <ThemeProvider

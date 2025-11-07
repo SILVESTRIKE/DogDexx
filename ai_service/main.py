@@ -8,12 +8,11 @@ import cv2
 import numpy as np
 import tempfile
 import os
-import json
 import uuid
 import base64
 import traceback
-import asyncio
 import imageio
+import sys
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from ultralytics.utils.plotting import Annotator, colors
@@ -25,79 +24,90 @@ from ultralytics.utils.plotting import Annotator, colors
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-DB_NAME = os.getenv("DB_NAME", "dog_breed_db")
+MONGO_URI = os.getenv("MONGO_URI")
+DB_NAME = os.getenv("DB_NAME")
 
 TRACKER_CONFIG = "bytetrack.yaml"
 
 # --- Dynamic Configuration Holder ---
 class Config:
     def __init__(self):
+        self.model = None  # Khởi tạo model là None
+        self.set_defaults() # Luôn đặt giá trị mặc định cứng trước
+
+        # --- Bước 1: Kết nối tới MongoDB ---
         try:
             self.mongo_client = MongoClient(MONGO_URI)
-            # The ismaster command is cheap and does not require auth.
+            # Lệnh ismaster rẻ và không yêu cầu xác thực.
             self.mongo_client.admin.command('ismaster')
             print(f"✅ MongoDB connection successful to URI ending with: ...{MONGO_URI[-20:]}")
             self.db = self.mongo_client[DB_NAME]
-            self.model = None  # Model instance
-            self.set_defaults() # Set defaults first
-            # Tải cấu hình lần đầu khi khởi động
-            self.load() # Then try to load from DB
         except Exception as e:
-            print(f"❌ FATAL: Could not connect to MongoDB at {MONGO_URI}. Error: {e}")
-            print("   - Please ensure MongoDB is running and MONGO_URI in your .env file is correct.")
+            print(f"❌ WARNING: Could not connect to MongoDB at {MONGO_URI}. Error: {e}")
+            print("   - Proceeding with default hardcoded configuration.")
             self.db = None
-            self.model = None
-            self.set_defaults()
+
+        # --- Bước 2: Tải cấu hình và model ---
+        # Sẽ tải từ DB nếu kết nối thành công, nếu không sẽ dùng mặc định
+        self.load()
+
+        # --- Bước 3: Kiểm tra quan trọng ---
+        # Nếu model không tải được vì bất kỳ lý do gì (thiếu file, cấu hình sai), dừng lại.
+        if self.model is None:
+            # Exception này sẽ được bắt ở scope global để dừng server.
+            raise RuntimeError("Model initialization failed. Check logs for specific error. Shutting down.")
+
 
     def load(self, config_data: dict = None):
         """
         Tải cấu hình. Nếu config_data được cung cấp, sử dụng nó.
         Nếu không, đọc từ MongoDB.
         """
-        if self.db is None:
-            print("⚠️ Skipping config load because DB connection failed.")
-            self.apply_config_and_load_model({})
-            return
-
         if config_data:
             print("Applying configuration from provided data (e.g., /config/reload)...")
             self.apply_config_and_load_model(config_data)
         else:
             print("Loading configuration from MongoDB on initial startup...")
-            # Lấy cả config và model active
+            if self.db is None:
+                print("⚠️ DB not connected. Using hardcoded defaults to load model.")
+                self.apply_config_and_load_model({}) # Dùng giá trị mặc định đã set
+                return
+
             config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
             active_model_doc = self.db.ai_models.find_one({"status": "ACTIVE", "taskType": "DOG_BREED_CLASSIFICATION"})
 
-            if config_doc:
-                # Kết hợp thông tin từ cả hai
-                full_config = {**config_doc}
-                if active_model_doc:
-                    full_config["model_path"] = active_model_doc.get("fileName")
-                    full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
-                    full_config["labels_path"] = active_model_doc.get("labelsFileName")
-                self.apply_config_and_load_model(full_config)
-            else:
-                print("⚠️ No configuration found in DB. Using hardcoded defaults.")
-                self.apply_config_and_load_model({}) # Dùng giá trị mặc định
+            full_config = config_doc if config_doc else {}
+            if active_model_doc:
+                full_config["model_path"] = active_model_doc.get("fileName")
+                full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
+            
+            if not config_doc and not active_model_doc:
+                 print("⚠️ No configuration or active model found in DB. Using hardcoded defaults.")
+
+            self.apply_config_and_load_model(full_config)
         
     def apply_config_and_load_model(self, config_data: dict):
         """Áp dụng các giá trị cấu hình và tải lại model."""
-        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf")
-        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf")
-        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf")
-        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf")
-        self.DEVICE = config_data.get("device")
-        self.MODEL_PATH = config_data.get("model_path")
-        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
-        self.LABELS_PATH = config_data.get("labels_path", "labels.json") # THÊM
+        # Lấy giá trị từ config_data, nếu không có thì giữ lại giá trị mặc định đã được set_defaults()
+        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf", self.IMAGE_CONF_THRESHOLD)
+        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf", self.VIDEO_CONF_THRESHOLD)
+        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf", self.STREAM_CONF_THRESHOLD)
+        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf", self.STREAM_HIGH_CONF_THRESHOLD)
+        self.DEVICE = config_data.get("device", self.DEVICE)
+        self.MODEL_PATH = config_data.get("model_path", self.MODEL_PATH)
+        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", self.HUGGINGFACE_REPO)
 
         print("✅ Configuration applied:")
         print(f"   - Model Path: {self.MODEL_PATH}")
-        print(f"   - Labels Path: {self.LABELS_PATH}")
         print(f"   - Device: {self.DEVICE}")
         print(f"   - HuggingFace Repo: {self.HUGGINGFACE_REPO}")
         print(f"   - Image Confidence: {self.IMAGE_CONF_THRESHOLD}")
+        
+        # --- FIX: Kiểm tra model path trước khi thực hiện bất cứ điều gì ---
+        if not self.MODEL_PATH:
+            print("❌ FATAL: Model path is missing from configuration. Cannot load model.")
+            self.model = None
+            return # Dừng thực thi trong hàm này
 
         model_dir = os.path.dirname(self.MODEL_PATH)
         if model_dir and not os.path.exists(model_dir):
@@ -107,29 +117,21 @@ class Config:
         if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
             self.download_model()
 
-        # Tải file labels nếu chưa có
-        if not os.path.exists(self.LABELS_PATH) and self.HUGGINGFACE_REPO:
-            self.download_labels()
-
-        # --- Reload the model with the new path and device ---
+        # --- Tải lại model với đường dẫn và device mới ---
         try:
+            # Kiểm tra lại file tồn tại sau khi có thể đã download
+            if not os.path.exists(self.MODEL_PATH):
+                 raise FileNotFoundError(f"Model file not found at {self.MODEL_PATH} even after download attempt.")
+
             print(f"Loading model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
             self.model = YOLO(self.MODEL_PATH) 
             self.model.to(self.DEVICE)
-            
-            # Tải lại tên class từ file labels.json nếu có
-            if os.path.exists(self.LABELS_PATH):
-                with open(self.LABELS_PATH, 'r') as f:
-                    labels_data = json.load(f)
-                    # Giả sử file json có dạng {"0": "class_a", "1": "class_b"}
-                    # hoặc là một list ["class_a", "class_b"]
-                    self.model.names = labels_data.get('names', self.model.names)
-                print(f"✅ Custom labels loaded from {self.LABELS_PATH}")
-
-            print("✅ YOLO model loaded/reloaded successfully.")
+            print("✅ YOLO model loaded successfully with classes:", self.model.names)
 
         except Exception as e:
-            print(f"FATAL: Error loading YOLO model: {e}")
+            # In ra lỗi cụ thể khi không tải được model
+            print(f"❌ FATAL: Error loading YOLO model from path '{self.MODEL_PATH}'. Error: {e}")
+            traceback.print_exc()
             self.model = None
 
     def download_model(self):
@@ -141,24 +143,15 @@ class Config:
         except Exception as e:
             print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
     
-    def download_labels(self):
-        from huggingface_hub import hf_hub_download
-        print(f"Labels file not found at {self.LABELS_PATH}. Downloading from Hugging Face...")
-        try:
-            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.LABELS_PATH), local_dir=os.path.dirname(self.LABELS_PATH) or '.')
-            print("Labels file downloaded successfully.")
-        except Exception as e:
-            print(f"Error downloading labels file from repo '{self.HUGGINGFACE_REPO}': {e}")
-
     def set_defaults(self):
+        """Thiết lập các giá trị mặc định cứng."""
         self.IMAGE_CONF_THRESHOLD = 0.25
         self.VIDEO_CONF_THRESHOLD = 0.5
         self.STREAM_CONF_THRESHOLD = 0.4
         self.STREAM_HIGH_CONF_THRESHOLD = 0.8
         self.DEVICE = "cpu"
-        self.MODEL_PATH = "models/epoch90.pt"
+        self.MODEL_PATH = "models/model_v8s_pro.pt" # Cung cấp một đường dẫn mặc định hợp lệ
         self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
-        self.LABELS_PATH = "labels.json"
 
 
 # Define the save directory relative to this script's location
@@ -176,7 +169,12 @@ app = FastAPI(
     version="6.0.0",
 )
 
-config = Config() 
+try:
+    config = Config()
+except RuntimeError as e:
+    print(f"❌ FATAL STARTUP ERROR: {e}")
+    # Thoát khỏi script với mã lỗi, ngăn Uvicorn khởi động.
+    sys.exit(1)
 
 os.makedirs(SAVE_DIR, exist_ok=True)
 print(f"Annotated frames will be saved to: {SAVE_DIR}")
@@ -600,11 +598,6 @@ async def predict_stream(websocket: WebSocket):
                     
                     prediction_id = str(uuid.uuid4())
 
-                    # track_id = best_det.get("track_id", "N/A")
-                    # breed_name = best_det["class"].replace(" ", "_")
-                    # filename = f"capture_ws_{track_id}_{breed_name}_{uuid.uuid4().hex[:6]}.jpg"
-                    # save_path = os.path.join(SAVE_DIR, filename)
-                    # cv2.imwrite(save_path, annotated_frame) # <--- BỎ DÒNG NÀY
                     print(f"[WS] Captured high-confidence dog detection: {best_det}")
 
                     response_payload = {

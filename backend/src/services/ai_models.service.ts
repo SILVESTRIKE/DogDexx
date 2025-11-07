@@ -3,7 +3,7 @@ import {
   CreateAIModelType,
   UpdateAIModelType,
 } from "../types/zod/ai_model.zod";
-import mongoose, { Types } from "mongoose";
+import mongoose, { Types, mongo } from "mongoose";
 import { ConflictError } from "../errors";
 import { uploadFile } from '@huggingface/hub';
 import { AppError } from '../errors';
