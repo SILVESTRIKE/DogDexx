@@ -29,7 +29,7 @@ export const wsOptionalAuthMiddleware = async (ws: WebSocket, req: Request, next
       const user = await UserModel.findById(decoded.userId).select('-password');
       if (user) {
         (req as any).user = user;
-        logger.info(`[WS-Auth] Authenticated user ${user._id} for WebSocket connection.`);
+        logger.info(`[WS-Auth] Authenticated user ${user.username} (ID: ${user._id}) for WebSocket connection.`);
       }
     } catch (error) {
       // Bỏ qua lỗi (token hết hạn, không hợp lệ, v.v.) và coi như là guest
@@ -46,7 +46,7 @@ export const wsOptionalAuthMiddleware = async (ws: WebSocket, req: Request, next
       ...(req as any).fingerprint,
       hash: visitorId,
     };
-    logger.info(`[WS-Auth] Identified guest using client-provided visitorId: ${visitorId}. Full fingerprint:`, (req as any).fingerprint);
+    logger.info(`[WS-Auth] Identified guest using client-provided visitorId: ${visitorId}.`);
   }
 
 

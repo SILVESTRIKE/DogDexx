@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getPokedex, addBreed, getAchievements, getStats } from '../controllers/bff_collection.controller';
+import { getDogDex, addBreed, getAchievements, getStats } from '../controllers/bff_collection.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 
@@ -9,9 +9,9 @@ router.use(optionalAuthMiddleware);
 
 /**
  * @swagger
- * /bff/collection/pokedex:
+ * /bff/collection/dogdex:
  *   get:
- *     summary: (BFF) Lấy danh sách Pokedex
+ *     summary: (BFF) Lấy danh sách DogDex
  *     tags: [BFF-Collection]
  *     description: Lấy danh sách tất cả các giống chó, kèm theo trạng thái sưu tầm của người dùng (nếu đã đăng nhập) và tiến trình.
  *     security:
@@ -53,9 +53,9 @@ router.use(optionalAuthMiddleware);
  *         description: Sắp xếp theo trường (ví dụ 'energy_level').
  *     responses:
  *       200:
- *         description: Lấy Pokedex thành công.
+ *         description: Lấy DogDex thành công.
  */
-router.get('/pokedex', optionalAuthMiddleware, getPokedex);
+router.get('/dogdex', optionalAuthMiddleware, getDogDex);
 
 /**
  * @swagger

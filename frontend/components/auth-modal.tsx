@@ -136,7 +136,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                     id="username"
                     type="text"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value)}
+                    onChange={(e) => {
+                      // Tự động chuyển đổi username thành dạng slug (chữ thường, không dấu, không cách)
+                      const slug = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                      setUsername(slug);
+                    }}
                     placeholder={t("auth.usernamePlaceholder")}
                     required
                   />

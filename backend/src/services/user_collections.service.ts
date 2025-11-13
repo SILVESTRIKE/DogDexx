@@ -4,11 +4,11 @@ import { PredictionHistoryDoc } from '../models/prediction_history.model';
 import { Types } from 'mongoose';
 
 // Giữ lại type này để service và controller có thể giao tiếp
-export interface PokedexBreed {
+export interface DogDexBreed {
   slug: string;
   breed: string;
   group?: string;
-  pokedexNumber?: number;
+  dogdexNumber?: number;
   origin?: string;
   mediaUrl?: string;
   rarity_level?: number;
@@ -92,7 +92,7 @@ export const collectionService = {
   },
 
   /**
-   * Lấy bộ sưu tập ("Pokedex") của một người dùng.
+   * Lấy bộ sưu tập ("DogDex") của một người dùng.
    */
   async getUserCollection(userId: Types.ObjectId, lang: 'vi' | 'en' = 'en'): Promise<CollectedBreed[]> {
     const WikiModel = getDogBreedWikiModel(lang);
@@ -147,9 +147,9 @@ export const collectionService = {
   },
 
   /**
-   * Sắp xếp danh sách Pokedex ở tầng ứng dụng.
+   * Sắp xếp danh sách DogDex ở tầng ứng dụng.
    */
-  sortPokedex(breeds: PokedexBreed[], sortBy: string): PokedexBreed[] {
+  sortDogDex(breeds: DogDexBreed[], sortBy: string): DogDexBreed[] {
     if (sortBy === 'collectedAt-desc') {
       return breeds.sort((a, b) => {
         if (!a.collectedAt) return 1;

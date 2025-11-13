@@ -1,7 +1,7 @@
 import mongoose, { Schema, Document, Types } from 'mongoose';
 
 /**
- * Đại diện cho một giống chó đã được sưu tầm, được nhúng trong Pokedex.
+ * Đại diện cho một giống chó đã được sưu tầm, được nhúng trong DogDex.
  */
 export interface CollectedBreed {
   breed_id: Types.ObjectId; // Liên kết tới DogBreedWiki
@@ -10,7 +10,7 @@ export interface CollectedBreed {
 }
 
 /**
- * Đại diện cho toàn bộ Pokedex của một người dùng.
+ * Đại diện cho toàn bộ DogDex của một người dùng.
  * Mỗi người dùng chỉ có MỘT document trong collection này.
  */
 export interface UserCollectionDoc extends Document {

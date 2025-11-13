@@ -46,7 +46,14 @@ export type UserDoc = Document & {
 
 const userSchema = new Schema<UserDoc>(
   {
-    username: { type: String, required: true, unique: true, trim: true },
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true, // Tự động chuyển thành chữ thường
+      match: [/^[a-z0-9_]+$/, "Username không hợp lệ"], // Ràng buộc định dạng
+    },
     email: {
       type: String,
       required: true,
@@ -70,8 +77,8 @@ const userSchema = new Schema<UserDoc>(
     // THAY ĐỔI: Thêm trường token
     remainingTokens: {
       type: Number,
-      default: 10, // Mặc định 10 token "chào mừng" cho người dùng mới
-      min: [0, "Số token không thể là số âm."], // THÊM DÒNG NÀY
+      default: 10,
+      min: [0, "Cant have negative tokens"],
     },
     lastUsageResetAt: { type: Date, default: () => new Date() },
     plan: {

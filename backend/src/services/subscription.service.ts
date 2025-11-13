@@ -154,8 +154,8 @@ export const subscriptionService = {
 
     const [subscriptions, total] = await Promise.all([
       SubscriptionModel.find(query)
-        .populate('userId', 'username email')
-        .populate('planId', 'name')
+        .populate('userId', 'name email') // Lấy cả name và email
+        .populate('planId', 'name')      // Giữ nguyên
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)

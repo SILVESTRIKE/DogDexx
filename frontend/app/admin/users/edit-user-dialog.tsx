@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { toast } from "sonner"
-import { apiClient } from "@/lib/api-client"
+import { adminUpdateUser } from "@/lib/admin-api"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { EnrichedUser } from "@/lib/admin-api"
 import { Switch } from "@/components/ui/switch"
@@ -44,7 +44,11 @@ export function EditUserDialog({ user, isOpen, onOpenChange, onUserUpdated }: Ed
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target
-    setFormData((prev) => ({ ...prev, [id]: value }))
+    let processedValue = value;
+    if (id === 'username') {
+      processedValue = value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    }
+    setFormData((prev) => ({ ...prev, [id]: processedValue }))
   }
 
   const handleRoleChange = (value: string) => {
@@ -58,7 +62,7 @@ export function EditUserDialog({ user, isOpen, onOpenChange, onUserUpdated }: Ed
   const handleUpdateUser = async () => {
     setIsSaving(true)
     try {
-      await apiClient.adminUpdateUser(user.id, formData)
+      await adminUpdateUser(user.id, formData)
       toast.success(`User "${formData.username}" updated successfully.`)
       onUserUpdated()
       onOpenChange(false)
@@ -78,8 +82,9 @@ export function EditUserDialog({ user, isOpen, onOpenChange, onUserUpdated }: Ed
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="username" className="text-right">Username</Label>
+            <Label htmlFor="username" className="text-right">Username</Label>            
             <Input id="username" value={formData.username} onChange={handleInputChange} className="col-span-3" />
+            <p className="col-start-2 col-span-3 text-xs text-muted-foreground mt-1">Chỉ chữ thường, số và dấu gạch dưới (_).</p>
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="email" className="text-right">Email</Label>
