@@ -21,7 +21,8 @@ from ultralytics.utils.plotting import Annotator, colors
 # 1. CONFIGURATION
 # ==============================================================================
 # --- FIX: Load environment variables from .env file ---
-dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
+# SỬA ĐỔI: Tải file .env từ cùng thư mục với main.py
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 MONGO_URI = os.getenv("MONGO_URI")
@@ -37,13 +38,18 @@ class Config:
 
         # --- Bước 1: Kết nối tới MongoDB ---
         try:
+            # THÊM: Kiểm tra xem MONGO_URI có tồn tại không
+            if not MONGO_URI:
+                raise ValueError("MONGO_URI environment variable is not set or is empty.")
+                
             self.mongo_client = MongoClient(MONGO_URI)
             # Lệnh ismaster rẻ và không yêu cầu xác thực.
             self.mongo_client.admin.command('ismaster')
             print(f"✅ MongoDB connection successful to URI ending with: ...{MONGO_URI[-20:]}")
             self.db = self.mongo_client[DB_NAME]
         except Exception as e:
-            print(f"❌ WARNING: Could not connect to MongoDB at {MONGO_URI}. Error: {e}")
+            # SỬA: In ra thông báo lỗi rõ ràng hơn
+            print(f"❌ WARNING: Could not connect to MongoDB. Error: {e}")
             print("   - Proceeding with default hardcoded configuration.")
             self.db = None
 
@@ -73,7 +79,7 @@ class Config:
                 self.apply_config_and_load_model({}) # Dùng giá trị mặc định đã set
                 return
 
-            config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
+            config_doc = self.db.configurations.find_one({"key": "model_thresholds"}) # This should be a constant
             active_model_doc = self.db.ai_models.find_one({"status": "ACTIVE", "taskType": "DOG_BREED_CLASSIFICATION"})
 
             full_config = config_doc if config_doc else {}
@@ -94,7 +100,9 @@ class Config:
         self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf", self.STREAM_CONF_THRESHOLD)
         self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf", self.STREAM_HIGH_CONF_THRESHOLD)
         self.DEVICE = config_data.get("device", self.DEVICE)
-        self.MODEL_PATH = config_data.get("model_path", self.MODEL_PATH)
+        
+        model_filename = os.path.basename(config_data.get("model_path") or self.MODEL_PATH)
+        self.MODEL_PATH = os.path.join("models", model_filename)
         self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", self.HUGGINGFACE_REPO)
 
         print("✅ Configuration applied:")
@@ -102,6 +110,8 @@ class Config:
         print(f"   - Device: {self.DEVICE}")
         print(f"   - HuggingFace Repo: {self.HUGGINGFACE_REPO}")
         print(f"   - Image Confidence: {self.IMAGE_CONF_THRESHOLD}")
+        print(f"   - Video Confidence: {self.VIDEO_CONF_THRESHOLD}")
+        print(f"   - Stream Confidence: {self.STREAM_CONF_THRESHOLD}")
         
         # --- FIX: Kiểm tra model path trước khi thực hiện bất cứ điều gì ---
         if not self.MODEL_PATH:
