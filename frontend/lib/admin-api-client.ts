@@ -37,21 +37,23 @@ export class AdminApiClient {
     );
   }
 
-  async adminApproveFeedback(feedbackId: string) {
+  async adminApproveFeedback(feedbackId: string, payload: { correctedLabel?: string }) {
     return this.client.request<any>(
       `/bff/admin/feedback/${feedbackId}/approve`,
       {
         method: "POST",
+        body: JSON.stringify(payload), 
       },
       true
     );
   }
 
-  async adminRejectFeedback(feedbackId: string) {
+  async adminRejectFeedback(feedbackId: string, payload: { reason?: string }) {
     return this.client.request<any>(
       `/bff/admin/feedback/${feedbackId}/reject`,
       {
         method: "POST",
+        body: JSON.stringify(payload),
       },
       true
     );
@@ -94,10 +96,6 @@ export class AdminApiClient {
 
   async getAlerts() {
     return this.client.request<any>("/bff/admin/alerts", {}, true);
-  }
-
-  async getAdminUsageStats() {
-    return this.client.request<any>("/bff/admin/usage", {}, true);
   }
 
   async getAdminHistories(params?: {
@@ -157,6 +155,62 @@ export class AdminApiClient {
     );
   }
 
+  // --- Dataset Management ---
+  async browseAdminDatasets(path: string, options: RequestInit = {}) {
+    const queryParams = new URLSearchParams({ path });
+    return this.client.request<any>(
+      `/bff/admin/datasets/browse?${queryParams.toString()}`,
+      options,
+      true
+    );
+  }
+
+  async downloadAdminDataset(): Promise<Blob> {
+    const url = `${this.client.getBaseUrl()}/bff/admin/datasets/download`;
+    const token = this.client.getAccessToken();
+
+    const response = await fetch(url, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to download dataset');
+    }
+
+    const blob = await response.blob();
+    return blob;
+  }
+
+  // --- Report Management ---
+  async exportAdminReport(params: {
+    startDate: string;
+    endDate: string;
+    format: "excel" | "word";
+  }): Promise<Blob> {
+    const queryParams = new URLSearchParams({
+      startDate: params.startDate,
+      endDate: params.endDate,
+      format: params.format,
+    });
+    const url = `${this.client.getBaseUrl()}/bff/admin/reports/export?${queryParams.toString()}`;
+    const token = this.client.getAccessToken();
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: "Failed to export report" }));
+      throw new Error(errorData.message || "Unknown error during export");
+    }
+
+    return response.blob();
+  }
+
   // Core User Management (Admin)
   async deleteUser(userId: string) {
     return this.client.request<void>(
@@ -207,16 +261,29 @@ export class AdminApiClient {
 
   // Core AI Model Management (Admin)
   async getAIModels() {
-    return this.client.request<any>("/api/ai-models", {}, true);
+    return this.client.request<any>("/bff/admin/ai-models", {}, true);
   }
 
   async activateAIModel(modelId: string) {
     return this.client.request<any>(
-      `/api/ai-models/${modelId}/activate`,
+      `/bff/admin/ai-models/${modelId}/activate`,
       {
         method: "POST",
       },
       true
     );
+  }
+
+  // THÊM: Method để lấy dữ liệu thống kê sử dụng
+  async getAdminUsageStats() {
+    return this.client.request<any>("/bff/admin/usage", {}, true);
+  }
+}
+
+// Thêm một phương thức để lấy base URL từ ApiClient
+declare module "./api-client" {
+  interface ApiClient {
+    getBaseUrl(): string;
+    getAccessToken(): string | null;
   }
 }
