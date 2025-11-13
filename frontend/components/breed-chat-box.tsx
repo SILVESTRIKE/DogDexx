@@ -86,6 +86,32 @@ export function BreedChatBox({ breedSlug, breedName, initialMessage }: BreedChat
     return () => window.removeEventListener('resize', updateConstraints);
   }, [isMounted, snapEdge]); // Cập nhật lại khi kích thước button thay đổi (do snapEdge)
 
+  // TẢI LỊCH SỬ CHAT KHI MỞ COMPONENT
+  useEffect(() => {
+    const fetchHistory = async () => {
+      try {
+        setIsLoading(true);
+        const { history } = await apiClient.getChatHistory(breedSlug);
+        const formattedMessages: Message[] = history.map(item => ({
+          role: item.role,
+          content: item.parts[0].text
+        }));
+        // Chỉ set message nếu có lịch sử, nếu không thì giữ lại initialMessage
+        if (formattedMessages.length > 0) {
+          setMessages(formattedMessages);
+        }
+      } catch (error) {
+        toast.error("Could not load chat history.", { description: (error as Error).message });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (isOpen) {
+      fetchHistory();
+    }
+  }, [isOpen, breedSlug]);
+
   useEffect(() => {
     if (scrollAreaRef.current) {
       scrollAreaRef.current.scrollTo({ top: scrollAreaRef.current.scrollHeight, behavior: "smooth" })

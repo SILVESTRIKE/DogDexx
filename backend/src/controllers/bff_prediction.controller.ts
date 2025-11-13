@@ -12,12 +12,14 @@ import { achievementService } from "../services/achievement.service";
 import { userService } from "../services/user.service";
 import { logger } from "../utils/logger.util";
 import { predictionHistoryService } from "../services/prediction_history.service";
-import { askGemini } from "../services/geminiAI.service";
+import { askGemini, getChatHistory as getGeminiChatHistory } from "../services/geminiAI.service";
 import { redisClient } from "../utils/redis.util";
+import { REDIS_KEYS } from "../constants/redis.constants";
 import { tokenConfig } from "../config/token.config";
-import { batchProcessor } from '../utils/BatchProcessor.util';
+import { getHealthRecommendations, getRecommendedProducts } from "../services/geminiAI.service";
 import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
+import { PREDICTION_SOURCES } from "../constants/prediction.constants";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
 
 // THÊM: Định nghĩa một kiểu dữ liệu rõ ràng cho một item trong mảng predictions
@@ -109,7 +111,7 @@ async function updateUserCollectionAndAchievements(
 async function handlePredictionAndEnrichment(
   req: Request,
   predictionPromise: Promise<any>,
-  source: "image_upload" | "video_upload" | "stream_capture",
+  source: typeof PREDICTION_SOURCES[keyof typeof PREDICTION_SOURCES],
   userId?: string
 ) {
   const lang =
@@ -181,148 +183,331 @@ async function handlePredictionAndEnrichment(
 }
 
 export const bffPredictionController = {
-  predictImage: async (req: Request, res: Response) => {
-    const user = (req as any).user as UserDoc | undefined;
-    const userId = user?._id as Types.ObjectId | undefined;
-    const file = req.file;
-    if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+  predictImage: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const file = req.file;
+      if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
-    const predictionPromise = predictionService.makePrediction(
-      userId,
-      file,
-      "image",
-      req
-    );
-    const data = await handlePredictionAndEnrichment(
-      req,
-      predictionPromise,
-      "image_upload",
-      userId?.toString()
-    );
+      const predictionPromise = predictionService.makePrediction(
+        userId,
+        file,
+        "image",
+        req
+      );
+      const data = await handlePredictionAndEnrichment(
+        req,
+        predictionPromise,
+        PREDICTION_SOURCES.IMAGE_UPLOAD,
+        userId?.toString()
+      );
 
-    await deductTokensForRequest(
-      req,
-      res,
-      tokenConfig.costs.imagePrediction,
-      "single"
-    );
+      await deductTokensForRequest(
+        req,
+        res,
+        tokenConfig.costs.imagePrediction,
+        "single"
+      );
 
-    res.status(200).json(data);
-  },
-
-  predictVideo: async (req: Request, res: Response) => {
-    const user = (req as any).user as UserDoc | undefined;
-    // SỬA ĐỔI: Truyền `res` vào hàm trừ token
-    const userId = user?._id as Types.ObjectId | undefined;
-    const file = req.file;
-    if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
-
-    const predictionPromise = predictionService.makePrediction(
-      userId,
-      file,
-      "video",
-      req
-    );
-    const data = await handlePredictionAndEnrichment(
-      req,
-      predictionPromise,
-      "video_upload",
-      userId?.toString()
-    );
-
-    await deductTokensForRequest(
-      req,
-      res,
-      tokenConfig.costs.videoPrediction,
-      "single"
-    );
-
-    res.status(200).json(data);
-  },
-
-  predictBatch: async (req: Request, res: Response) => {
-    const user = (req as any).user as UserDoc | undefined;
-    // SỬA ĐỔI: Truyền `res` vào hàm trừ token
-    const userId = user?._id as Types.ObjectId | undefined;
-    const lang =
-      req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
-        ? "vi"
-        : "en";
-    const files = req.files as Express.Multer.File[];
-    if (!files || files.length === 0) {
-      throw new BadRequestError("Không có file nào được cung cấp.");
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
     }
+  },
 
-    const batchPredictionResults = await predictionService.makeBatchPredictions(
-      userId,
-      files,
-      req
-    );
-    const allSlugs: string[] = batchPredictionResults.flatMap((result) =>
-      result.predictions.map((p) => p.class.toLowerCase().replace(/\s+/g, "-"))
-    );
-    const uniqueSlugs: string[] = [...new Set(allSlugs)];
+  predictVideo: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const file = req.file;
+      if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
 
-    let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
-    let collectionStatus: any = null;
+      const predictionPromise = predictionService.makePrediction(
+        userId,
+        file,
+        "video",
+        req
+      );
+      const data = await handlePredictionAndEnrichment(
+        req,
+        predictionPromise,
+        PREDICTION_SOURCES.VIDEO_UPLOAD,
+        userId?.toString()
+      );
 
-    const enrichmentPromises: Promise<any>[] = [
-      wikiService.getBreedsBySlugs(uniqueSlugs, lang).then((breeds) => {
-        breeds.forEach((breed) => wikiInfoMap.set(breed.slug, breed));
-      }),
-    ];
+      await deductTokensForRequest(
+        req,
+        res,
+        tokenConfig.costs.videoPrediction,
+        "single"
+      );
 
-    if (userId && uniqueSlugs.length > 0) {
-      enrichmentPromises.push(
-        (async () => {
-          const [userBeforeUpdate, oldCollections] = await Promise.all([
-            userService.getById(userId.toString()),
-            collectionService.getUserCollection(userId),
-          ]);
-          if (!userBeforeUpdate) return;
-          await collectionService.addOrUpdateFromPredictionResults(
-            userId,
-            batchPredictionResults,
-            lang
-          );
-          const [userAfterUpdate, newCollections] = await Promise.all([
-            userService.getById(userId.toString()),
-            collectionService.getUserCollection(userId),
-          ]);
-          if (!userAfterUpdate) return;
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
+    }
+  },
 
-          const achievementsResult =
-            await achievementService.processUserAchievements(
-              userAfterUpdate as UserDoc,
-              newCollections,
+  predictBatch: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const lang =
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en";
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        throw new BadRequestError("Không có file nào được cung cấp.");
+      }
+
+      const batchPredictionResults = await predictionService.makeBatchPredictions(
+        userId,
+        files,
+        req
+      );
+      const allSlugs: string[] = batchPredictionResults.flatMap((result) =>
+        result.predictions.map((p) => p.class.toLowerCase().replace(/\s+/g, "-"))
+      );
+      const uniqueSlugs: string[] = [...new Set(allSlugs)];
+
+      let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
+      let collectionStatus: any = null;
+
+      const enrichmentPromises: Promise<any>[] = [
+        wikiService.getBreedsBySlugs(uniqueSlugs, lang).then((breeds) => {
+          breeds.forEach((breed) => wikiInfoMap.set(breed.slug, breed));
+        }),
+      ];
+
+      if (userId && uniqueSlugs.length > 0) {
+        enrichmentPromises.push(
+          (async () => {
+            const [userBeforeUpdate, oldCollections] = await Promise.all([
+              userService.getById(userId.toString()),
+              collectionService.getUserCollection(userId),
+            ]);
+            if (!userBeforeUpdate) return;
+            await collectionService.addOrUpdateFromPredictionResults(
+              userId,
+              batchPredictionResults,
               lang
             );
-          const unlockedAchievements = achievementsResult.filter(
-            (ach) =>
-              ach.unlocked &&
-              !(userBeforeUpdate.achievements || []).some(
-                (oldAch: UnlockedAchievement) => oldAch.key === ach.key
-              )
-          );
-          collectionStatus = {
-            isNewBreed: newCollections.length > oldCollections.length,
-            totalCollected: newCollections.length,
-            achievementsUnlocked: unlockedAchievements.map((ach) => ach.key),
+            const [userAfterUpdate, newCollections] = await Promise.all([
+              userService.getById(userId.toString()),
+              collectionService.getUserCollection(userId),
+            ]);
+            if (!userAfterUpdate) return;
+
+            const achievementsResult =
+              await achievementService.processUserAchievements(
+                userAfterUpdate as UserDoc,
+                newCollections,
+                lang
+              );
+            const unlockedAchievements = achievementsResult.filter(
+              (ach) =>
+                ach.unlocked &&
+                !(userBeforeUpdate.achievements || []).some(
+                  (oldAch: UnlockedAchievement) => oldAch.key === ach.key
+                )
+            );
+            collectionStatus = {
+              isNewBreed: newCollections.length > oldCollections.length,
+              totalCollected: newCollections.length,
+              achievementsUnlocked: unlockedAchievements.map((ach) => ach.key),
+            };
+          })()
+        );
+      }
+
+      await Promise.all(enrichmentPromises);
+
+      const results = batchPredictionResults.map((predictionResult) => {
+        const transformedPrediction = transformMediaURLs(
+          req,
+          predictionResult.toObject()
+        );
+        const detections = transformedPrediction.predictions.map((p: any) => {
+          const slug = p.class.toLowerCase().replace(/\s+/g, "-");
+          const breedInfoDoc = wikiInfoMap.get(slug);
+          return {
+            detectedBreed: slug,
+            confidence: p.confidence,
+            boundingBox: {
+              x: p.box[0],
+              y: p.box[1],
+              width: p.box[2] - p.box[0],
+              height: p.box[3] - p.box[1],
+            },
+            breedInfo: createEnrichedBreedInfo(breedInfoDoc),
           };
-        })()
-      );
-    }
+        });
 
-    await Promise.all(enrichmentPromises);
+        return {
+          predictionId: transformedPrediction.id,
+          originalFilename:
+            (transformedPrediction.media as any)?.name || "unknown",
+          processedMediaUrl: transformedPrediction.processedMediaUrl,
+          detections: detections,
+          collectionStatus: collectionStatus,
+        };
+      });
 
-    const results = batchPredictionResults.map((predictionResult) => {
-      const transformedPrediction = transformMediaURLs(
+      await deductTokensForRequest(
         req,
-        predictionResult.toObject()
+        res,
+        tokenConfig.costs.imagePrediction,
+        "batch"
       );
+
+      res.status(200).json(results);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  submitFeedback: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user?._id;
+      const { id: prediction_id } = req.params;
+      const { user_submitted_label, notes, isCorrect } = req.body;
+
+      // Fetch prediction history to get the file_path
+      const predictionHistory =
+        await predictionHistoryService.getHistoryByIdForUser(
+          userId,
+          prediction_id
+        );
+      if (!predictionHistory) {
+        throw new NotFoundError("Không tìm thấy lịch sử dự đoán.");
+      }
+      // SỬA LỖI: Lấy mediaPath một cách an toàn, nó có thể không tồn tại (ví dụ: stream)
+      const file_path = (predictionHistory.media as any)?.mediaPath;
+
+      const feedback = await feedbackService.submitFeedback(userId, {
+        prediction_id,
+        isCorrect,
+        user_submitted_label,
+        notes,
+        file_path,
+      });
+
+      res.status(201).json({
+        feedbackId: feedback._id,
+        message: "Feedback submitted successfully",
+      });
+    } catch (error) {
+      next(error); // Chuyển lỗi đến middleware xử lý lỗi chung
+    }
+  },
+
+  deletePredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user!._id;
+      const { id: historyId } = req.params;
+      const result = await predictionHistoryService.deleteHistoryForUser(
+        userId,
+        historyId
+      );
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getPredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const userId = (req as any).user!._id;
+      const lang =
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en";
+      const { page = 1, limit = 10 } = req.query;
+      const historyResult = await predictionHistoryService.getHistoryForUser(
+        userId,
+        {
+          page: Number(page),
+          limit: Number(limit),
+        }
+      );
+      const allSlugs = [
+        ...new Set(
+          historyResult.histories.flatMap((h) =>
+            h.predictions.map((p) => p.class.toLowerCase().replace(/\s+/g, "-"))
+          )
+        ),
+      ];
+      const wikiInfoMap = new Map<string, { breed: string }>();
+      if (allSlugs.length > 0) {
+        const breeds = await wikiService.getBreedsBySlugs(allSlugs, lang);
+        breeds.forEach((breed) =>
+          wikiInfoMap.set(breed.slug, { breed: breed.breed })
+        );
+      }
+      const enrichedData = historyResult.histories.map((historyItem) => {
+        const item = transformMediaURLs(req, historyItem.toObject());
+        const detections = (item.predictions || []).map((p: any) => {
+          const slug = p.class.toLowerCase().replace(/\s+/g, "-");
+          const breedInfo = wikiInfoMap.get(slug);
+          return {
+            detectedBreed: slug,
+            breedName: breedInfo?.breed || slug,
+            confidence: p.confidence,
+          };
+        });
+        return {
+          id: item.id,
+          processedMediaUrl: item.processedMediaUrl,
+          modelUsed: item.modelUsed,
+          isCorrect: item.isCorrect,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+          detections: detections,
+          media: {
+            name: item.media?.name || 'N/A',
+            mediaUrl: item.media?.mediaUrl,
+            type: item.media?.type,
+          },
+          source: item.source,
+        };
+      });
+      res.status(200).json({
+        histories: enrichedData,
+        total: historyResult.total,
+        page: historyResult.page,
+        limit: historyResult.limit,
+        totalPages: historyResult.totalPages,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getPredictionHistoryById: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id: historyId } = req.params;
+      const lang =
+        req.query.lang === "vi" || req.query.lang === "en"
+          ? (req.query.lang as "vi" | "en")
+          : "en";
+      const historyItem = await predictionHistoryService.getHistoryById(
+        historyId
+      );
+      if (!historyItem) throw new NotFoundError("Prediction history not found.");
+      const breedSlugs: string[] = [
+        ...new Set(
+          historyItem.predictions.map((p: any) =>
+            p.class.toLowerCase().replace(/\s+/g, "-")
+          )
+        ),
+      ];
+      const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
+      const wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
+      const transformedPrediction = transformMediaURLs(req, historyItem);
       const detections = transformedPrediction.predictions.map((p: any) => {
         const slug = p.class.toLowerCase().replace(/\s+/g, "-");
-        const breedInfoDoc = wikiInfoMap.get(slug);
         return {
           detectedBreed: slug,
           confidence: p.confidence,
@@ -332,164 +517,20 @@ export const bffPredictionController = {
             width: p.box[2] - p.box[0],
             height: p.box[3] - p.box[1],
           },
-          breedInfo: createEnrichedBreedInfo(breedInfoDoc),
+          breedInfo: createEnrichedBreedInfo(wikiInfoMap.get(slug)),
         };
       });
-
-      return {
+      const finalResponse = {
         predictionId: transformedPrediction.id,
-        originalFilename:
-          (transformedPrediction.media as any)?.name || "unknown",
         processedMediaUrl: transformedPrediction.processedMediaUrl,
-        detections: detections,
-        collectionStatus: collectionStatus,
+        detections,
+        collectionStatus: null,
+        hasFeedback: (historyItem as any).hasFeedback, 
       };
-    });
-
-    await deductTokensForRequest(
-      req,
-      res,
-      tokenConfig.costs.imagePrediction,
-      "batch"
-    );
-
-    res.status(200).json(results);
-  },
-
-  submitFeedback: async (req: Request, res: Response) => {
-    const userId = (req as any).user?._id;
-    const { id: predictionId } = req.params;
-    const { isCorrect, submittedLabel, notes } = req.body;
-    const result = await feedbackService.submitFeedback(userId, {
-      predictionId,
-      isCorrect,
-      submittedLabel,
-      notes,
-    });
-    const newBreedAlert = !isCorrect && submittedLabel;
-    res.status(201).json({
-      feedbackId: (result as any)._id,
-      message: "Feedback submitted successfully",
-      newBreedAlert,
-    });
-  },
-
-  deletePredictionHistory: async (req: Request, res: Response) => {
-    const userId = (req as any).user!._id;
-    const { id: historyId } = req.params;
-    const result = await predictionHistoryService.deleteHistoryForUser(
-      userId,
-      historyId
-    );
-    res.status(200).json(result);
-  },
-
-  getPredictionHistory: async (req: Request, res: Response) => {
-    const userId = (req as any).user!._id;
-    const lang =
-      req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
-        ? "vi"
-        : "en";
-    const { page = 1, limit = 10 } = req.query;
-    const historyResult = await predictionHistoryService.getHistoryForUser(
-      userId,
-      {
-        page: Number(page),
-        limit: Number(limit),
-      }
-    );
-    const allSlugs = [
-      ...new Set(
-        historyResult.histories.flatMap((h) =>
-          h.predictions.map((p) => p.class.toLowerCase().replace(/\s+/g, "-"))
-        )
-      ),
-    ];
-    const wikiInfoMap = new Map<string, { breed: string }>();
-    if (allSlugs.length > 0) {
-      const breeds = await wikiService.getBreedsBySlugs(allSlugs, lang);
-      breeds.forEach((breed) =>
-        wikiInfoMap.set(breed.slug, { breed: breed.breed })
-      );
+      res.status(200).json(finalResponse);
+    } catch (error) {
+      next(error);
     }
-    const enrichedData = historyResult.histories.map((historyItem) => {
-      const item = transformMediaURLs(req, historyItem.toObject());
-      const detections = (item.predictions || []).map((p: any) => {
-        const slug = p.class.toLowerCase().replace(/\s+/g, "-");
-        const breedInfo = wikiInfoMap.get(slug);
-        return {
-          detectedBreed: slug,
-          breedName: breedInfo?.breed || slug,
-          confidence: p.confidence,
-        };
-      });
-      return {
-        id: item.id,
-        processedMediaUrl: item.processedMediaUrl,
-        modelUsed: item.modelUsed,
-        isCorrect: item.isCorrect,
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-        detections: detections,
-        media: {
-          name: item.media.name,
-          mediaUrl: item.media.mediaUrl,
-          type: item.media.type,
-        },
-        source: item.source,
-      };
-    });
-    res.status(200).json({
-      histories: enrichedData,
-      total: historyResult.total,
-      page: historyResult.page,
-      limit: historyResult.limit,
-      totalPages: historyResult.totalPages,
-    });
-  },
-
-  getPredictionHistoryById: async (req: Request, res: Response) => {
-    const { id: historyId } = req.params;
-    const lang =
-      req.query.lang === "vi" || req.query.lang === "en"
-        ? (req.query.lang as "vi" | "en")
-        : "en";
-    const historyItem = await predictionHistoryService.getHistoryById(
-      historyId
-    );
-    if (!historyItem) throw new NotFoundError("Prediction history not found.");
-    const breedSlugs: string[] = [
-      ...new Set(
-        historyItem.predictions.map((p: any) =>
-          p.class.toLowerCase().replace(/\s+/g, "-")
-        )
-      ),
-    ];
-    const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
-    const wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
-    const transformedPrediction = transformMediaURLs(req, historyItem);
-    const detections = transformedPrediction.predictions.map((p: any) => {
-      const slug = p.class.toLowerCase().replace(/\s+/g, "-");
-      return {
-        detectedBreed: slug,
-        confidence: p.confidence,
-        boundingBox: {
-          x: p.box[0],
-          y: p.box[1],
-          width: p.box[2] - p.box[0],
-          height: p.box[3] - p.box[1],
-        },
-        breedInfo: createEnrichedBreedInfo(wikiInfoMap.get(slug)),
-      };
-    });
-    const finalResponse = {
-      predictionId: transformedPrediction.id,
-      processedMediaUrl: transformedPrediction.processedMediaUrl,
-      detections,
-      collectionStatus: null,
-      hasFeedback: (historyItem as any).hasFeedback, 
-    };
-    res.status(200).json(finalResponse);
   },
 
   handleStreamPrediction: async (ws: WebSocket, req: Request) => {
@@ -512,7 +553,7 @@ export const bffPredictionController = {
     // ======================== THÊM MỚI TẠI ĐÂY ========================
     // BƯỚC 2A: KIỂM TRA & KHỞI TẠO TOKEN CHO KHÁCH (NẾU LÀ KHÁCH)
     if (!user && redisClient) {
-      const key = `guest:token:${guestIdentifier}`;
+      const key = `${REDIS_KEYS.GUEST_TOKEN_PREFIX}${guestIdentifier}`;
       const streamCost = tokenConfig.costs.streamSession;
 
       try {
@@ -661,7 +702,7 @@ export const bffPredictionController = {
           const enrichedResult = await handlePredictionAndEnrichment(
             mockReq,
             Promise.resolve(savedPrediction),
-            "stream_capture",
+            PREDICTION_SOURCES.STREAM_CAPTURE,
             userId
           );
 
@@ -778,5 +819,122 @@ export const bffPredictionController = {
     await deductTokensForRequest(req, res, tokenConfig.costs.chatMessage);
 
     res.status(200).json(result);
+  },
+
+  getHealthRecommendations: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { breedSlug } = req.params;
+      const lang = (req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi" ? "vi" : "en") as "vi" | "en";
+      const cacheKey = `${REDIS_KEYS.HEALTH_RECOMMENDATIONS_PREFIX}${breedSlug}:${lang}`;
+
+      // 1. Thử lấy từ cache trước
+      if (redisClient) {
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+          logger.info(`[BFF Controller] 🩺 Cache HIT for health recommendations: '${breedSlug}', lang: '${lang}'`);
+          return res.status(200).json({ recommendations: cachedData });
+        }
+        logger.info(`[BFF Controller] 🩺 Cache MISS for health recommendations: '${breedSlug}', lang: '${lang}'`);
+      }
+
+      logger.info(`[BFF Controller] 🩺 Requesting health recommendations for slug: '${breedSlug}', lang: '${lang}'`);
+
+      const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
+      if (!breedInfo || !breedInfo.common_health_issues || breedInfo.common_health_issues.length === 0) {
+        logger.warn(`[BFF Controller] 🩺 No health issues found for slug '${breedSlug}'. Returning empty recommendations.`);
+        return res.status(200).json({ recommendations: "" }); // Trả về chuỗi rỗng nếu không có thông tin
+      }
+
+      logger.info(`[BFF Controller] 🩺 Found health issues: ${breedInfo.common_health_issues.join(', ')}. Calling Gemini...`);
+      const recommendations = await getHealthRecommendations(
+        breedInfo.breed,
+        breedInfo.common_health_issues,
+        lang
+      );
+      logger.info(`[BFF Controller] 🩺 Gemini returned recommendations. Length: ${recommendations.length}`);
+
+      // 2. Lưu kết quả vào cache
+      if (redisClient && recommendations) {
+        await redisClient.set(cacheKey, recommendations, { EX: 3600 * 24 }); // Cache trong 24 giờ
+      }
+
+      logger.info(`[BFF Controller] 🩺 Sending response for '${breedSlug}'.`);
+      res.status(200).json({ recommendations });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getRecommendedProducts: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { breedSlug } = req.params;
+      const lang = (req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi" ? "vi" : "en") as "vi" | "en";
+      const cacheKey = `${REDIS_KEYS.RECOMMENDED_PRODUCTS_PREFIX}${breedSlug}:${lang}`;
+
+      // 1. Thử lấy từ cache trước
+      if (redisClient) {
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+          logger.info(`[BFF Controller] 🛍️ Cache HIT for recommended products: '${breedSlug}', lang: '${lang}'`);
+          return res.status(200).json({ products: JSON.parse(cachedData) });
+        }
+        logger.info(`[BFF Controller] 🛍️ Cache MISS for recommended products: '${breedSlug}', lang: '${lang}'`);
+      }
+
+      logger.info(`[BFF Controller] 🛍️ Requesting recommended products for slug: '${breedSlug}', lang: '${lang}'`);
+
+      const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
+      if (!breedInfo) {
+        logger.error(`[BFF Controller] 🛍️ Breed not found for slug '${breedSlug}'.`);
+        throw new NotFoundError("Breed not found");
+      }
+
+      logger.info(`[BFF Controller] 🛍️ Breed found: '${breedInfo.breed}'. Calling Gemini...`);
+      const productsJsonString = await getRecommendedProducts(
+        breedInfo.breed,
+        lang
+      );
+      logger.info(`[BFF Controller] 🛍️ Gemini returned products JSON string. Length: ${productsJsonString.length}`);
+      
+      // 2. Lưu kết quả vào cache trước khi parse và gửi đi
+      if (redisClient && productsJsonString && productsJsonString.length > 2) { // Chỉ cache nếu có nội dung
+        await redisClient.set(cacheKey, productsJsonString, { EX: 3600 * 24 }); // Cache trong 24 giờ
+      }
+
+      try {
+        const products = JSON.parse(productsJsonString);
+        logger.info(`[BFF Controller] 🛍️ Successfully parsed JSON. Found ${products.length} products. Sending response for '${breedSlug}'.`);
+        res.status(200).json({ products });
+      } catch (e) {
+        logger.error(`[BFF Controller] Failed to parse recommended products JSON for breed '${breedSlug}':`, e);
+        logger.error(`[BFF Controller] Invalid JSON string was: ${productsJsonString}`);
+        logger.info(`[BFF Controller] 🛍️ Sending empty products array due to parse error for '${breedSlug}'.`);
+        res.status(200).json({ products: [] }); // Trả về mảng rỗng nếu parse lỗi
+      }
+
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  getChatHistory: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { breedSlug } = req.params;
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id?.toString();
+      const guestIdentifier = user
+        ? undefined
+        : (req as any).fingerprint?.hash || req.ip;
+
+      const history = await getGeminiChatHistory(
+        userId,
+        guestIdentifier,
+        breedSlug
+      );
+
+      res.status(200).json({ history });
+    } catch (error) {
+      next(error);
+    }
   },
 };

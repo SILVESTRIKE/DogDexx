@@ -11,8 +11,9 @@ import { UserDoc } from "../models/user.model";
 import { DirectoryModel } from "../models/directory.model";
 import { MediaModel, MediaDoc } from "../models/medias.model";
 import { BadRequestError } from "../errors";
-import { AnalyticsEventName } from '../constants/analytics.events';
+import { AnalyticsEventName } from '../constants/analytics.constants';
 import { BatchProcessor } from '../utils/BatchProcessor.util';
+import { PREDICTION_SOURCES } from '../constants/prediction.constants';
 import { analyticsService } from './analytics.service';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
@@ -86,8 +87,8 @@ export const predictionService = {
 
       const newPrediction = await PredictionHistoryModel.create({
         user: userId, media: newMedia._id, mediaPath: newMedia.mediaPath,
-        predictions: result.predictions, processedMediaPath: publicUrl,
-        modelUsed: 'YOLOv8_image_batch', source: 'image_upload',
+        predictions: result.predictions, processedMediaPath: publicUrl, // Sửa lỗi: Thêm source
+        modelUsed: 'YOLOv8_image_batch', source: PREDICTION_SOURCES.IMAGE_UPLOAD,
       });
 
       const populatedPrediction = await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([
@@ -168,7 +169,7 @@ export const predictionService = {
     const newPrediction = await PredictionHistoryModel.create({
       user: userId, media: newMedia._id, mediaPath: newMedia.mediaPath,
       predictions: predictionResult.predictions, processedMediaPath: publicUrl,
-      modelUsed: `YOLOv8_${type}_upload`, source: `${type}_upload` as 'image_upload' | 'video_upload',
+      modelUsed: `YOLOv8_${type}_upload`, source: `${type}_upload` as typeof PREDICTION_SOURCES[keyof typeof PREDICTION_SOURCES],
     });
 
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
@@ -211,7 +212,7 @@ export const predictionService = {
     const newPrediction = await PredictionHistoryModel.create({
       user: userId, media: newMedia._id, mediaPath: publicUrl,
       predictions: payload.detections, processedMediaPath: publicUrl,
-      modelUsed: `YOLOv8_stream`, source: 'stream_capture',
+      modelUsed: `YOLOv8_stream`, source: PREDICTION_SOURCES.STREAM_CAPTURE,
     });
 
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);

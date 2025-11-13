@@ -2,7 +2,12 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
 import { logger } from "../utils/logger.util";
 import { redisClient } from "../utils/redis.util"; // Import Redis client
-import { tokenConfig } from "../config/token.config"; // Import tokenConfig cho thời gian hết hạn
+import { tokenConfig } from "../config/token.config";
+import { REDIS_KEYS } from "../constants/redis.constants";
+import axios from "axios";
+import { Builder, By, until, WebDriver, Capabilities } from 'selenium-webdriver';
+import chrome from 'selenium-webdriver/chrome';
+import 'chromedriver'; 
 dotenv.config();
 
 // 1. Kiểm tra API Key ngay từ đầu để báo lỗi sớm
@@ -10,32 +15,67 @@ const apiKey = process.env.GOOGLE_API_KEY;
 if (!apiKey) {
   throw new Error("GOOGLE_API_KEY is not defined in the .env file");
 }
-
+const ACCESSTRADE_API_BASE = "https://fast.accesstrade.com.vn";
 const genAI = new GoogleGenerativeAI(apiKey);
+const SHOPEE_CAMPAIGN_ID = "128"; // ID chiến dịch của Shopee trên AccessTrade
 
 // 2. Khởi tạo model một lần duy nhất để tái sử dụng
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 
 // Interface cho lịch sử chat lưu trong Redis
 interface RedisChatSession {
-  lang: 'vi' | 'en';
+  lang: "vi" | "en";
   history: { role: string; parts: { text: string }[] }[];
 }
 
 // Hàm tạo khóa Redis cho phiên chat
-function getChatRedisKey(userId: string | undefined, guestIdentifier: string | undefined, breedSlug: string): string {
+function getChatRedisKey(
+  userId: string | undefined,
+  guestIdentifier: string | undefined,
+  breedSlug: string
+): string {
   if (userId) {
-    return `chat:user:${userId}:${breedSlug}`;
+    return `${REDIS_KEYS.CHAT_SESSION_PREFIX}user:${userId}:${breedSlug}`;
   }
   if (guestIdentifier) {
-    return `chat:guest:${guestIdentifier}:${breedSlug}`;
+    return `${REDIS_KEYS.CHAT_SESSION_PREFIX}guest:${guestIdentifier}:${breedSlug}`;
   }
   // Trường hợp dự phòng, không nên xảy ra nếu logic xác định người dùng/khách là mạnh mẽ
-  return `chat:anon:${breedSlug}`;
+  return `${REDIS_KEYS.CHAT_SESSION_PREFIX}anon:${breedSlug}`;
 }
 
+/**
+ * Lấy lịch sử chat từ Redis.
+ */
+export async function getChatHistory(
+  userId: string | undefined,
+  guestIdentifier: string | undefined,
+  breedSlug: string
+): Promise<RedisChatSession['history']> {
+  const chatRedisKey = getChatRedisKey(userId, guestIdentifier, breedSlug);
+  if (!redisClient) {
+    logger.error("Redis client not available, cannot get chat history.");
+    return [];
+  }
+
+  const sessionStr = await redisClient.get(chatRedisKey);
+  if (sessionStr) {
+    try {
+      const session: RedisChatSession = JSON.parse(sessionStr);
+      // Bỏ qua 2 tin nhắn hệ thống đầu tiên (system prompt)
+      return session.history.slice(1);
+    } catch (e) {
+      logger.error(`Failed to parse chat session from Redis for key ${chatRedisKey}:`, e);
+    }
+  }
+  return [];
+}
 // Hàm thêm tin nhắn vào lịch sử chat trong Redis
-async function addToRedisHistory(key: string, role: "user" | "model", content: string) {
+async function addToRedisHistory(
+  key: string,
+  role: "user" | "model",
+  content: string
+) {
   if (!redisClient) {
     logger.error("Redis client not available for chat history.");
     return;
@@ -47,13 +87,18 @@ async function addToRedisHistory(key: string, role: "user" | "model", content: s
     try {
       session = JSON.parse(sessionStr);
     } catch (e) {
-      logger.error(`Failed to parse chat session from Redis for key ${key}:`, e);
+      logger.error(
+        `Failed to parse chat session from Redis for key ${key}:`,
+        e
+      );
       session = null; // Vô hiệu hóa session nếu phân tích cú pháp thất bại
     }
   }
 
   if (!session) {
-    logger.warn(`No existing session found for key ${key} when trying to add history. This should not happen.`);
+    logger.warn(
+      `No existing session found for key ${key} when trying to add history. This should not happen.`
+    );
     return;
   }
 
@@ -82,8 +127,9 @@ export async function askGemini(
   try {
     const chatRedisKey = getChatRedisKey(userId, guestIdentifier, breed);
 
-    const systemPromptText = lang === "en"
-      ? `You are an expert in dog breeds, especially knowledgeable about the ${breed} breed.
+    const systemPromptText =
+      lang === "en"
+        ? `You are an expert in dog breeds, especially knowledgeable about the ${breed} breed.
 
 Requirements:
 - Talk only about the ${breed} breed.
@@ -112,7 +158,10 @@ Yêu cầu:
         try {
           session = JSON.parse(sessionStr);
         } catch (e) {
-          logger.error(`Failed to parse chat session from Redis for key ${chatRedisKey}:`, e);
+          logger.error(
+            `Failed to parse chat session from Redis for key ${chatRedisKey}:`,
+            e
+          );
           session = null; // Vô hiệu hóa session nếu phân tích cú pháp thất bại
         }
       }
@@ -122,10 +171,14 @@ Yêu cầu:
 
     // Nếu chưa có session hoặc ngôn ngữ đã thay đổi, tạo session mới
     if (!session || session.lang !== lang) {
-      logger.info(`[Gemini] Creating new chat session for breed '${breed}' for ${userId ? 'user' : guestIdentifier ? 'guest' : 'anon'} in '${lang}'.`);
+      logger.info(
+        `[Gemini] Creating new chat session for breed '${breed}' for ${
+          userId ? "user" : guestIdentifier ? "guest" : "anon"
+        } in '${lang}'.`
+      );
 
       const newHistory = [
-        { role: 'user', parts: [{ text: systemPromptText }] },
+        { role: "user", parts: [{ text: systemPromptText }] },
       ];
 
       session = { lang, history: newHistory };
@@ -143,7 +196,7 @@ Yêu cầu:
 
     const result = await chat.sendMessage(userMessage);
     const reply = result.response.text();
-    
+
     // CẬP NHẬT: Thêm tin nhắn mới vào lịch sử trước khi gửi về
     await addToRedisHistory(chatRedisKey, "user", userMessage);
     await addToRedisHistory(chatRedisKey, "model", reply);
@@ -155,21 +208,14 @@ Yêu cầu:
       error
     );
     // Trả về một tin nhắn lỗi thân thiện với người dùng
-    const errorMessage = lang === "en"
-      ? "I'm having a little trouble thinking right now. Please try again in a moment."
-      : "Mình đang gặp chút sự cố, bạn thử lại sau nhé.";
-    
+    const errorMessage =
+      lang === "en"
+        ? "I'm having a little trouble thinking right now. Please try again in a moment."
+        : "Mình đang gặp chút sự cố, bạn thử lại sau nhé.";
+
     return { reply: errorMessage };
   }
 }
-
-/**
- * Lấy khuyến nghị chăm sóc sức khỏe từ Gemini AI dựa trên các vấn đề sức khỏe phổ biến.
- * @param breed Tên giống chó
- * @param healthIssues Mảng các vấn đề sức khỏe
- * @param lang Ngôn ngữ
- * @returns Một chuỗi chứa các khuyến nghị.
- */
 export async function getHealthRecommendations(
   breed: string,
   healthIssues: string[],
@@ -178,91 +224,241 @@ export async function getHealthRecommendations(
   try {
     const issuesString = healthIssues.join(", ");
 
-    const prompt = lang === "en"
-      ? `As a veterinary expert, provide practical and easy-to-understand care recommendations for a ${breed} dog owner. This breed may be prone to the following health issues: ${issuesString}.
+    // ====================== PROMPT MỚI - ĐỊNH DẠNG LIST ======================
+    const prompt =
+      lang === "en"
+        ? `As a veterinary expert, provide practical care recommendations for a ${breed} dog for these health issues: ${issuesString}.
 
-Focus on preventative care, early detection signs, and home care tips. Structure the advice clearly. For example, for skin issues like mange, recommend regular grooming, diet adjustments, and what symptoms to watch for.
+CRITICAL REQUIREMENTS:
+- DO NOT use a Markdown table. Use lists.
+- For each health issue, use a Level 3 Markdown header (e.g., "### Hip Dysplasia").
+- Under each header, provide a bulleted list of the 2-3 most important preventive measures using a hyphen (-).
+- Keep the advice concise, professional, and easy to understand.
+- Do not include any introductory or concluding paragraphs. Just the headers and lists.
 
-Your tone should be empathetic, professional, and reassuring. Start with a general encouraging sentence.`
-      : `Với vai trò là một chuyên gia thú y, hãy đưa ra các khuyến nghị chăm sóc thiết thực và dễ hiểu cho người nuôi chó giống ${breed}. Giống chó này có thể gặp các vấn đề sức khỏe sau: ${issuesString}.
+Example:
+### Health Issue A
+- Do this one short thing.
+- Do this other short thing.
 
-Hãy tập trung vào các biện pháp phòng ngừa, dấu hiệu phát hiện sớm và các mẹo chăm sóc tại nhà. Sắp xếp lời khuyên một cách rõ ràng. Ví dụ, đối với các vấn đề về da như ghẻ, rận, hãy đề xuất lịch trình chải chuốt thường xuyên, điều chỉnh chế độ ăn và những triệu chứng cần chú ý.
+### Health Issue B
+- Do this third short thing.
+`
+        : `Với vai trò là chuyên gia thú y, hãy đưa ra các khuyến nghị chăm sóc cho chó ${breed} đối với các vấn đề sức khỏe sau: ${issuesString}.
 
-Sử dụng giọng văn đồng cảm, chuyên nghiệp và trấn an. Bắt đầu bằng một câu động viên chung.`;
+YÊU CẦU QUAN TRỌNG:
+- KHÔNG sử dụng định dạng bảng Markdown. Hãy dùng danh sách.
+- Với mỗi vấn đề sức khỏe, hãy sử dụng tiêu đề Markdown cấp 3 (ví dụ: "### Loạn sản khớp háng").
+- Bên dưới mỗi tiêu đề, cung cấp một danh sách gạch đầu dòng từ 2-3 biện pháp phòng ngừa quan trọng nhất, sử dụng dấu gạch ngang (-).
+- Giữ cho lời khuyên ngắn gọn, chuyên nghiệp và dễ hiểu.
+- Không thêm bất kỳ đoạn văn giới thiệu hay kết luận nào. Chỉ cần các tiêu đề và danh sách.
+
+Ví dụ:
+### Tên Bệnh A
+- Làm hành động 1 ngắn gọn.
+- Làm hành động 2 ngắn gọn.
+
+### Tên Bệnh B
+- Làm hành động 3 ngắn gọn.
+`;
+    // =======================================================================
 
     const result = await model.generateContent(prompt);
     const reply = result.response.text();
     return reply;
   } catch (error) {
-    logger.error(`[Gemini Service Error] Failed to get health recommendations for breed '${breed}':`, error);
-    const errorMessage = lang === "en"
-      ? "I'm having a little trouble thinking of recommendations right now. Please try again in a moment."
-      : "Mình đang gặp chút sự cố khi lấy khuyến nghị, bạn thử lại sau nhé.";
+    logger.error(
+      `[Gemini Service Error] Failed to get health recommendations for breed '${breed}':`,
+      error
+    );
+    const errorMessage =
+      lang === "en"
+        ? "I'm having a little trouble thinking of recommendations right now. Please try again in a moment."
+        : "Mình đang gặp chút sự cố khi lấy khuyến nghị, bạn thử lại sau nhé.";
     return errorMessage;
   }
 }
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+interface ShopeeProduct {
+    name: string;
+    imageUrl: string;
+    productUrl: string;
+}
+async function scrapeFirstShopeeProduct(keyword: string): Promise<ShopeeProduct | null> {
+    const encodedKeyword = encodeURIComponent(keyword);
+    const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
 
+    logger.info(`[Selenium V3] 🚀 Khởi tạo trình duyệt cho: "${keyword}"`);
+    
+    const options = new chrome.Options();
+    options.addArguments(
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-dev-shm-usage',
+        '--start-maximized',
+        '--disable-blink-features=AutomationControlled',
+        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+    );
+    options.excludeSwitches('enable-automation');
+    
+    let driver: WebDriver | null = null;
+
+    try {
+        driver = await new Builder()
+            .forBrowser('chrome')
+            .setChromeOptions(options)
+            .build();
+
+        await driver.executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+
+        await driver.get(searchUrl);
+        logger.info(`[Selenium V3] 🔎 Đã truy cập Shopee...`);
+        
+        try {
+            const popupCloseButton = await driver.wait(until.elementLocated(By.css('div.shopee-popup__close-btn')), 5000);
+            await driver.executeScript("arguments[0].click();", popupCloseButton);
+            logger.info('[Selenium V3] 👍 Đã đóng pop-up.');
+            await sleep(1000);
+        } catch (error) {
+            logger.info('[Selenium V3] ✅ Không có pop-up.');
+        }
+
+        // CẢI TIẾN 1: CUỘN XUỐNG TẬN CÙNG TRANG
+        logger.info('[Selenium V3] 🖱️ Cuộn xuống cuối trang để tải tất cả sản phẩm...');
+        await driver.executeScript('window.scrollTo(0, document.body.scrollHeight);');
+        await sleep(1000); // Chờ 1 giây để các sản phẩm bắt đầu hiện ra
+        await driver.executeScript('window.scrollTo(0, 0);'); // Cuộn lại lên đầu để đảm bảo sản phẩm đầu tiên hiển thị
+        await sleep(500);
+
+        // CẢI TIẾN 2: CHỜ "VÙNG CHỨA SẢN PHẨM" TRƯỚC
+        const resultsContainerSelector = By.css('div.shopee-search-item-result__items');
+        logger.info(`[Selenium V3] ⏳ Chờ vùng chứa sản phẩm xuất hiện...`);
+        
+        // CẢI TIẾN 3: TĂNG TIMEOUT TỔNG THỂ LÊN 30 GIÂY
+        const resultsContainer = await driver.wait(
+            until.elementLocated(resultsContainerSelector), 
+            30000 
+        );
+        logger.info(`[Selenium V3] ✅ Vùng chứa sản phẩm đã xuất hiện!`);
+
+        // Bây giờ mới tìm sản phẩm đầu tiên BÊN TRONG vùng chứa đó
+        const productXPathSelector = ".//a[contains(@href, '-i.')]"; // Dùng ".//" để tìm bên trong element
+        logger.info(`[Selenium V3] 🎯 Đang săn lùng sản phẩm đầu tiên...`);
+        const firstProductElement = await resultsContainer.findElement(By.xpath(productXPathSelector));
+        
+        logger.info("[Selenium V3] ✅ Đã tìm thấy sản phẩm! Đang lấy chi tiết...");
+
+        const productUrl = await firstProductElement.getAttribute("href");
+        const name = (await firstProductElement.findElement(By.css('div[data-sqe="name"]')).getText()) || keyword;
+        const imageUrl = await firstProductElement.findElement(By.css('img.shopee-search-item-result__item-image-img')).getAttribute("src");
+        
+        return { name, imageUrl, productUrl };
+
+    } catch (error) {
+        logger.error(`[Selenium V3] Lỗi khi cào dữ liệu cho "${keyword}":`, error);
+        if(driver) {
+            const image = await driver.takeScreenshot();
+            const safeKeyword = keyword.replace(/[\\/:*?"<>|]/g, "_").substring(0, 100);
+            const screenshotPath = `selenium_error_${safeKeyword}.png`;
+            require('fs').writeFileSync(screenshotPath, image, 'base64');
+            logger.info(`📸 Đã lưu ảnh màn hình lỗi tại: ${screenshotPath}`);
+        }
+        return null;
+    } finally {
+        if (driver) {
+            logger.info("[Selenium V3] 👍 Hoàn tất, đóng trình duyệt.");
+            await driver.quit();
+        }
+    }
+}
 /**
- * Lấy danh sách sản phẩm đề xuất từ Gemini AI cho một giống chó cụ thể.
- * @param breed Tên giống chó
- * @param lang Ngôn ngữ
- * @returns Một chuỗi JSON chứa danh sách sản phẩm.
+ * [HÀM GIỮ LẠI] Tạo deeplink từ link sản phẩm gốc.
+ * Hàm này vẫn cần thiết để chuyển đổi link gốc từ Top Products thành link affiliate.
+ * Lưu ý: Tên biến accessToken đã đổi từ process.env.ACCESSTRADE_ACCESS_TOKEN thành process.env.ACCESSTRADE_API_KEY để nhất quán
  */
-export async function getRecommendedProducts(
-  breed: string,
-  lang: "vi" | "en" = "vi"
-): Promise<string> {
-  try {
-    const prompt = lang === "en"
-      ? `Based on the characteristics of the ${breed} dog breed, recommend a list of about 10 essential products for a new owner.
-
-Include products from these categories:
-- Food (e.g., specific brand or type suitable for the breed)
-- Grooming tools (e.g., brush type for their coat)
-- Health supplements (e.g., for joints or skin)
-- Toys (e.g., for their energy level)
-- Training aids
-
-For each product, provide a "productName" and a brief "reason" why it's suitable for a ${breed}.
-
-Return the result ONLY as a single JSON array string. Do not include any other text or markdown formatting. The JSON should look like this:
-[
-  {"productName": "Example Product Name 1", "reason": "Reason why this is good for a ${breed}."},
-  {"productName": "Example Product Name 2", "reason": "Another reason for this product."}
-]`
-      : `Dựa trên đặc điểm của giống chó ${breed}, hãy đề xuất một danh sách khoảng 10 sản phẩm thiết yếu cho người mới nuôi.
-
-Bao gồm các sản phẩm từ những danh mục sau:
-- Thức ăn (ví dụ: nhãn hiệu hoặc loại cụ thể phù hợp với giống chó)
-- Dụng cụ chải chuốt (ví dụ: loại lược cho bộ lông của chúng)
-- Thực phẩm chức năng (ví dụ: cho khớp hoặc da)
-- Đồ chơi (ví dụ: phù hợp với mức năng lượng của chúng)
-- Dụng cụ huấn luyện
-
-Với mỗi sản phẩm, hãy cung cấp "productName" (tên sản phẩm) và "reason" (lý do ngắn gọn tại sao nó phù hợp với chó ${breed}).
-
-Chỉ trả về kết quả dưới dạng một chuỗi mảng JSON duy nhất. Không bao gồm bất kỳ văn bản hay định dạng markdown nào khác. JSON phải có dạng như sau:
-[
-  {"productName": "Tên sản phẩm ví dụ 1", "reason": "Lý do tại sao sản phẩm này tốt cho chó ${breed}."},
-  {"productName": "Tên sản phẩm ví dụ 2", "reason": "Một lý do khác cho sản phẩm này."}
-]`;
-
-    const result = await model.generateContent(prompt);
-    let reply = result.response.text();
-
-    // Đảm bảo chuỗi trả về là một JSON hợp lệ
-    const jsonStartIndex = reply.indexOf('[');
-    const jsonEndIndex = reply.lastIndexOf(']');
-    if (jsonStartIndex !== -1 && jsonEndIndex !== -1) {
-      reply = reply.substring(jsonStartIndex, jsonEndIndex + 1);
+async function createAffiliateLinkManually(destinationUrl: string): Promise<string | null> {
+    const affiliateId = process.env.ACCESSTRADE_API_KEY;
+    if (!affiliateId) {
+        logger.error("[Link Builder] ACCESSTRADE_API_KEY chưa được cấu hình trong file .env!");
+        return null;
     }
 
-    return reply;
-  } catch (error) {
-    logger.error(`[Gemini Service Error] Failed to get recommended products for breed '${breed}':`, error);
-    const errorMessage = lang === "en"
-      ? '[]' // Trả về mảng rỗng nếu có lỗi
-      : '[]';
-    return errorMessage;
-  }
+    const encodedDestinationUrl = encodeURIComponent(destinationUrl);
+    
+    // ĐÚNG CÔNG THỨC LINK CÔNG KHAI
+    const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
+    
+    return affiliateLink;
+}
+
+export async function getRecommendedProducts(
+    breed: string,
+    lang: "vi" | "en" = "vi"
+): Promise<string> {
+    try {
+        logger.info(`[Gemini Products] Bắt đầu lấy gợi ý sản phẩm cho giống chó: ${breed}`);
+        // === BƯỚC 1: LẤY GỢI Ý TỪ GEMINI (Cập nhật để hỗ trợ đa ngôn ngữ) ===
+        const prompt = lang === 'en'
+            ? `Based on the characteristics of the ${breed} dog, suggest 6 essential product types. For each type, provide:
+1. "categoryName": A concise category name (e.g., "Smart Toys").
+2. "searchKeywords": The best search keywords for Shopee (a Vietnamese e-commerce site).
+3. "reason": A short sentence explaining WHY the ${breed} dog needs this type of product.
+Return as a valid JSON array.`
+            : `Dựa trên đặc điểm của chó ${breed}, đề xuất 6 loại sản phẩm thiết yếu. Với mỗi loại, hãy cung cấp:
+1. "categoryName": Tên danh mục ngắn gọn (VD: "Đồ Chơi Thông Minh").
+2. "searchKeywords": Từ khóa tìm kiếm tốt nhất trên Shopee.
+3. "reason": Một câu ngắn giải thích TẠI SAO giống chó ${breed} cần loại sản phẩm này.
+Trả về dưới dạng một mảng JSON hợp lệ.`;
+
+        const resultFromAI = await model.generateContent(prompt);
+        const rawReply = resultFromAI.response.text();
+        logger.info(`[Gemini Products] Phản hồi thô từ Gemini: ${rawReply}`);
+        
+        let ideas: { categoryName: string; searchKeywords: string; reason: string; }[] = [];
+        try {
+            const jsonString = rawReply.match(/\[[\s\S]*\]/)?.[0];
+            if (jsonString) {
+                ideas = JSON.parse(jsonString);
+                logger.info(`[Gemini Products] Đã parse thành công ${ideas.length} ý tưởng sản phẩm.`);
+            } else {
+                throw new Error("Không tìm thấy mảng JSON trong phản hồi của AI.");
+            }
+        } catch (e) {
+            logger.error("Lỗi parse JSON từ Gemini.", e);
+            return "[]";
+        }
+
+        const finalRecommendations = [];
+
+        logger.info(`[Gemini Products] Bắt đầu tạo link Shopee cho từng ý tưởng...`);
+        // === BƯỚC 2: DUYỆT VÀ TẠO LINK SHOPEE TRỰC TIẾP (KHÔNG AFFILIATE) ===
+        for (const idea of ideas) {
+            if (!idea.searchKeywords) {
+                logger.warn(`[Gemini Products] Bỏ qua ý tưởng vì không có searchKeywords:`, idea);
+                continue;
+            }
+            
+            // Lấy từ khóa chính để tạo link
+            const mainKeyword = idea.searchKeywords.split(',')[0].trim();
+            
+            // Tạo URL tìm kiếm gốc, trực tiếp trên Shopee
+            const shopeeSearchUrl = `https://shopee.vn/search?keyword=${encodeURIComponent(mainKeyword)}`;
+            
+            logger.info(`[Gemini Products] -> Từ khóa: "${mainKeyword}", URL: ${shopeeSearchUrl}`);
+
+            // Đóng gói kết quả theo yêu cầu cuối cùng của bạn
+            finalRecommendations.push({
+                category: idea.categoryName,
+                reason: idea.reason,
+                shopeeUrl: shopeeSearchUrl // Trả về link Shopee gốc
+            });
+        }
+        
+        logger.info(`[Workflow] ĐÃ XONG! Đã tạo ${finalRecommendations.length} link Shopee trực tiếp.`);
+        return JSON.stringify(finalRecommendations);
+
+    } catch (error) {
+        logger.error(`Lỗi nghiêm trọng trong getRecommendedProducts cho ${breed}:`, error);
+        return "[]";
+    }
 }

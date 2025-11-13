@@ -205,6 +205,44 @@ router.post(
     bffPredictionController.chatWithGemini
 );
 
+/**
+ * @swagger
+ * /bff/predict/chat/{breedSlug}/history:
+ *   get:
+ *     summary: "(BFF) Lấy lịch sử trò chuyện về một giống chó (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy toàn bộ lịch sử chat đã lưu trong Redis cho một phiên trò chuyện cụ thể.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Slug của giống chó.
+ *     responses:
+ *       200:
+ *         description: Trả về lịch sử chat thành công.
+ */
+router.get(
+    "/chat/:breedSlug/history",
+    optionalAuthMiddleware,
+    bffPredictionController.getChatHistory
+);
+
+router.get(
+    "/:breedSlug/health-recommendations", 
+    optionalAuthMiddleware,
+    bffPredictionController.getHealthRecommendations
+);
+
+router.get(
+    "/:breedSlug/recommended-products", 
+    optionalAuthMiddleware,
+    bffPredictionController.getRecommendedProducts
+);
+
 // --- CÁC ROUTE KHÔNG TỐN TOKEN GIỮ NGUYÊN ---
 
 /**

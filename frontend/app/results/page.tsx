@@ -8,13 +8,15 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, Loader2 } from "lucide-react"
+import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, Loader2, Sparkles, ShoppingCart, Stethoscope } from "lucide-react"
 import Link from "next/link"
 import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
-import { BreedChatBox } from "@/components/breed-chat-box";
+import { BreedChatBox } from "@/components/breed-chat-box"; 
+import { HealthRecommendations } from "@/components/health_rec";
+import { RecommendedProducts } from "@/components/product_rec";
 
 /**
  * Component con chứa logic chính để có thể sử dụng hook `useSearchParams`
@@ -37,6 +39,7 @@ function ResultsContent() {
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
   const [hasFeedback, setHasFeedback] = useState(false); // State mới để lưu trạng thái feedback
+
 
   useEffect(() => {
     const historyId = searchParams.get('id');
@@ -62,7 +65,7 @@ function ResultsContent() {
     
     // Luồng logic mới: Luôn lấy dữ liệu từ historyId trên URL.
     if (!historyId) {
-      setError("No prediction ID provided. Please go back and try again.");
+      setError("No prediction yet. Please go back and try again.");
       setLoading(false);
       return;
     }
@@ -210,7 +213,7 @@ function ResultsContent() {
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    <Link href={`/pokedex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
+                    <Link href={`/dogdex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
                       <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
                         <MapPin className="h-3 w-3 mr-1" />
                         {selectedBreedInfo.group || t("results.unknownOrigin")}
@@ -226,12 +229,12 @@ function ResultsContent() {
                   <Progress value={selectedConfidence} className="h-3" />
                 </div>
                 <Button
-                  onClick={() => router.push(`/pokedex?highlight=${selectedBreedInfo.slug}`)}
+                  onClick={() => router.push(`/dogdex?highlight=${selectedBreedInfo.slug}`)}
                   size="lg"
                   className="w-full gap-2"
                 >
                   <BookOpen className="h-5 w-5" />
-                  {t("results.viewInPokedex")}
+                  {t("results.viewInDogDex")}
                 </Button>
                 <Link href={`/dog/${selectedBreedInfo.slug}`}>
                   <Button variant="outline" size="lg" className="w-full bg-transparent">
@@ -312,6 +315,13 @@ function ResultsContent() {
                 <CardHeader><CardTitle>{t("results.description")}</CardTitle></CardHeader>
                 <CardContent><p className="text-muted-foreground leading-relaxed">{selectedBreedInfo.description}</p></CardContent>
               </Card>
+
+              {/* --- TÍCH HỢP COMPONENT MỚI --- */}
+              <div className="space-y-8">
+                <HealthRecommendations breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
+                <RecommendedProducts breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
+              </div>
+
             </>
           ) : (
             <p className="text-center text-muted-foreground py-8">{t("results.noDetails")}</p>
