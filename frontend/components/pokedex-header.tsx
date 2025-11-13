@@ -15,7 +15,7 @@ import {
 import { useI18n } from "@/lib/i18n-context";
 import { motion, AnimatePresence } from "framer-motion";
 
-export const PokedexHeader = memo(function PokedexHeader({
+export const DogDexHeader = memo(function DogDexHeader({
   collectionStats,
   totalCount,
   searchQuery,
@@ -60,7 +60,7 @@ export const PokedexHeader = memo(function PokedexHeader({
         <AnimatePresence initial={false}>
           {isExpanded && (
             <motion.div
-              key="pokedex-header-content"
+              key="dogdex-header-content"
               initial="collapsed"
               animate="open"
               exit="collapsed"
@@ -74,7 +74,7 @@ export const PokedexHeader = memo(function PokedexHeader({
               <div className="flex items-center justify-between mb-4">
                 <div className="hidden md:flex items-center gap-3">
                   <div className="bg-primary text-primary-foreground px-4 py-2 rounded-lg font-bold">
-                    {t("pokedex.collected")}: {collectionStats?.collectedBreeds ?? 0}/{totalCount}
+                    {t("dogdex.collected")}: {collectionStats?.collectedBreeds ?? 0}/{totalCount}
                   </div>
                   <Link href="/achievements">
                     <Button
@@ -92,7 +92,7 @@ export const PokedexHeader = memo(function PokedexHeader({
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
-                    placeholder={t("pokedex.searchPlaceholder")}
+                    placeholder={t("dogdex.searchPlaceholder")}
                     className="pl-10 bg-background border-2"
                     value={searchQuery}
                     onChange={(e) => onSearchChange(e.target.value)}
@@ -105,15 +105,15 @@ export const PokedexHeader = memo(function PokedexHeader({
                       <SelectValue placeholder={t("common.sort")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="name-asc">{t("pokedex.sort.nameAsc")}</SelectItem>
-                      <SelectItem value="name-desc">{t("pokedex.sort.nameDesc")}</SelectItem>
-                      <SelectItem value="rarity_level-desc">{t("pokedex.sort.rarityDesc")}</SelectItem>
-                      <SelectItem value="rarity_level-asc">{t("pokedex.sort.rarityAsc")}</SelectItem>
+                      <SelectItem value="name-asc">{t("dogdex.sort.nameAsc")}</SelectItem>
+                      <SelectItem value="name-desc">{t("dogdex.sort.nameDesc")}</SelectItem>
+                      <SelectItem value="rarity_level-desc">{t("dogdex.sort.rarityDesc")}</SelectItem>
+                      <SelectItem value="rarity_level-asc">{t("dogdex.sort.rarityAsc")}</SelectItem>
                       {/* Chỉ hiển thị tùy chọn sắp xếp theo ngày khi đang lọc các con đã sưu tầm */}
                       {filterBy === 'collected' && (
                         <>
-                          <SelectItem value="collectedAt-desc">{t("pokedex.sort.collectedAtDesc")}</SelectItem>
-                          <SelectItem value="collectedAt-asc">{t("pokedex.sort.collectedAtAsc")}</SelectItem>
+                          <SelectItem value="collectedAt-desc">{t("dogdex.sort.collectedAtDesc")}</SelectItem>
+                          <SelectItem value="collectedAt-asc">{t("dogdex.sort.collectedAtAsc")}</SelectItem>
                         </>
                       )}
                     </SelectContent>
@@ -124,9 +124,9 @@ export const PokedexHeader = memo(function PokedexHeader({
                       <SelectValue placeholder={t("common.filter")} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">{t("pokedex.filter.all")}</SelectItem>
-                      <SelectItem value="collected">{t("pokedex.filter.collected")}</SelectItem>
-                      <SelectItem value="uncollected">{t("pokedex.filter.notCollected")}</SelectItem>
+                      <SelectItem value="all">{t("dogdex.filter.all")}</SelectItem>
+                      <SelectItem value="collected">{t("dogdex.filter.collected")}</SelectItem>
+                      <SelectItem value="uncollected">{t("dogdex.filter.notCollected")}</SelectItem>
                       {groups.map((group) => (
                         <SelectItem key={group} value={group}>
                           {group}

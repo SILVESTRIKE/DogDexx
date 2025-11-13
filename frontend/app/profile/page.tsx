@@ -342,7 +342,7 @@ function ProfileContent() {
               <CardDescription>{t('profile.links.description')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Link href="/pokedex">
+              <Link href="/dogdex">
                 <Button variant="outline" className="w-full justify-start bg-transparent">
                   <Dog className="h-4 w-4 mr-2" />
                   {t('profile.links.viewCollection')}

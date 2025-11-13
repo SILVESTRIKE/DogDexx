@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { toast } from "sonner"
-import { apiClient } from "@/lib/api-client"
+import { toast } from "sonner" 
+import { adminUploadModel } from "@/lib/admin-api"
 
 interface UploadModelDialogProps {
   isOpen: boolean
@@ -59,12 +59,13 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
     setIsUploading(true)
     try {
       const apiFormData = new FormData()
+
       apiFormData.append("modelFile", file)
       Object.entries(formData).forEach(([key, value]) => {
         apiFormData.append(key, value)
       })
 
-      await apiClient.adminUploadModel(apiFormData)
+      await adminUploadModel(apiFormData)
 
       toast.success("Model uploaded successfully!", {
         description: "The new model is now available in the list.",

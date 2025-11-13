@@ -24,43 +24,44 @@ import { usePathname } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
-const menuItems = [
+const menuGroups = [
   {
-    title: "Dashboard",
-    icon: LayoutDashboard,
-    href: "/admin",
+    label: "Tổng quan",
+    items: [
+      { title: "Dashboard", icon: LayoutDashboard, href: "/admin" },
+      { title: "Usage", icon: TrendingUp, href: "/admin/usage" },
+    ],
   },
   {
-    title: "Users",
-    icon: Users,
-    href: "/admin/users",
+    label: "Quản lý",
+    items: [
+      { title: "Users", icon: Users, href: "/admin/users" },
+      { title: "Subscriptions", icon: Settings, href: "/admin/subscriptions" },
+      { title: "Transactions", icon: Settings, href: "/admin/transactions" },
+    ],
   },
   {
-    title: "Feedback",
-    icon: MessageSquare,
-    href: "/admin/feedback",
+    label: "Datasets",
+    items: [
+      { title: "Feedback", icon: MessageSquare, href: "/admin/feedback" },
+      { title: "Histories", icon: History, href: "/admin/histories" },
+      { title: "Media library", icon: Camera, href: "/admin/images" },
+      { title: "Datasets", icon: Settings, href: "/admin/datasets" },
+    ],
   },
   {
-    title: "Histories",
-    icon: History,
-    href: "/admin/histories",
+    label: "Thống kê",
+    items: [
+      { title: "Reports", icon: BarChart3, href: "/admin/reports" },
+    ],
   },
   {
-    title: "Usage",
-    icon: TrendingUp,
-    href: "/admin/usage",
+    label: "Cấu hình",
+    items: [
+      { title: "AI Models", icon: Settings, href: "/admin/models" },
+    ],
   },
-  {
-    title: "Images",
-    icon: Camera,
-    href: "/admin/images",
-  },
-  {
-    title: "Models",
-    icon: Settings,
-    href: "/admin/models",
-  },
-]
+];
 
 function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -70,23 +71,25 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <Sidebar>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {menuItems.map((item) => (
-                  <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={pathname === item.href}>
-                      <Link href={item.href}>
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.title}</span>
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
+          {menuGroups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={pathname === item.href}>
+                        <Link href={item.href}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
           <SidebarGroup>
             <SidebarGroupLabel>Quick Links</SidebarGroupLabel>
             <SidebarGroupContent>

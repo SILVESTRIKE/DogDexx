@@ -121,10 +121,10 @@ export default function TransactionsPage() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>{t("admin.user") || "User"}</TableHead>
-                        <TableHead>{t("admin.plan") || "Plan"}</TableHead>
+                        <TableHead>{t("admin.transactions.user") || "User"}</TableHead>
+                        <TableHead>{t("admin.transactions.plan") || "Plan"}</TableHead>
                         <TableHead className="text-right">{t("admin.transactions.amount") || "Amount"}</TableHead>
-                        <TableHead>{t("admin.status") || "Status"}</TableHead>
+                        <TableHead>{t("admin.transactions.status") || "Status"}</TableHead>
                         <TableHead>{t("admin.transactions.gateway") || "Gateway"}</TableHead>
                         <TableHead>{t("admin.transactions.date") || "Date"}</TableHead>
                       </TableRow>

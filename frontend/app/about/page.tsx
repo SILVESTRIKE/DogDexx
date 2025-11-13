@@ -39,7 +39,7 @@ export default function AboutPage() {
         <div className="container mx-auto px-4 py-16">
           {/* Hero Section */}
           <div className="text-center mb-16">
-            <h1 className="text-5xl font-bold mb-4 text-balance">{t("about.title") || "About DogPokedex"}</h1>
+            <h1 className="text-5xl font-bold mb-4 text-balance">{t("about.title") || "About DogDogDex"}</h1>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto text-balance">
               {t("about.subtitle") || "Revolutionizing dog breed identification with artificial intelligence"}
             </p>
@@ -50,7 +50,7 @@ export default function AboutPage() {
             <h2 className="text-3xl font-bold mb-4">{t("about.mission") || "Our Mission"}</h2>
             <p className="text-lg text-muted-foreground leading-relaxed">
               {t("about.missionText") ||
-                "We believe that technology should make the world more connected. DogPokedex uses cutting-edge AI to help dog lovers, veterinarians, and researchers identify dog breeds instantly. Our mission is to make dog breed identification accessible to everyone, everywhere."}
+                "We believe that technology should make the world more connected. DogDogDex uses cutting-edge AI to help dog lovers, veterinarians, and researchers identify dog breeds instantly. Our mission is to make dog breed identification accessible to everyone, everywhere."}
             </p>
           </Card>
 

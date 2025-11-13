@@ -19,7 +19,6 @@ export const TokenManager = {
     if (typeof window === "undefined") return;
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("refreshToken", refreshToken);
-    // Khi người dùng đăng nhập và có token, họ không còn là khách nữa.
     TokenManager.clearGuestSession();
   },
 
@@ -27,15 +26,18 @@ export const TokenManager = {
     if (typeof window === "undefined") return;
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
+    TokenManager.setGuestSession();
   },
 
   hasGuestSession: (): boolean => {
     if (typeof window === "undefined") return false;
-    return localStorage.getItem("guestSession") === "true";
+    return !localStorage.getItem("accessToken");
   },
 
   setGuestSession: () => {
     if (typeof window === "undefined") return;
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     localStorage.setItem("guestSession", "true");
   },
 
@@ -45,44 +47,47 @@ export const TokenManager = {
   },
 };
 
-// API Client with automatic token refresh
+
 export class ApiClient {
   private baseUrl: string;
-  // THAY ĐỔI 1: Tạo một callback duy nhất, mạnh mẽ hơn
   private onTokenUpdate:
     | ((tokens: { remaining: number; limit: number }) => void)
     | null = null;
+  private refreshTokenPromise: Promise<boolean> | null = null;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
-  // THAY ĐỔI 2: Đổi tên hàm callback để rõ ràng hơn
+  // THÊM MỚI: Cung cấp một phương thức công khai để lấy baseUrl.
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
+  // THÊM MỚI: Cung cấp một phương thức công khai để lấy access token.
+  public getAccessToken(): string | null {
+    return TokenManager.getAccessToken();
+  }
+
   public setTokenUpdateCallback(
     callback: (tokens: { remaining: number; limit: number }) => void
   ) {
     this.onTokenUpdate = callback;
   }
   
+  // --- HÀM NÀY ĐƯỢC ĐỊNH NGHĨA Ở ĐÂY ĐỂ FIX LỖI 'this' ---
   private handleTokenHeaders(response: Response | XMLHttpRequest) {
     if (!this.onTokenUpdate) return;
-
-    // Logic lấy header chung cho cả fetch Response và XHR
     const getHeader = (name: string) =>
       response instanceof Response
         ? response.headers.get(name)
         : response.getResponseHeader(name);
-
-    // Ưu tiên đọc header của người dùng đã đăng nhập trước
     let limit = getHeader("X-User-Tokens-Limit");
     let remaining = getHeader("X-User-Tokens-Remaining");
-
-    // Nếu không có, thì đọc header của khách
     if (!limit || !remaining) {
       limit = getHeader("X-Trial-Tokens-Limit");
       remaining = getHeader("X-Trial-Tokens-Remaining");
     }
-
     if (limit && remaining) {
       this.onTokenUpdate({
         remaining: parseInt(remaining, 10),
@@ -91,7 +96,43 @@ export class ApiClient {
     }
   }
 
-  // SỬA LẠI: Hàm request<T>
+  private async handleUnauthorized(): Promise<boolean> {
+    if (!this.refreshTokenPromise) {
+      this.refreshTokenPromise = this.refreshAccessToken();
+    }
+    return this.refreshTokenPromise;
+  }
+
+  private async refreshAccessToken(): Promise<boolean> {
+    const refreshToken = TokenManager.getRefreshToken();
+    if (!refreshToken) return false;
+
+    try {
+      const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.accessToken && data.refreshToken) {
+          TokenManager.setTokens(data.accessToken, data.refreshToken);
+          return true;
+        }
+      }
+      TokenManager.clearTokens();
+      return false;
+    } catch (error) {
+      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.", error);
+      TokenManager.clearTokens();
+      return false;
+    } finally {
+      this.refreshTokenPromise = null;
+    }
+  }
+
+  // SỬA LẠI: Hàm request<T> phiên bản đơn giản, không có hàm lồng nhau
   public async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -103,7 +144,7 @@ export class ApiClient {
       ...(options.headers as Record<string, string>),
     };
 
-    const token = TokenManager.getAccessToken();
+    let token = TokenManager.getAccessToken();
     if (token) {
       headers["Authorization"] = `Bearer ${token}`;
     } else if (requiresAuth) {
@@ -111,45 +152,32 @@ export class ApiClient {
     }
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      let response = await fetch(url, { ...options, headers });
 
-      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
+      if (response.status === 401 && TokenManager.getRefreshToken()) {
+        const refreshed = await this.handleUnauthorized();
 
-      if (response.status === 401 && requiresAuth) {
-        const refreshed = await this.refreshAccessToken();
         if (refreshed) {
+          // Lấy token mới và xây dựng lại header để thử lại
           const newToken = TokenManager.getAccessToken();
           if (newToken) {
             headers["Authorization"] = `Bearer ${newToken}`;
           }
-          const retryResponse = await fetch(url, { ...options, headers });
-
-          this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
-
-          if (!retryResponse.ok) {
-            const retryErrorData = await retryResponse.json().catch(() => ({}));
-            const retryErrorMessage =
-              retryErrorData.errors?.[0]?.message ||
-              retryErrorData.message ||
-              `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
-            throw new Error(retryErrorMessage);
-          }
-
-          return retryResponse.json();
+          response = await fetch(url, { ...options, headers }); // Thử lại
         } else {
-          TokenManager.clearTokens();
-          throw new Error("Authentication failed: Unable to refresh token.");
+          throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         }
       }
 
+      this.handleTokenHeaders(response);
+
       if (!response.ok) {
-        if (response.status === 304) {
-        } else {
+        if (response.status !== 304) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage =
             errorData.errors?.[0]?.message ||
             errorData.message ||
-            `API Error: ${response.status} ${response.statusText} on ${url}`;
+            `API Error: ${response.status} ${response.statusText}`;
           throw new Error(errorMessage);
         }
       }
@@ -160,77 +188,70 @@ export class ApiClient {
 
       return response.json();
     } catch (error) {
+      // BỎ QUA LỖI ABORT: Lỗi này xảy ra khi một request bị hủy bỏ,
+      // thường là do component unmount (ví dụ trong React Strict Mode).
+      // Đây là hành vi mong muốn, không cần log ra console.
+      if (error instanceof Error && error.name === 'AbortError') return Promise.reject(error);
+
       console.error("[ApiClient] Request failed:", error, `(URL: ${url})`);
       if (error instanceof TypeError && error.message === "Failed to fetch") {
         throw new Error(
           "Network error: Could not connect to the server. Please check your internet connection or contact support."
         );
       }
-      if (error instanceof Error) {
-        throw error;
-      }
+      if (error instanceof Error) throw error;
       throw new Error("An unexpected error occurred.");
     }
   }
 
+  // SỬA ĐỔI: Hàm requestWithFormData<T>
   private async requestWithFormData<T>(
     endpoint: string,
     formData: FormData,
     requiresAuth = false
   ): Promise<T> {
-    const url = new URL(endpoint, this.baseUrl).toString();
-    const headers: Record<string, string> = {};
+     const makeRequest = async (isRetry = false): Promise<Response> => {
+      const url = new URL(endpoint, this.baseUrl).toString();
+      const headers: Record<string, string> = {};
 
-    const token = TokenManager.getAccessToken();
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
+      const token = TokenManager.getAccessToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
 
-    const options: RequestInit = {
-      method: "POST",
-      body: formData,
-      headers: headers,
+      const options: RequestInit = {
+        method: "POST", // Mặc định cho FormData
+        body: formData,
+        headers: headers,
+      };
+      
+      return fetch(url, options);
     };
 
     try {
-      const response = await fetch(url, options);
-      
-      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
+      let response = await makeRequest();
 
-      if (response.status === 401 && requiresAuth) {
-        const refreshed = await this.refreshAccessToken();
+      if (response.status === 401 && TokenManager.getRefreshToken()) {
+        const refreshed = await this.handleUnauthorized();
         if (refreshed) {
-          const newToken = TokenManager.getAccessToken();
-          if (newToken) {
-            const retryHeaders = { ...headers, Authorization: `Bearer ${newToken}` };
-            const retryOptions = { ...options, headers: retryHeaders };
-            const retryResponse = await fetch(url, retryOptions);
-            
-            this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
-
-            if (!retryResponse.ok) {
-              const retryErrorData = await retryResponse.json().catch(() => ({}));
-              const retryErrorMessage = retryErrorData.errors?.[0]?.message || retryErrorData.message || `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
-              throw new Error(retryErrorMessage);
-            }
-            return retryResponse.json();
-          }
+          response = await makeRequest(true);
+        } else {
+           TokenManager.clearTokens();
+           throw new Error("Authentication failed: Unable to refresh token.");
         }
-        TokenManager.clearTokens();
-        throw new Error("Authentication failed: Unable to refresh token.");
       }
 
+      this.handleTokenHeaders(response);
+      
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${response.status} ${response.statusText} on ${url}`;
+        const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${response.status} ${response.statusText}`;
         throw new Error(errorMessage);
       }
       return response.json();
+
     } catch (error) {
-      console.error("[ApiClient] FormData request failed:", error, `(URL: ${url})`);
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error('Network error: Could not connect to the server. Please check your internet connection or contact support.');
-      }
+      console.error("[ApiClient] FormData request failed:", error);
       if (error instanceof Error) {
         throw error;
       }
@@ -291,8 +312,8 @@ export class ApiClient {
     const refreshToken = TokenManager.getRefreshToken();
     if (!refreshToken) return false;
 
+    console.log("[ApiClient] refreshAccessToken: Attempting to refresh access token.");
     try {
-      // Sử dụng endpoint làm mới token của BFF để đảm bảo tính nhất quán
       const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -302,14 +323,20 @@ export class ApiClient {
       if (response.ok) {
         const data = await response.json();
         if (data.accessToken && data.refreshToken) {
+          console.log("[ApiClient] refreshAccessToken: Successfully received new tokens.");
           TokenManager.setTokens(data.accessToken, data.refreshToken);
           return true;
         }
-        return false; // Treat as failure if tokens are missing
       }
+      console.error("[ApiClient] refreshAccessToken: Failed to refresh token, server response not OK or data invalid.");
+      TokenManager.clearTokens();
       return false;
     } catch {
+      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.");
+      TokenManager.clearTokens();
       return false;
+    } finally {
+      this.refreshTokenPromise = null;
     }
   }
 
@@ -344,23 +371,32 @@ export class ApiClient {
   }
 
   async logout() {
-    // 1. Lấy refreshToken từ TokenManager
     const refreshToken = TokenManager.getRefreshToken();
-    // 2. Gửi nó lên trong body của request
-    return this.request<any>(
-      "/bff/user/logout",
-      {
-        method: "POST",
-        body: JSON.stringify({ refreshToken }), // Thêm body vào đây
-      },
-      true // Yêu cầu xác thực (để gửi accessToken nếu có)
-    );
+
+    if (!refreshToken) {
+      TokenManager.clearTokens();
+      return Promise.resolve({ message: "Logged out locally." });
+    }
+
+    try {
+      // Gửi yêu cầu logout đến server với refreshToken
+      const response = await this.request<any>(
+        "/bff/user/logout",
+        {
+          method: "POST",
+          body: JSON.stringify({ refreshToken }),
+        },
+        true // Yêu cầu xác thực để gửi accessToken nếu có
+      );
+      return response;
+    } finally {
+      // Quan trọng: Luôn xóa token ở client sau khi gọi API, bất kể thành công hay thất bại.
+      TokenManager.clearTokens();
+    }
   }
 
   // THÊM MỚI: Hàm kiểm tra trạng thái phiên làm việc
   async getSessionStatus() {
-    // Sử dụng optionalAuth ở backend, không cần token ở đây
-    // Endpoint này sẽ trả về hoặc là profile người dùng, hoặc là trạng thái guest
     return this.request<any>("/bff/user/session-status", {
       cache: "no-cache",
     });
@@ -385,7 +421,7 @@ export class ApiClient {
   }
 
   // BFF-Collection endpoints
-  async getPokedex(params?: {
+  async getDogDex(params?: {
     page?: number;
     limit?: number;
     search?: string;
@@ -408,7 +444,7 @@ export class ApiClient {
     }
     const query = queryParams.toString();
     return this.request<any>(
-      `/bff/collection/pokedex${query ? `?${query}` : ""}`,
+      `/bff/collection/dogdex${query ? `?${query}` : ""}`,
       {},
       !!params?.isCollected // Chỉ yêu cầu xác thực khi lọc theo trạng thái 'collected'
     );
@@ -502,7 +538,7 @@ export class ApiClient {
     predictionId: string,
     feedback: {
       isCorrect: boolean;
-      submittedLabel?: string;
+      user_submitted_label?: string;
       notes?: string;
     }
   ) {
@@ -530,6 +566,50 @@ export class ApiClient {
         body: JSON.stringify({ message }),
       },
       false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
+    );
+  }
+
+  async getChatHistory(
+    breedSlug: string
+  ): Promise<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }> {
+    return this.request<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }>(
+      `/bff/predict/chat/${breedSlug}/history`,
+      {
+        method: "GET",
+        cache: "no-cache",
+      },
+      false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
+    );
+  }
+
+
+  async getHealthRecommendations(
+    breedSlug: string,
+    lang: "vi" | "en"
+  ): Promise<{ recommendations: string }> {
+    const headers = { "Accept-Language": lang };
+    return this.request<{ recommendations: string }>(
+      `/bff/predict/${breedSlug}/health-recommendations`,
+      {
+        method: "GET",
+        headers: headers,
+      },
+      false
+    );
+  }
+
+  async getRecommendedProducts(
+    breedSlug: string,
+    lang: "vi" | "en"
+  ): Promise<{ products: import("./types").RecommendedProduct[] }> {
+    const headers = { "Accept-Language": lang };
+    return this.request<{ products: import("./types").RecommendedProduct[] }>(
+      `/bff/predict/${breedSlug}/recommended-products`,
+      {
+        method: "GET",
+        headers: headers,
+      },
+      false
     );
   }
 

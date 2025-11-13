@@ -1,7 +1,6 @@
 import dotenv from "dotenv";
 dotenv.config();
 import { apiLimiter } from "./middlewares/rateLimiter.middleware";
-import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import path from "path";
@@ -9,6 +8,7 @@ import cookieParser from "cookie-parser";
 import Fingerprint from 'express-fingerprint';
 
 import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
+import { corsMiddleware } from "./middlewares/cors.middleware";
 import { configureViewEngine } from "./config/viewEngine";
 import authRoutes from "./routes/auth.route";
 import userRoutes from "./routes/user.route";
@@ -38,25 +38,7 @@ import { options as swaggerOptions } from "../swaggerConfig.js";
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 const app = express();
 
-const allowedOrigins = [
-  process.env.FRONTEND_URL || "http://localhost:3001",
-  "http://localhost:3000",
-];
-
-const corsOptions = {
-  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  allowedHeaders: "Origin, X-Requested-With, Content-Type, Accept, Authorization",
-};
-
-app.use(cors(corsOptions));
+app.use(corsMiddleware);
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use(cookieParser());
@@ -87,6 +69,9 @@ app.get("/test", (req, res) => {
 // 1. Middleware phục vụ file tĩnh
 const publicDirectory = path.join(__dirname, "..", "public");
 app.use('/public', express.static(publicDirectory));
+const datasetDirectory = path.join(__dirname, "..", "public", "dataset");
+app.use('/public/dataset', express.static(datasetDirectory));
+
 
 app.use(apiLimiter);
 
@@ -100,17 +85,17 @@ app.use('/bff/public', bffPublicRoutes);
  
 // 3. Core API Routes
 app.use(analyticsRoutes);
-app.use(authRoutes);
-app.use(achievementRoute);
-app.use(userRoutes);
-app.use(predictionRoutes);
-app.use(mediasRouter);
-app.use(wikiRoutes);
-app.use(collectionRoutes);
-app.use(adminFeedbackRouter);
-app.use(aiModelsRoutes);
-app.use(predictionHistoryRouter);
-app.use(adminPredictionHistoryRouter);
+// app.use(authRoutes);
+// app.use(achievementRoute);
+// app.use(userRoutes);
+// app.use(predictionRoutes);
+// app.use(mediasRouter);
+// app.use(wikiRoutes);
+// app.use(collectionRoutes);
+// app.use(adminFeedbackRouter);
+// app.use(aiModelsRoutes);
+// app.use(predictionHistoryRouter);
+// app.use(adminPredictionHistoryRouter);
 
 // 4. Middleware xử lý lỗi cuối cùng
 app.use(errorHandlerMiddleware);

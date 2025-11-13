@@ -4,7 +4,7 @@ import { logger } from '../utils/logger.util';
 export interface DogBreedWikiDoc extends Document {
   slug: string; // Key chính, ví dụ: "boxer"  
   breed: string; // Tên hiển thị theo ngôn ngữ, ví dụ: "Affenpinscher" hoặc "Chó Affenpinscher"
-  pokedexNumber?: number; // Số thứ tự trong Pokedex
+  dogdexNumber?: number; // Số thứ tự trong DogDex
   group?: string; // Nhóm chó, ví dụ: "Working"
   origin?: string; // Nguồn gốc, ví dụ: "Germany"
   mediaPath?: string; // Đường dẫn ảnh đại diện
@@ -37,7 +37,7 @@ export interface DogBreedWikiDoc extends Document {
 const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
   slug: { type: String, required: true, unique: true},
   breed: { type: String, required: true, text: true, index: true }, // Đây sẽ là tên hiển thị
-  pokedexNumber: { type: Number, unique: true, sparse: true },
+  dogdexNumber: { type: Number, unique: true, sparse: true },
   origin: { type: String },
   mediaPath: { type: String }, // Thêm trường mediaPath
   group: { type: String },

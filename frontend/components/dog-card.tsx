@@ -87,7 +87,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
               collected ? `${rarityClassSet.bg} text-primary-foreground` : "bg-muted text-muted-foreground"
             }`}
           >
-            #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
+            #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '???'}
           </div>
           {collected && (
             <div className={`absolute top-3 right-3 ${rarityClassSet.bg} text-primary-foreground rounded-full p-2 shadow-lg animate-in zoom-in duration-300`}>
@@ -121,21 +121,21 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
               <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 italic">
                 <CalendarDays className="h-3.5 w-3.5" />
                 <span>
-                  {t('pokedex.collectedOn')}: {dog.collectedAt ? new Date(dog.collectedAt).toLocaleDateString() : "N/A"}
+                  {t('dogdex.collectedOn')}: {dog.collectedAt ? new Date(dog.collectedAt).toLocaleDateString() : "N/A"}
                 </span>
                 {dog.source === 'image_upload' && (
                   <TooltipProvider delayDuration={100}>
-                    <Tooltip><TooltipTrigger><Camera className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceImage')}</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger><Camera className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('dogdex.sourceImage')}</p></TooltipContent></Tooltip>
                   </TooltipProvider>
                 )}
                 {dog.source === 'video_upload' && (
                   <TooltipProvider delayDuration={100}>
-                    <Tooltip><TooltipTrigger><Video className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceVideo')}</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger><Video className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('dogdex.sourceVideo')}</p></TooltipContent></Tooltip>
                   </TooltipProvider>
                 )}
                 {dog.source === 'stream_capture' && (
                   <TooltipProvider delayDuration={100}>
-                    <Tooltip><TooltipTrigger><Webcam className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('pokedex.sourceStream')}</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger><Webcam className="h-3.5 w-3.5 text-muted-foreground" /></TooltipTrigger><TooltipContent><p>{t('dogdex.sourceStream')}</p></TooltipContent></Tooltip>
                   </TooltipProvider>
                 )}
                 
@@ -153,7 +153,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground pt-1 italic">
                 <Lock className="h-3.5 w-3.5" />
-                <p>{t('pokedex.unlockDetails')}</p>
+                <p>{t('dogdex.unlockDetails')}</p>
               </div>
             </>
           )}
@@ -175,7 +175,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
           </div>
         </TooltipTrigger>
         <TooltipContent>
-          <p>{t('pokedex.notCollectedTooltip')}</p>
+          <p>{t('dogdex.notCollectedTooltip')}</p>
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

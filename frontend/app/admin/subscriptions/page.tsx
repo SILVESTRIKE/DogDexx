@@ -131,19 +131,25 @@ export default function AdminSubscriptionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>}
-            {isError && <TableRow><TableCell colSpan={5} className="text-center text-red-500">Failed to load data.</TableCell></TableRow>}
-            {!isLoading && !isError && subscriptions.map((sub: Subscription) => (
-              <TableRow key={sub.id}>
-                <TableCell>{sub.user.name} ({sub.user.email})</TableCell>
-                <TableCell>{sub.plan.name}</TableCell>
-                <TableCell>
-                  <SubscriptionStatusBadge status={sub.status} />
-                </TableCell>
-                <TableCell>{format(new Date(sub.startDate), "PPP")}</TableCell>
-                <TableCell>{sub.endDate ? format(new Date(sub.endDate), "PPP") : "N/A"}</TableCell>
-              </TableRow>
-            ))}
+            {isLoading && <TableRow key="loading"><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>}
+            {isError && <TableRow key="error"><TableCell colSpan={5} className="text-center text-red-500">Failed to load data.</TableCell></TableRow>}
+            {!isLoading && !isError && (
+              subscriptions.length > 0 ? (
+                subscriptions.map((sub: Subscription) => (
+                  <TableRow key={sub._id}>
+                    <TableCell>{sub.userId?.name || 'N/A'} ({sub.userId?.email || 'N/A'})</TableCell>
+                    <TableCell>{sub.planId?.name || 'N/A'}</TableCell>
+                    <TableCell>
+                      <SubscriptionStatusBadge status={sub.status} />
+                    </TableCell>
+                    <TableCell>{sub.startDate ? format(new Date(sub.startDate), "PPP") : "N/A"}</TableCell>
+                    <TableCell>{sub.endDate ? format(new Date(sub.endDate), "PPP") : "N/A"}</TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow key="no-data"><TableCell colSpan={5} className="text-center">No subscriptions found.</TableCell></TableRow>
+              )
+            )}
           </TableBody>
         </Table>
       </div>

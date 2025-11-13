@@ -35,8 +35,8 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
       if (predictionId) {
         await apiClient.submitPredictionFeedback(predictionId, {
           isCorrect: isCorrect ?? false,
-          submittedLabel: isCorrect ? undefined : correctBreed,
-          notes: notes || undefined,
+          user_submitted_label: isCorrect ? undefined : correctBreed,
+          notes: notes || undefined
         })
       } else {
         // Fallback to localStorage if no prediction ID
@@ -61,7 +61,7 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
 
       setSubmitted(true)
     } catch (error) {
-      console.error("[v0] Failed to submit feedback:", error)
+      console.error("Failed to submit feedback:", error)
       alert(t('feedback.error'))
     } finally {
       setIsSubmitting(false)
@@ -120,7 +120,10 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
               variant={isCorrect === true ? "default" : "outline"}
               size="lg"
               className="flex-1 gap-2"
-              onClick={() => setIsCorrect(true)}
+              onClick={() => {
+                setIsCorrect(true);
+                setCorrectBreed(detectedBreed); // Tự động điền giống chó đã phát hiện
+              }}
             >
               <ThumbsUp className="h-5 w-5" />
               {t('feedback.yes')}
@@ -129,7 +132,10 @@ export function FeedbackForm({ detectedBreed, confidence, imageUrl, predictionId
               variant={isCorrect === false ? "default" : "outline"}
               size="lg"
               className="flex-1 gap-2"
-              onClick={() => setIsCorrect(false)}
+              onClick={() => {
+                setIsCorrect(false);
+                setCorrectBreed(""); // Xóa để người dùng nhập mới
+              }}
             >
               <ThumbsDown className="h-5 w-5" />
               {t('feedback.no')}

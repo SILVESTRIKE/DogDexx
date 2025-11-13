@@ -3,14 +3,8 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { Request } from "express";
+import { AVATAR_UPLOAD_DIR, MEDIA_UPLOAD_DIR } from "../constants/paths.constants";
 
-// --- Cấu hình chung ---
-const PUBLIC_DIR = "public";
-const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
-
-if (!fs.existsSync(PUBLIC_DIR)) {
-  fs.mkdirSync(PUBLIC_DIR);
-}
 const getFileTypeDir = (mimetype: string): string => {
   // Chỉ xử lý các loại file ảnh cho avatar
   if (mimetype.startsWith("image/")) return "images";
@@ -43,11 +37,11 @@ const predictionStorage = multer.diskStorage({
     if (req.user) {
       // Logged-in user
       const fileTypeDir = getFileTypeDir(file.mimetype);
-      fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
+      fullPath = path.join(MEDIA_UPLOAD_DIR, fileTypeDir, year, month);
     } else {
       // Anonymous user
       const week = `week-${getWeekOfMonth(now)}`;
-      fullPath = path.join(UPLOADS_DIR, "test", year, month, week);
+      fullPath = path.join(MEDIA_UPLOAD_DIR, "test", year, month, week);
     }
 
     fs.mkdirSync(fullPath, { recursive: true });
@@ -73,7 +67,7 @@ const predictionStorage = multer.diskStorage({
 // --- Storage cho avatar người dùng ---
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const fullPath = path.join(PUBLIC_DIR, "useravatar");
+    const fullPath = AVATAR_UPLOAD_DIR;
     fs.mkdirSync(fullPath, { recursive: true });
     cb(null, fullPath);
   },

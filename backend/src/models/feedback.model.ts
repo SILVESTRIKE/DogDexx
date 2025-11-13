@@ -3,13 +3,14 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export interface FeedbackDoc extends Document {
   prediction_id: Types.ObjectId;
   user_id: Types.ObjectId;
+  isCorrect: boolean; // THÊM MỚI: Lưu trữ phản hồi của người dùng
   user_submitted_label?: string;
   notes?: string;
   file_path: string;
   admin_id: Types.ObjectId;
   reason?: string;
-  status: "pending" | "approved" | "rejected";
-  isDeleted: boolean; // <-- THÊM MỚI
+  status: "pending_review" | "approved_for_training" | "rejected";
+  isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,13 +24,17 @@ const feedbackSchema = new Schema<FeedbackDoc>(
       unique: true,
     }, // Cho phép guest gửi feedback
     user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
+    isCorrect: { type: Boolean, required: true }, // THÊM MỚI
     user_submitted_label: { type: String, trim: true },
     notes: { type: String, trim: true },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: ["pending_review", "approved_for_training", "rejected"],
+      default: "pending_review",
     },
+    file_path: { type: String, required: true },
+    admin_id: { type: Schema.Types.ObjectId, ref: "User" },
+    reason: { type: String, trim: true },
     isDeleted: {
       type: Boolean,
       default: false,
@@ -44,7 +49,6 @@ const feedbackSchema = new Schema<FeedbackDoc>(
         delete ret.id;
         delete ret._id;
         delete ret.__v;
-        delete ret.isDeleted;
       },
     },
     toObject: {

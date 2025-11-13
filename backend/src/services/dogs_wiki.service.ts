@@ -101,7 +101,7 @@ export const wikiService = {
 
     const [breeds, total] = await Promise.all([
       Model.find(query)
-        .select('slug breed pokedexNumber group origin mediaPath rarity_level')
+        .select('slug breed dogdexNumber group origin mediaPath rarity_level')
         .sort(sortOption)
         .skip(skip)
         .limit(limit)

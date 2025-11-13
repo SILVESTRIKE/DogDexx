@@ -1,5 +1,5 @@
 import { Request } from "express";
-import rateLimit from "express-rate-limit";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { TooMuchReqError } from "../errors";
 import { UserDoc } from "../models/user.model";
 
@@ -10,13 +10,10 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false, // Tắt các header `X-RateLimit-*` cũ
 
   keyGenerator: (req: Request): string => {
-    const user = (req as any).user as UserDoc | undefined;
-
-    if (user?._id) {
-      return user._id.toString();
-    }
-
-    return (req as any).fingerprint?.hash || req.ip;
+    // SỬA LỖI: Ưu tiên fingerprint, nếu không có thì dùng req.ip.
+    // express-rate-limit sẽ tự động xử lý IPv6 một cách an toàn khi key là địa chỉ IP.
+    // Thêm fallback 'unknown' để đảm bảo hàm luôn trả về một string.
+    return req.fingerprint?.hash || (req.ip ? ipKeyGenerator(req.ip) : 'unknown');
   },
 
   skip: (req: Request): boolean => {

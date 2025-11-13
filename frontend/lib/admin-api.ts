@@ -1,4 +1,4 @@
-import { apiClient } from "./api-client"
+import { apiClient, adminApiClient } from "./api-client"
 
 export interface DashboardStats {
   totalUsers: number
@@ -38,12 +38,12 @@ export interface SystemAlert {
 
 export const getAdminDashboardData = async (): Promise<DashboardData> => {
   // Sử dụng phương thức đã được định nghĩa sẵn trong apiClient
-  return apiClient.getAdminDashboard()
+  return adminApiClient.getAdminDashboard()
 }
 
 export const getSystemAlerts = async (): Promise<{ alerts: SystemAlert[] }> => {
   // Sử dụng phương thức đã được định nghĩa sẵn trong apiClient
-  return apiClient.getAlerts()
+  return adminApiClient.getAlerts()
 }
 
 // --- User Management ---
@@ -72,15 +72,19 @@ export interface PaginatedUsersResponse {
 }
 
 export const getAdminUsers = async (params: { page: number; limit: number; search?: string }): Promise<PaginatedUsersResponse> => {
-  return apiClient.getAdminUsers(params)
+  return adminApiClient.getAdminUsers(params)
 }
 
 export const adminCreateUser = async (data: { username: string; email: string; password: string; role: string, verify: string }) => {
-  return apiClient.adminCreateUser(data);
+  return adminApiClient.adminCreateUser(data);
 }
 
 export const deleteUser = async (userId: string): Promise<void> => {
-  return apiClient.deleteUser(userId)
+  return adminApiClient.deleteUser(userId)
+}
+
+export const adminUpdateUser = async (userId: string, data: { username?: string; email?: string; role?: string; status?: string }) => {
+  return adminApiClient.adminUpdateUser(userId, data);
 }
 
 // --- Feedback Management ---
@@ -138,15 +142,15 @@ export const getAdminFeedback = async (params: {
   startDate?: string;
   endDate?: string;
 }): Promise<AdminFeedbackResponse> => {
-  return apiClient.getAdminFeedback(params)
+  return adminApiClient.getAdminFeedback(params)
 }
 
-export const approveAdminFeedback = async (feedbackId: string): Promise<{ message: string; data: Feedback }> => {
-  return apiClient.adminApproveFeedback(feedbackId);
+export const approveAdminFeedback = async (feedbackId: string, payload: { correctedLabel?: string }): Promise<{ message: string; data: Feedback }> => {
+  return adminApiClient.adminApproveFeedback(feedbackId, payload);
 }
 
-export const rejectAdminFeedback = async (feedbackId: string): Promise<{ message: string; data: Feedback }> => {
-  return apiClient.adminRejectFeedback(feedbackId);
+export const rejectAdminFeedback = async (feedbackId: string, payload: { reason?: string }): Promise<{ message: string; data: Feedback }> => {
+  return adminApiClient.adminRejectFeedback(feedbackId, payload);
 }
 
 // --- AI Model Configuration ---
@@ -167,11 +171,11 @@ export interface AIConfiguration {
 export type AIConfigurationUpdatePayload = Partial<Omit<AIConfiguration, "_id" | "key" | "createdAt" | "updatedAt">>
 
 export const getAIConfig = async (): Promise<{ data: AIConfiguration }> => {
-  return apiClient.getModelConfig()
+  return adminApiClient.getModelConfig()
 }
 
 export const updateAIConfig = async (config: AIConfigurationUpdatePayload): Promise<any> => {
-  return apiClient.updateModelConfig(config)
+  return adminApiClient.updateModelConfig(config)
 }
 
 export interface AIModel {
@@ -191,11 +195,15 @@ export interface AIModel {
 }
 
 export const getAIModels = async (): Promise<AIModel[]> => {
-  return apiClient.getAIModels();
+  return adminApiClient.getAIModels();
 }
 
 export const activateAIModel = async (modelId: string): Promise<any> => {
-  return apiClient.activateAIModel(modelId);
+  return adminApiClient.activateAIModel(modelId);
+}
+
+export const adminUploadModel = async (formData: FormData): Promise<any> => {
+  return adminApiClient.adminUploadModel(formData);
 }
 
 // --- History Management ---
@@ -232,7 +240,7 @@ export interface PaginatedAdminHistoryResponse {
 }
 
 export const getAdminHistories = async (params: { page: number; limit: number; search?: string }): Promise<PaginatedAdminHistoryResponse> => {
-  return apiClient.getAdminHistories(params);
+  return adminApiClient.getAdminHistories(params);
 }
 
 export interface DirectoryItem {
@@ -247,5 +255,81 @@ export interface BrowseHistoryResponse {
 }
 
 export const browseAdminHistories = async (path: string, params?: { startDate?: string, endDate?: string }): Promise<BrowseHistoryResponse> => {
-  return apiClient.browseAdminHistories(path, params);
+  return adminApiClient.browseAdminHistories(path, params);
 }
+
+// --- Media Management ---
+export interface AdminMediaItem {
+  id: string;
+  name: string;
+  type: 'folder' | 'image' | 'video';
+  url: string;
+  createdAt?: string;
+  size?: number;
+}
+
+export interface BrowseMediaResponse {
+  directories: { id: string; name: string; type: 'folder'; url: string; }[];
+  media: AdminMediaItem[];
+}
+
+export const browseAdminMedia = async (path: string, options: RequestInit = {}): Promise<BrowseMediaResponse> => {
+  return adminApiClient.browseAdminMedia(path, options);
+}
+
+export const deleteAdminMedia = async (mediaId: string): Promise<{ message: string }> => {
+  return adminApiClient.adminDeleteMedia(mediaId);
+}
+
+// --- Usage Tracking ---
+export interface UserUsageData {
+  userId: string;
+  userName: string;
+  email: string;
+  tokensUsed: number;
+  tokensLimit: number;
+  plan: string;
+  lastActive: string;
+}
+
+export interface AdminUsageResponse {
+  usageData: UserUsageData[];
+  tokensChartData: any[];
+  plansChartData: any[];
+}
+
+export const getAdminUsageStats = async (): Promise<AdminUsageResponse> => {
+  return adminApiClient.getAdminUsageStats();
+};
+
+// --- THÊM MỚI: Interface cho Dataset Management ---
+export interface AdminFileItem {
+  id: string;
+  name: string;
+  type: 'folder' | 'image' | 'video' | 'file';
+  url: string;
+  createdAt?: string;
+  size?: number;
+}
+export interface BrowseDatasetResponse {
+  directories: { id: string; name: string; type: 'folder' }[];
+  files: AdminFileItem[];
+}
+
+// --- Dataset Management ---
+export const browseAdminDatasets = async (path: string, options: RequestInit = {}): Promise<BrowseDatasetResponse> => {
+  return adminApiClient.browseAdminDatasets(path, options);
+}
+export const downloadAdminDataset = async (): Promise<Blob> => {
+  const blob = await adminApiClient.downloadAdminDataset();
+  return blob;
+}
+
+// --- THÊM MỚI: Report Management ---
+export const exportAdminReport = async (params: {
+  startDate: string;
+  endDate: string;
+  format: "excel" | "word";
+}): Promise<Blob> => {
+  return adminApiClient.exportAdminReport(params);
+};

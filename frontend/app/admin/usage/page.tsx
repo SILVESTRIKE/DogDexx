@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Search, Download, TrendingUp, HardDrive } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useI18n } from "@/lib/i18n-context"
-import { apiClient } from "@/lib/api-client"
+import { getAdminUsageStats, UserUsageData } from "@/lib/admin-api"
 import {
   LineChart,
   Line,
@@ -23,26 +23,15 @@ import {
   Bar,
 } from "recharts"
 
-interface UserUsage {
-  userId: string
-  userName: string
-  email: string
-  detections: number
-  storageUsed: number
-  storageLimit: number
-  lastActive: string
-  plan: "free" | "starter" | "professional" | "enterprise"
-  trend: number
-}
-
 export default function UsagePage() {
   const { t } = useI18n()
-  const [usageData, setUsageData] = useState<UserUsage[]>([])
+  const [usageData, setUsageData] = useState<UserUsageData[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [planFilter, setPlanFilter] = useState<string>("all")
-  const [sortBy, setSortBy] = useState<string>("detections")
+  const [sortBy, setSortBy] = useState<string>("tokensUsed")
   const [isLoading, setIsLoading] = useState(true)
-  const [chartData, setChartData] = useState<any[]>([])
+  const [tokensChartData, setTokensChartData] = useState<any[]>([])
+  const [plansChartData, setPlansChartData] = useState<any[]>([])
 
   useEffect(() => {
     fetchUsageData()
@@ -51,11 +40,11 @@ export default function UsagePage() {
   const fetchUsageData = async () => {
     try {
       setIsLoading(true)
-      // SỬA LỖI: Gọi API thật để lấy dữ liệu
-      const response = await apiClient.getAdminUsageStats();
+      const response = await getAdminUsageStats();
       setUsageData(response.usageData || [])
-      // Lấy dữ liệu biểu đồ từ API
-      setChartData(response.chartData || [])
+      // Cập nhật state cho từng biểu đồ
+      setTokensChartData(response.tokensChartData || [])
+      setPlansChartData(response.plansChartData || [])
     } catch (error) {
       console.error("[v0] Error fetching usage data:", error)
     } finally {
@@ -63,41 +52,41 @@ export default function UsagePage() {
     }
   }
 
-  const filteredData = usageData
-    .filter((user) => {
-      const matchesSearch =
-        user.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase())
-      const matchesPlan = planFilter === "all" || user.plan === planFilter
-      return matchesSearch && matchesPlan
-    })
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "detections":
-          return b.detections - a.detections
-        case "storage":
-          return b.storageUsed - a.storageUsed
-        case "lastActive":
-          return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime()
-        default:
-          return 0
-      }
-    })
+  const filteredAndSortedData = useMemo(() => {
+    return usageData
+      .filter((user) => {
+        const searchLower = searchQuery.toLowerCase()
+        const matchesSearch =
+          user.userName.toLowerCase().includes(searchLower) ||
+          user.email.toLowerCase().includes(searchLower)
+        const matchesPlan = planFilter === "all" || user.plan.toLowerCase() === planFilter.toLowerCase()
+        return matchesSearch && matchesPlan
+      })
+      .sort((a, b) => {
+        switch (sortBy) {
+          case "tokensUsed":
+            return b.tokensUsed - a.tokensUsed
+          case "lastActive":
+            return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime()
+          default:
+            return 0
+        }
+      })
+  }, [usageData, searchQuery, planFilter, sortBy])
 
-  const totalDetections = usageData.reduce((sum, user) => sum + user.detections, 0)
-  const totalStorage = usageData.reduce((sum, user) => sum + user.storageUsed, 0)
-  const avgDetectionsPerUser = usageData.length > 0 ? Math.round(totalDetections / usageData.length) : 0
+  const totalTokensUsed = usageData.reduce((sum, user) => sum + user.tokensUsed, 0)
+  const totalUsers = usageData.length
+  const avgTokensPerUser = totalUsers > 0 ? Math.round(totalTokensUsed / totalUsers) : 0
 
   const handleExportReport = () => {
     const csv = [
-      ["User Name", "Email", "Plan", "Detections", "Storage Used (GB)", "Storage Limit (GB)", "Last Active"],
-      ...filteredData.map((user) => [
+      ["User Name", "Email", "Plan", "Tokens Used", "Tokens Limit", "Last Active"],
+      ...filteredAndSortedData.map((user) => [
         user.userName,
         user.email,
         user.plan,
-        user.detections,
-        user.storageUsed,
-        user.storageLimit,
+        user.tokensUsed,
+        user.tokensLimit,
         user.lastActive,
       ]),
     ]
@@ -133,11 +122,11 @@ export default function UsagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <TrendingUp className="h-4 w-4" />
-              {t("admin.totalDetections")}
+              {t("admin.usage.totalTokensUsed")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalDetections.toLocaleString()}</div>
+            <div className="text-3xl font-bold">{totalTokensUsed.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{t("admin.allTime")}</p>
           </CardContent>
         </Card>
@@ -146,21 +135,21 @@ export default function UsagePage() {
           <CardHeader className="pb-3">
             <CardTitle className="text-sm font-medium flex items-center gap-2">
               <HardDrive className="h-4 w-4" />
-              {t("admin.totalStorage")}
+              {t("admin.totalUsers")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{totalStorage.toFixed(1)} GB</div>
+            <div className="text-3xl font-bold">{totalUsers.toLocaleString()}</div>
             <p className="text-xs text-muted-foreground">{t("admin.across")}</p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">{t("admin.avgDetections")}</CardTitle>
+            <CardTitle className="text-sm font-medium">{t("admin.usage.avgTokens")}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{avgDetectionsPerUser}</div>
+            <div className="text-3xl font-bold">{avgTokensPerUser}</div>
             <p className="text-xs text-muted-foreground">{t("admin.perUser")}</p>
           </CardContent>
         </Card>
@@ -170,17 +159,17 @@ export default function UsagePage() {
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle>{t("admin.detectionsOverTime")}</CardTitle>
+            <CardTitle>{t("admin.usage.tokensOverTime")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
+              <LineChart data={tokensChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip />
                 {/* <Legend /> */}
-                <Line type="monotone" dataKey="detections" stroke="#3b82f6" />
+                <Line type="monotone" dataKey="tokens" stroke="#3b82f6" />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -188,17 +177,17 @@ export default function UsagePage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{t("admin.storageUsage")}</CardTitle>
+            <CardTitle>{t("admin.usage.usersByPlan")}</CardTitle>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={chartData}>
+              <BarChart data={plansChartData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
                 <Tooltip />
                 {/* <Legend /> */}
-                <Bar dataKey="detections" fill="#10b981" />
+                <Bar dataKey="count" fill="#10b981" />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
@@ -232,10 +221,9 @@ export default function UsagePage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t("common.all")}</SelectItem>
-                <SelectItem value="free">{t("pricing.free")}</SelectItem>
-                <SelectItem value="starter">{t("pricing.starter")}</SelectItem>
-                <SelectItem value="professional">{t("pricing.professional")}</SelectItem>
-                <SelectItem value="enterprise">{t("pricing.enterprise")}</SelectItem>
+                <SelectItem value="free">Free</SelectItem>
+                <SelectItem value="starter">Starter</SelectItem>
+                <SelectItem value="pro">Professional</SelectItem>
               </SelectContent>
             </Select>
 
@@ -244,8 +232,7 @@ export default function UsagePage() {
                 <SelectValue placeholder={t("common.sort")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="detections">{t("admin.detections")}</SelectItem>
-                <SelectItem value="storage">{t("admin.storage")}</SelectItem>
+                <SelectItem value="tokensUsed">{t("admin.usage.tokensUsed")}</SelectItem>
                 <SelectItem value="lastActive">{t("admin.lastActive")}</SelectItem>
               </SelectContent>
             </Select>
@@ -259,10 +246,8 @@ export default function UsagePage() {
                   <TableHead>{t("admin.usage.headers.name")}</TableHead>
                   <TableHead>{t("admin.usage.headers.email")}</TableHead>
                   <TableHead>{t("admin.usage.headers.plan")}</TableHead>
-                  <TableHead className="text-right">{t("admin.usage.headers.detections")}</TableHead>
-                  <TableHead className="text-right">{t("admin.usage.headers.storage")}</TableHead>
-                  <TableHead className="text-right">{t("admin.usage.headers.trend")}</TableHead>
-                  <TableHead>{t("admin.usage.headers.lastActive")}</TableHead>
+                  <TableHead className="text-right">{t("admin.usage.headers.tokensUsed")}</TableHead>
+                  <TableHead className="text-right">{t("admin.usage.headers.lastActive")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -272,34 +257,27 @@ export default function UsagePage() {
                       {t("common.loading")}
                     </TableCell>
                   </TableRow>
-                ) : filteredData.length === 0 ? (
+                ) : filteredAndSortedData.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       {t("admin.noData")}
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredData.map((user) => (
+                  filteredAndSortedData.map((user) => (
                     <TableRow key={user.userId}>
                       <TableCell className="font-medium">{user.userName}</TableCell>
                       <TableCell>{user.email}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.plan.charAt(0).toUpperCase() + user.plan.slice(1)}</Badge>
+                        <Badge variant="outline" className="capitalize">{user.plan}</Badge>
                       </TableCell>
-                      <TableCell className="text-right font-medium">{user.detections.toLocaleString()}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex flex-col items-end">
-                          <span className="font-medium">{user.storageUsed.toFixed(1)} GB</span>
+                          <span className="font-medium">{user.tokensUsed.toLocaleString()}</span>
                           <span className="text-xs text-muted-foreground">
-                            {Math.round((user.storageUsed / user.storageLimit) * 100)}% of {user.storageLimit} GB
+                            / {user.tokensLimit.toLocaleString()}
                           </span>
                         </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Badge variant={user.trend > 0 ? "default" : "secondary"}>
-                          {user.trend > 0 ? "+" : ""}
-                          {user.trend}%
-                        </Badge>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{user.lastActive}</TableCell>
                     </TableRow>

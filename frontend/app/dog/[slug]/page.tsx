@@ -99,11 +99,11 @@ export default function DogDetailPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <Link
-              href="/pokedex"
+              href="/dogdex"
               className="inline-flex items-center gap-2 text-primary hover:text-primary/80 transition-colors font-semibold"
             >
               <ArrowLeft className="h-5 w-5" />
-              {t('dogDetails.backToPokedex')}
+              {t('dogDetails.backToDogDex')}
             </Link>
           </div>
         </div>
@@ -121,7 +121,7 @@ export default function DogDetailPage() {
               />
             </div>
             <div className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full text-lg shadow-lg">
-              #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
+              #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '???'}
             </div>
             
           </div>
@@ -134,7 +134,7 @@ export default function DogDetailPage() {
                   <MapPin className="h-3 w-3 mr-1" />
                   {dog.origin}
                 </Badge>
-                <Link href={`/pokedex?filter=${encodeURIComponent(dog.group || '')}`}>
+                <Link href={`/dogdex?filter=${encodeURIComponent(dog.group || '')}`}>
                   <Badge variant="secondary" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
                     {dog.group}
                   </Badge>

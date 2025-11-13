@@ -8,12 +8,13 @@ import { I18nContextType, useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button, buttonVariants } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield, Coins } from "lucide-react"
+import { User, Shield, Coins, Settings } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
+  DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { ThemeToggle } from "@/components/theme-toggle"
@@ -55,9 +56,11 @@ export function Navbar() {
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
     { href: "/live", label: t("nav.live"), auth: false },
-    { href: "/pokedex", label: t("nav.pokedex"), auth: false },
+    { href: "/dogdex", label: t("nav.dogdex"), auth: false },
     { href: "/achievements", label: t("nav.achievements"), auth: true },
     { href: "/history", label: t("nav.history"), auth: true },
+    { href: "/about", label: t("nav.about"), auth: false },
+    { href: "/results", label: t("nav.results"), auth: false },
   ], [t]);
 
   useEffect(() => {
@@ -214,9 +217,23 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center justify-end gap-3 flex-1">
-            <ThemeToggle />
-            <LanguageToggle />
             {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted rounded-full animate-pulse" />}
+
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" className="rounded-full">
+                  <Settings className="h-[1.2rem] w-[1.2rem]" />
+                  <span className="sr-only">Settings</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>{t('nav.light')}/{t('nav.dark')}</DropdownMenuLabel>
+                <div className="px-2 py-1"><ThemeToggle /></div>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>{t('language.toggle')}</DropdownMenuLabel>
+                <div className="px-2 py-1"><LanguageToggle /></div>
+              </DropdownMenuContent>
+            </DropdownMenu>
 
             {/* Mobile Menu */}
             <div className="md:hidden">

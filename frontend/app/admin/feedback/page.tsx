@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useMemo } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -14,6 +14,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -22,9 +32,19 @@ import { getAdminFeedback, approveAdminFeedback, rejectAdminFeedback, AdminFeedb
 import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useI18n } from "@/lib/i18n-context"
-import { PaginationComponent } from "@/components/ui/pagination"
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination"
 import { DateRange } from "react-day-picker"
 import { format } from "date-fns"
+import { Label } from "@/components/ui/label";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { CheckIcon, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const initialData: AdminFeedbackResponse = {
   stats: { pending_review: 0, approved_for_training: 0, rejected: 0 },
@@ -32,6 +52,40 @@ const initialData: AdminFeedbackResponse = {
   feedbacks: { data: [], total: 0, page: 1, limit: 10, totalPages: 1 },
 }
 
+// Combobox Component for Breed Selection
+const BreedCombobox = ({
+  breeds,
+  value,
+  onChange,
+  ...props
+}: {
+  breeds: string[];
+  value: string;
+  onChange: (value: string) => void;
+} & Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'>) => {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between font-normal">
+          {value || t('admin.feedback.dialog.selectOrEnterBreed')}
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+        <Command shouldFilter={true}>
+          <CommandInput onValueChange={onChange} value={value} placeholder={t('admin.feedback.dialog.correctedLabelPlaceholder')} />
+          <CommandList>
+            <CommandEmpty>{t('admin.feedback.dialog.noBreedFound')}</CommandEmpty>
+            <CommandGroup>{breeds.map((breed) => (<CommandItem key={breed} value={breed} onSelect={(currentValue) => { onChange(currentValue === value ? "" : currentValue); setOpen(false); }}>{breed}</CommandItem>))}</CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
 export default function FeedbackManagement() {
   const { t } = useI18n();
   const [data, setData] = useState<AdminFeedbackResponse>(initialData)
@@ -41,6 +95,13 @@ export default function FeedbackManagement() {
   const [searchQuery, setSearchQuery] = useState("")
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("")
   const [dateRange, setDateRange] = useState<DateRange | undefined>()
+  const [isApproveAlertOpen, setIsApproveAlertOpen] = useState(false)
+  const [isRejectAlertOpen, setIsRejectAlertOpen] = useState(false)
+  const [selectedFeedbackForApproval, setSelectedFeedbackForApproval] = useState<Feedback | null>(null)
+  const [selectedFeedbackForRejection, setSelectedFeedbackForRejection] = useState<Feedback | null>(null)
+  const rejectionReasonRef = useRef<HTMLInputElement>(null)
+  const [approvedBreeds, setApprovedBreeds] = useState<string[]>([]);
+  const [correctedLabel, setCorrectedLabel] = useState("");
 
   // Debounce search query
   useEffect(() => {
@@ -70,6 +131,17 @@ export default function FeedbackManagement() {
     }
   }, [t])
 
+  const fetchApprovedBreeds = useCallback(async () => {
+    setLoading(true);
+    try {
+      // This is a placeholder for an API call that should be created
+      // For now, we'll simulate it.
+      setApprovedBreeds(["Poodle", "Golden Retriever", "Labrador", "German Shepherd", "Bulldog", "Beagle", "Pomeranian", "Chihuahua", "Siberian Husky", "Shiba Inu"]);
+    } finally {
+      setLoading(false)
+    }
+  }, [t])
+
   useEffect(() => {
     setPage(1); // Reset page when filters change
   }, [statusFilter, debouncedSearchQuery, dateRange]);
@@ -82,17 +154,30 @@ export default function FeedbackManagement() {
       startDate: dateRange?.from?.toISOString(),
       endDate: dateRange?.to?.toISOString(),
     })
-  }, [page, statusFilter, debouncedSearchQuery, dateRange, fetchFeedback])
+    fetchApprovedBreeds();
+  }, [page, statusFilter, debouncedSearchQuery, dateRange, fetchFeedback, fetchApprovedBreeds])
 
   const { stats, userStats, feedbacks } = data
   const totalFeedback = stats.pending_review + stats.approved_for_training + stats.rejected
   const accuracy =
     totalFeedback > 0 ? ((stats.approved_for_training / totalFeedback) * 100).toFixed(1) : "0.0"
+  
+  useEffect(() => {
+    if (selectedFeedbackForApproval) {
+      setCorrectedLabel(selectedFeedbackForApproval.feedbackContent.isCorrect ? selectedFeedbackForApproval.aiPrediction?.class || "" : selectedFeedbackForApproval.feedbackContent.userSubmittedLabel || "");
+    }
+  }, [selectedFeedbackForApproval]);
 
-  const handleApprove = async (feedbackId: string) => {
+  const handleApprove = async () => {
+    if (!selectedFeedbackForApproval) return;
+
+    const feedbackId = selectedFeedbackForApproval.id;
+
+    setIsApproveAlertOpen(false);
     const toastId = toast.loading(t('admin.feedback.actions.approving'));
+
     try {
-      const result = await approveAdminFeedback(feedbackId);
+      const result = await approveAdminFeedback(feedbackId, { correctedLabel });
       toast.success(result.message, { id: toastId });
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
@@ -104,7 +189,7 @@ export default function FeedbackManagement() {
           ...prevData,
           stats: newStats,
           feedbacks: {
-            ...prevData.feedbacks,
+            ...prevData.feedbacks, // Cập nhật trạng thái của feedback đã được duyệt
             data: prevData.feedbacks.data.map(f => 
               f.id === feedbackId ? { ...f, status: 'approved_for_training' } : f
             )
@@ -113,13 +198,20 @@ export default function FeedbackManagement() {
       });
     } catch (error) {
       toast.error(t('admin.feedback.errors.approveFailed'), { id: toastId, description: (error as Error).message });
+    } finally {
+      setSelectedFeedbackForApproval(null);
+      setCorrectedLabel("");
     }
   }
 
-  const handleReject = async (feedbackId: string) => {
+  const handleReject = async () => {
+    if (!selectedFeedbackForRejection) return;
+    const feedbackId = selectedFeedbackForRejection.id;
+    const reason = rejectionReasonRef.current?.value;
+    setIsRejectAlertOpen(false);
     const toastId = toast.loading(t('admin.feedback.actions.rejecting'));
     try {
-      const result = await rejectAdminFeedback(feedbackId);
+      const result = await rejectAdminFeedback(feedbackId, { reason });
       toast.success(result.message, { id: toastId });
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
@@ -140,6 +232,8 @@ export default function FeedbackManagement() {
       });
     } catch (error) {
       toast.error(t('admin.feedback.errors.rejectFailed'), { id: toastId, description: (error as Error).message });
+    } finally {
+      setSelectedFeedbackForRejection(null);
     }
   }
   return (
@@ -358,10 +452,17 @@ export default function FeedbackManagement() {
                               <div className="flex justify-end gap-2 pt-4 border-t">
                                 {f.status === 'pending_review' && (
                                   <>
-                                    <Button variant="destructive" size="sm" onClick={() => handleReject(f.id)}>
-                                      <X className="h-4 w-4 mr-2" />{t('admin.feedback.actions.reject')}
+                                    <Button variant="destructive" size="sm" onClick={() => {
+                                      setSelectedFeedbackForRejection(f);
+                                      setIsRejectAlertOpen(true);
+                                    }}>
+                                      <X className="h-4 w-4 mr-2" />
+                                      {t('admin.feedback.actions.reject')}
                                     </Button>
-                                    <Button variant="default" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleApprove(f.id)} >
+                                    <Button variant="default" size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => {
+                                      setSelectedFeedbackForApproval(f);
+                                      setIsApproveAlertOpen(true);
+                                    }}>
                                       <Check className="h-4 w-4 mr-2" />{t('admin.feedback.actions.approve')}
                                     </Button>
                                   </>
@@ -382,16 +483,33 @@ export default function FeedbackManagement() {
                 </TableBody>
               </Table>
               {!loading && feedbacks.totalPages > 1 && (
-                <PaginationComponent
-                  currentPage={feedbacks.page}
-                  totalPages={feedbacks.totalPages}
-                  onPageChange={setPage}
-                  className="mt-6"
-                />
+                <Pagination className="mt-6">
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); setPage((p) => Math.max(1, p - 1)); }}
+                        className={feedbacks.page <= 1 ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                    <PaginationItem>
+                      <span className="px-4 py-2 text-sm">
+                        {t("admin.userPageIndicator", { page: feedbacks.page, totalPages: feedbacks.totalPages })}
+                      </span>
+                    </PaginationItem>
+                    <PaginationItem>
+                      <PaginationNext
+                        href="#"
+                        onClick={(e) => { e.preventDefault(); setPage((p) => Math.min(feedbacks.totalPages, p + 1)); }}
+                        className={feedbacks.page >= feedbacks.totalPages ? "pointer-events-none opacity-50" : ""}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
               )}
             </CardContent>
           </Card>
-        </TabsContent>
+        </TabsContent> 
         <TabsContent value="user-stats">
           <Card>
             <CardHeader>
@@ -431,6 +549,50 @@ export default function FeedbackManagement() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Approval Confirmation Dialog */}
+      <AlertDialog open={isApproveAlertOpen} onOpenChange={setIsApproveAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('admin.feedback.dialog.approveTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('admin.feedback.dialog.approveDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="correctedLabel">{t('admin.feedback.dialog.correctedLabel')}</Label>
+            <BreedCombobox
+              breeds={approvedBreeds}
+              value={correctedLabel}
+              onChange={setCorrectedLabel}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setSelectedFeedbackForApproval(null); setCorrectedLabel(""); }}>{t('common.cancel')}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleApprove} className="bg-green-600 hover:bg-green-700">{t('admin.feedback.actions.approve')}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Rejection Confirmation Dialog */}
+      <AlertDialog open={isRejectAlertOpen} onOpenChange={setIsRejectAlertOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t('admin.feedback.dialog.rejectTitle')}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t('admin.feedback.dialog.rejectDescription')}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-4 space-y-2">
+            <Label htmlFor="rejectionReason">{t('admin.feedback.dialog.rejectionReason')}</Label>
+            <Input id="rejectionReason" ref={rejectionReasonRef} placeholder={t('admin.feedback.dialog.rejectionReasonPlaceholder')} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setSelectedFeedbackForRejection(null)}>{t('common.cancel')}</AlertDialogCancel>
+            <Button onClick={handleReject} variant="destructive">{t('admin.feedback.actions.reject')}</Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

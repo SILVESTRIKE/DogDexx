@@ -1,11 +1,17 @@
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
 import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
-import { Types } from 'mongoose';
+import { Types, model } from 'mongoose';
 import { UserModel, UserDoc } from '../models/user.model';
 import { sendEmail } from './email.service';
+import path from 'path';
+import fs from 'fs/promises'; // Assuming these constants exist
+import { MediaModel } from '../models/medias.model'; // THÊM: Import MediaModel
+import { MEDIA_UPLOAD_DIR, DATASET_DIR } from '../constants/paths.constants';
 
+import { slugify } from '../utils/slugify.util';
 // Interface cho các bộ lọc
+import { PREDICTION_SOURCES } from '../constants/prediction.constants';
 interface QueryFilters {
   status?: FeedbackDoc['status']
   username?: string
@@ -16,33 +22,66 @@ interface QueryFilters {
 
 export const feedbackService = {
   // --- Dành cho USER ---
-  async submitFeedback(userId: Types.ObjectId, data: { predictionId: string; isCorrect: boolean; submittedLabel?: string; notes?: string; }) {
-    const { predictionId, isCorrect, submittedLabel, notes } = data;
+  async submitFeedback(userId: Types.ObjectId, data: { prediction_id: string; isCorrect: boolean; user_submitted_label?: string; notes?: string; file_path: string; }) {
+    const { prediction_id, isCorrect, user_submitted_label, notes, file_path } = data;
 
     // Yêu cầu người dùng phải đăng nhập
     if (!userId) throw new NotAuthorizedError('Bạn phải đăng nhập để gửi phản hồi.');
 
-    const prediction = await PredictionHistoryModel.findById(predictionId);
+    const prediction = await PredictionHistoryModel.findById(prediction_id);
     if (!prediction) throw new NotFoundError('Không tìm thấy lịch sử dự đoán.');
 
     if (prediction.user?.toString() !== userId.toString()) throw new BadRequestError('Bạn không có quyền đánh giá kết quả này.');
 
-    if (prediction.isCorrect !== null) throw new BadRequestError('Kết quả này đã được đánh giá.');
-
-    prediction.isCorrect = isCorrect;
-    await prediction.save();
-
-    if (!isCorrect) {
-      if (!submittedLabel) throw new BadRequestError('Vui lòng cung cấp nhãn đúng.');
-      const correction = await FeedbackModel.create({
-        prediction_id: prediction._id,
-        user_id: userId,
-        user_submitted_label: submittedLabel,
-        notes: notes,
-      });
-      return { prediction, correction };
+    // Kiểm tra xem feedback đã tồn tại cho prediction này chưa
+    const existingFeedback = await FeedbackModel.findOne({ prediction_id });
+    if (existingFeedback) {
+      throw new BadRequestError('Bạn đã gửi phản hồi cho kết quả này rồi.');
     }
-    return { prediction };
+
+    let destinationPath = file_path; // Giữ lại đường dẫn cũ nếu không có hành động nào với file
+
+    // Chỉ di chuyển hoặc sao chép file nếu file_path tồn tại
+    if (file_path) {
+      const fileName = path.basename(file_path);
+      const sourcePath = path.resolve(process.cwd(), file_path);
+      const destinationDir = path.join(DATASET_DIR, 'pending');
+      destinationPath = path.join(destinationDir, fileName);
+      
+      try {
+        await fs.access(sourcePath); // Kiểm tra file có tồn tại không
+        await fs.mkdir(destinationDir, { recursive: true });
+
+        // **LOGIC MỚI: Sao chép file từ stream, di chuyển file từ upload**
+        if (prediction.source === PREDICTION_SOURCES.STREAM_CAPTURE) {
+          await fs.copyFile(sourcePath, destinationPath);
+          console.log(`[Feedback Service] Copied stream capture file to ${destinationPath}`);
+          // Không cần cập nhật DB vì file gốc vẫn còn
+        } else {
+          await fs.rename(sourcePath, destinationPath);
+          // SỬA LỖI: Cập nhật lại mediaPath trong MediaModel sau khi di chuyển file
+          if (prediction.media) {
+            const relativeDestPath = path.relative(process.cwd(), destinationPath).replace(/\\/g, '/');
+            await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: relativeDestPath } });
+            console.log(`[Feedback Service] Moved file and updated Media entry ${prediction.media} to new path: ${relativeDestPath}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[Feedback Service] Could not process file from ${sourcePath} to ${destinationPath}. It might not exist. Error: ${(error as Error).message}`);
+      }
+    }
+
+    const feedback = await FeedbackModel.create({
+      prediction_id: new Types.ObjectId(prediction_id),
+      user_id: userId,
+      isCorrect: isCorrect,
+      user_submitted_label: user_submitted_label,
+      notes: notes,
+      file_path: destinationPath, // Lưu đường dẫn mới của file
+      status: 'pending_review',
+    });
+
+    return feedback;
   },
 
   // --- Dành cho ADMIN ---
@@ -104,7 +143,7 @@ export const feedbackService = {
             // Thống kê top người dùng gửi feedback
             userStats: [
               { $match: { isDeleted: false } },
-              { $group: { _id: "$user_id", total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ["$status", "approved"] }, 1, 0] } }, rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } } } },
+              { $group: { _id: "$user_id", total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ["$status", "approved_for_training"] }, 1, 0] } }, rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } } } },
               { $sort: { total: -1 } },
               { $limit: 10 },
               { $lookup: { from: 'users', localField: '_id', foreignField: '_id', as: 'user' } },
@@ -118,12 +157,12 @@ export const feedbackService = {
   
     // Định dạng lại overallStats
     const stats = {
-      pending: 0,
-      approved: 0,
+      pending_review: 0,
+      approved_for_training: 0,
       rejected: 0,
     };
     (statsResult[0]?.overallStats || []).forEach((stat: { _id: keyof typeof stats, count: number }) => {
-      if (stats.hasOwnProperty(stat._id)) {
+      if (Object.prototype.hasOwnProperty.call(stats, stat._id)) {
         stats[stat._id] = stat.count;
       }
     });
@@ -137,9 +176,72 @@ export const feedbackService = {
     return feedback;
   },
 
-  async updateFeedback(id: string, data: { status?: FeedbackDoc['status']; notes?: string }) {
-    const feedback = await FeedbackModel.findByIdAndUpdate(id, data, { new: true });
+  async updateFeedback(
+    id: string,
+    data: {
+      status: FeedbackDoc['status'];
+      admin_id?: Types.ObjectId;
+      reason?: string;
+    },
+    correctedLabel?: string) {
+    // TỐI ƯU: Populate prediction_id để lấy thông tin dự đoán gốc
+    const feedback = await FeedbackModel.findById(id).populate('prediction_id', 'predictions');
     if (!feedback) throw new NotFoundError('Không tìm thấy feedback để cập nhật.');
+
+    const oldStatus = feedback.status;
+    feedback.status = data.status;
+    if (data.admin_id) feedback.admin_id = data.admin_id;
+    if (data.reason) feedback.reason = data.reason;
+
+    // Logic di chuyển file khi trạng thái thay đổi
+    if (oldStatus === 'pending_review' && (data.status === 'approved_for_training' || data.status === 'rejected')) {
+      const fileName = path.basename(feedback.file_path);
+      let destinationDir: string;
+
+      // SỬA LỖI: Chuẩn hóa sourcePath.
+      // Đường dẫn lưu trong DB có thể là tuyệt đối (sau khi submit) hoặc tương đối (dữ liệu cũ).
+      // path.isAbsolute() sẽ kiểm tra điều này.
+      const sourcePath = path.isAbsolute(feedback.file_path)
+        ? feedback.file_path
+        : path.resolve(process.cwd(), feedback.file_path); // Nếu là tương đối, giả định nó nằm ở gốc project
+
+      if (data.status === 'approved_for_training') {
+        // CẢI TIẾN LOGIC:
+        // 1. Nếu người dùng xác nhận dự đoán là ĐÚNG (isCorrect = true), lấy tên giống chó từ dự đoán gốc.
+        // 2. Nếu người dùng nói là SAI (isCorrect = false), lấy tên giống chó mà họ đã submit.
+        // 3. Fallback về 'unknown' nếu không có thông tin.
+        // 4. ƯU TIÊN: Nếu admin cung cấp `correctedLabel`, dùng nó.
+        const prediction = feedback.prediction_id as any;
+        // SỬA LỖI & CẢI TIẾN: Sử dụng slugify để tạo tên thư mục an toàn
+        // CẬP NHẬT: Chuyển đổi username thành dạng slug để đảm bảo tính nhất quán
+        const rawBreedName = correctedLabel && correctedLabel.trim() !== ''
+          ? correctedLabel
+          : feedback.isCorrect
+            ? prediction?.predictions?.[0]?.class
+            : feedback.user_submitted_label;
+        const breedName = slugify(rawBreedName || '');
+        if (!breedName) throw new Error("Không thể xác định tên giống chó để tạo thư mục. Raw name: " + rawBreedName);
+
+        destinationDir = path.join(DATASET_DIR, 'approved', breedName);
+      } else { // rejected
+        destinationDir = path.join(DATASET_DIR, 'rejected');
+      }
+      const destinationPath = path.join(destinationDir, fileName);
+      
+      try {
+        await fs.mkdir(destinationDir, { recursive: true });
+        // **LOGIC MỚI: Sao chép file từ stream, di chuyển file từ các nguồn khác**
+        // Khi duyệt feedback, file gốc đã nằm trong thư mục 'pending'.
+        // Chúng ta luôn di chuyển nó từ 'pending' sang 'approved' hoặc 'rejected'.
+        // Logic sao chép chỉ cần thiết ở bước submit ban đầu.
+        await fs.rename(sourcePath, destinationPath);
+        feedback.file_path = destinationPath; // Cập nhật đường dẫn mới
+      } catch (error) {
+        console.warn(`[Feedback Service] Could not move file from ${sourcePath} to ${destinationPath} during status update. Error: ${(error as Error).message}`);
+        // Không cập nhật file_path nếu di chuyển thất bại
+      }
+    }
+    await feedback.save();
     return feedback;
   },
   
@@ -149,6 +251,14 @@ export const feedbackService = {
 
     // Logic xóa cứng
     if (force) {
+      // Xóa file vật lý nếu tồn tại
+      try {
+        await fs.unlink(feedback.file_path);
+      } catch (error: any) {
+        if (error.code !== 'ENOENT') { // Ignore if file not found
+          console.error(`Không thể xóa file ${feedback.file_path}:`, error);
+        }
+      }
       await PredictionHistoryModel.updateOne({ _id: feedback.prediction_id }, { $set: { isCorrect: null } });
       await feedback.deleteOne();
       return { message: 'Feedback đã được xóa vĩnh viễn.' };
@@ -163,41 +273,57 @@ export const feedbackService = {
   /**
    * [Admin] Duyệt một feedback.
    */
-  async approveFeedback(id: string): Promise<FeedbackDoc> {
+  async approveFeedback(id: string, adminId: Types.ObjectId, correctedLabel?: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id); // Reuse getById to get populated data
 
-    if (feedback.status !== 'pending') {
+    if (feedback.status !== 'pending_review') {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
-    feedback.status = 'approved';
-    await feedback.save();
+    // Nếu admin cung cấp label đã sửa, cập nhật nó
+    if (correctedLabel && correctedLabel.trim() !== '') {
+      feedback.user_submitted_label = correctedLabel.trim();
+      feedback.isCorrect = false; // Coi như là "sai" so với AI, vì admin đã sửa lại
+    }
+
+    // Sử dụng updateFeedback để xử lý logic di chuyển file
+    const updatedFeedback = await this.updateFeedback(id, {
+      status: "approved_for_training",
+      admin_id: adminId,
+    },
+    correctedLabel); // Truyền correctedLabel vào đây
+    await updatedFeedback.populate("user_id", "username email");
 
     // Gửi email cảm ơn nếu có thông tin người dùng
-    const user = feedback.user_id as any;
+    const user = updatedFeedback.user_id as any;
     if (user && user.email) {
       const subject = 'Cảm ơn bạn đã đóng góp cho DogBreedID!';
-      const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${feedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
+      const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${updatedFeedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
       
       sendEmail(user.email, subject, text).catch(err => console.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
     }
 
-    return feedback;
+    return updatedFeedback;
   },
 
   /**
    * [Admin] Từ chối một feedback.
    */
-  async rejectFeedback(id: string): Promise<FeedbackDoc> {
+  async rejectFeedback(id: string, adminId: Types.ObjectId, reason?: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id);
 
-    if (feedback.status !== 'pending') {
+    if (feedback.status !== 'pending_review') {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
-    feedback.status = 'rejected';
-    await feedback.save();
+    // Sử dụng updateFeedback để xử lý logic di chuyển file
+    const updatedFeedback = await this.updateFeedback(id, {
+      status: "rejected",
+      admin_id: adminId,
+      reason: reason,
+    });
+    await updatedFeedback.populate("user_id", "username email");
 
-    return feedback;
+    return updatedFeedback;
   },
 };

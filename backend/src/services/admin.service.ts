@@ -13,8 +13,11 @@ import {
 } from "../types/zod/admin.zod";
 import fs from 'fs/promises';
 import path from 'path';
-import { AnalyticsEventName } from "../constants/analytics.events";
+import { AnalyticsEventName } from "../constants/analytics.constants";
 // THÊM IMPORT: Cần PlanModel để lấy thông tin gói cước
+import { DATASET_DIR } from '../constants/paths.constants';
+import { AppError } from '../errors';
+import archiver from 'archiver';
 import { PlanModel } from "../models/plan.model";
 
 export class AdminService {
@@ -195,54 +198,33 @@ export class AdminService {
   /**
    * Duyệt hệ thống file media ảo cho trang quản lý media.
    */
-  async browseMedia(path: string): Promise<{ directories: DirectoryItem[], media: MediaDoc[] }> {
-    const parts = path.split("/").filter(Boolean);
+  async browseMediaByLogic(path: string): Promise<{ directories: DirectoryItem[], media: MediaDoc[] }> {
+    // Nếu path rỗng hoặc null, ta đang ở thư mục gốc.
+    // Trong MongoDB, ta truy vấn các document không có trường parent_id hoặc parent_id là null.
+    const directoryId = path ? path : null;
 
-    if (parts.length === 0) {
-      const userDirectoriesFromDB = await DirectoryModel.find({ parent_id: null, creator_id: { $ne: null } })
-        .populate<{ creator_id: UserDoc }>('creator_id', 'username');
-      
-      const directories: DirectoryItem[] = userDirectoriesFromDB
-        .filter((dir) => (dir.creator_id as UserDoc)?.username !== 'guest_uploads' && dir.name !== 'guest_uploads')
-        .map((dir) => {
-          // SỬA LỖI: Thêm type assertion để TypeScript hiểu kiểu dữ liệu
-          const creator = dir.creator_id as UserDoc;
-          return {
-            id: creator?.username || dir.name,
-            name: creator?.username || dir.name,
-            type: "folder",
-          };
-        });
+    console.log(`[CORE_SERVICE] Duyệt thư mục thật với parent_id/directory_id: ${directoryId === null ? '"null" (root)' : `"${directoryId}"`}`);
 
-      directories.push({ id: "guest_uploads", name: "Guest Uploads", type: "folder" });
-      return { directories, media: [] };
-    }
+    // 1. Tìm kiếm song song các thư mục con và các file media con
+    const [subDirectories, mediaFiles] = await Promise.all([
+      // Tìm các thư mục có parent_id là directoryId hiện tại
+      DirectoryModel.find({ parent_id: directoryId, isDeleted: false }).sort({ name: 1 }).lean(),
+      // Tìm các file media có directory_id là directoryId hiện tại
+      MediaModel.find({ directory_id: directoryId, isDeleted: false }).sort({ createdAt: -1 }).lean()
+    ]);
 
-    const username = parts[0];
+    console.log(`[CORE_SERVICE] Kết quả từ CSDL: tìm thấy ${subDirectories.length} thư mục con, ${mediaFiles.length} media files.`);
 
-    if (parts.length === 1) {
-      const isGuest = username === 'guest_uploads';
-      const userExists = isGuest || (await UserModel.findOne({ username, isDeleted: false }));
-      if (userExists) {
-        return {
-          directories: [
-            { id: "images", name: "Images", type: "folder" },
-            { id: "videos", name: "Videos", type: "folder" },
-          ],
-          media: [],
-        };
-      }
-    }
+    // 2. Chuyển đổi kết quả thư mục sang định dạng DirectoryItem mà frontend cần
+    const directoryItems: DirectoryItem[] = subDirectories.map(dir => ({
+      // SỬA LỖI QUAN TRỌNG: Lấy _id của chính thư mục đó, KHÔNG phải creator_id
+      id: dir._id.toString(),
+      name: dir.name,
+      type: 'folder',
+    }));
 
-    if (parts.length === 2 && (parts[1] === "images" || parts[1] === "videos")) {
-      const mediaType = parts[1].slice(0, -1);
-      const user = username === 'guest_uploads' ? null : (await UserModel.findOne({ username, isDeleted: false }));
-      if (user || username === 'guest_uploads') {
-        const mediaFiles = await MediaModel.find({ creator_id: user?._id ?? null, type: mediaType }).sort({ createdAt: -1 });
-        return { directories: [], media: mediaFiles };
-      }
-    }
-    throw new NotFoundError(`Path not found: ${path}`);
+    // 3. Trả về cả thư mục con và file media
+    return { directories: directoryItems, media: mediaFiles };
   }
 
   /**
@@ -267,6 +249,71 @@ export class AdminService {
     return { message: `Đã xóa thành công media và ${historyIds.length} bản ghi lịch sử liên quan.` };
   }
 
+  /**
+   * [Admin] Duyệt hệ thống file dataset vật lý.
+   */
+  async browseDatasetDirectory(relativePath: string): Promise<{ directories: DirectoryItem[], files: any[] }> {
+    const safeSuffix = path.normalize(relativePath).replace(/^(\.\.(\/|\\|$))+/, '');
+    const absolutePath = path.join(DATASET_DIR, safeSuffix);
+
+    if (!absolutePath.startsWith(path.resolve(DATASET_DIR))) {
+      throw new AppError("Access denied. Path is outside of the dataset directory.");
+    }
+
+    try {
+      const entries = await fs.readdir(absolutePath, { withFileTypes: true });
+      const directories: DirectoryItem[] = [];
+      const files: any[] = [];
+
+      for (const entry of entries) {
+        const entryPath = path.join(relativePath, entry.name);
+        if (entry.isDirectory()) {
+          directories.push({
+            id: entryPath.replace(/\\/g, '/'), // Use normalized path as ID
+            name: entry.name,
+            type: 'folder',
+          });
+        } else {
+          const stats = await fs.stat(path.join(absolutePath, entry.name));
+          files.push({
+            id: entryPath.replace(/\\/g, '/'),
+            name: entry.name,
+            type: entry.name.match(/\.(jpg|jpeg|png|gif)$/i) ? 'image' : (entry.name.match(/\.(mp4|mov|avi)$/i) ? 'video' : 'file'),
+            size: stats.size,
+            createdAt: stats.mtime,
+            // Sửa lỗi: URL phải được phục vụ qua một route tĩnh
+            url: `/public/dataset/${entryPath.replace(/\\/g, '/')}`
+          });
+        }
+      }
+
+      return { directories, files };
+    } catch (error: any) {
+      if (error.code === 'ENOENT') {
+        throw new NotFoundError(`Directory not found: ${relativePath}`);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * [Admin] Nén và trả về toàn bộ thư mục dataset.
+   */
+  async downloadDatasetArchive(): Promise<archiver.Archiver> {
+    console.log('[Admin Service] Bắt đầu tạo file zip cho dataset...');
+    const archive = archiver('zip', {
+      zlib: { level: 9 } // Mức nén cao nhất
+    });
+
+    console.log(`[Admin Service] Thêm thư mục '${DATASET_DIR}' vào archive với tên 'dataset'.`);
+    // Thêm toàn bộ thư mục `dataset` vào file zip với tên là `dataset`
+    archive.directory(DATASET_DIR, 'dataset');
+
+    // Quan trọng: KHÔNG gọi archive.finalize() ở đây.
+    // Controller sẽ chịu trách nhiệm finalize và pipe stream.
+    console.log('[Admin Service] Đã tạo đối tượng archive, trả về cho controller xử lý.');
+    return archive;
+  }
   /**
    * Lấy danh sách người dùng và làm giàu dữ liệu.
    */
@@ -332,7 +379,7 @@ export class AdminService {
   public async getSystemAlerts() {
     const NEW_BREED_THRESHOLD = 3;
     const potentialNewBreeds = await FeedbackModel.aggregate([
-      { $match: { status: 'pending_review', user_submitted_label: { $nin: [null, ""] } } },
+      { $match: { status: 'pending', user_submitted_label: { $nin: [null, ""] } } },
       { $group: { _id: "$user_submitted_label", count: { $sum: 1 }, lastReported: { $max: "$createdAt" } } },
       { $match: { count: { $gte: NEW_BREED_THRESHOLD } } },
       { $sort: { count: -1 } }
@@ -349,10 +396,16 @@ export class AdminService {
    * Lấy dữ liệu thống kê sử dụng cho trang Usage Tracking.
    */
   public async getUsageStats() {
-    // THAY ĐỔI: Cập nhật để phản ánh cấu trúc mới
-    const [users, plans] = await Promise.all([
+    // THAY ĐỔI: Truy vấn các sự kiện dự đoán thành công thay vì TOKEN_SPENT
+    const [users, plans, analyticsEvents] = await Promise.all([
         UserModel.find({ isDeleted: false }).select('username email plan remainingTokens createdAt').lean(),
         PlanModel.find({ isDeleted: false }).lean(),
+        AnalyticsEventModel.find({ 
+          eventName: { 
+            $in: [AnalyticsEventName.SUCCESSFUL_PREDICTION, AnalyticsEventName.SUCCESSFUL_TRIAL] 
+          }, 
+          date: { $gte: new Date(new Date().setDate(new Date().getDate() - 7)) } 
+        }).lean(),
     ]);
 
     const plansMap = new Map(plans.map(p => [p.slug, p]));
@@ -372,6 +425,30 @@ export class AdminService {
       };
     });
 
-    return { usageData, chartData: [] }; // Tạm thời bỏ chartData phức tạp
+    // --- TÍNH TOÁN DỮ LIỆU CHO BIỂU ĐỒ ---
+
+    // 1. Dữ liệu cho biểu đồ "Tokens Over Time" (Line Chart)
+    const tokensByDay = new Map<string, number>();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      tokensByDay.set(d.toISOString().split('T')[0], 0);
+    }
+    analyticsEvents.forEach((event: any) => {
+        const day = event.date.toISOString().split('T')[0];
+        if (tokensByDay.has(day)) {
+            tokensByDay.set(day, (tokensByDay.get(day) || 0) + event.count);
+        }
+    });
+    const tokensChartData = Array.from(tokensByDay.entries()).map(([date, tokens]) => ({ date, tokens })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // 2. Dữ liệu cho biểu đồ "Users By Plan" (Bar Chart)
+    const usersByPlan = usageData.reduce((acc, user) => {
+        acc[user.plan] = (acc[user.plan] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+    const plansChartData = Object.entries(usersByPlan).map(([plan, count]) => ({ name: plan, count }));
+
+    return { usageData, tokensChartData, plansChartData };
   }
 }

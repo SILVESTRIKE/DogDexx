@@ -1,7 +1,7 @@
 import { Request } from 'express';
 import { AnalyticsEventModel } from '../models/analytics_event.model';
 import { Types } from 'mongoose';
-import { AnalyticsEventName } from '../constants/analytics.events';
+import { AnalyticsEventName } from '../constants/analytics.constants';
 import { logger } from '../utils/logger.util';
 interface TrackEventArgs {
   eventName: AnalyticsEventName;

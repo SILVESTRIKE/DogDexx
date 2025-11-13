@@ -62,7 +62,7 @@ export interface RegisterResponse {
 export interface DogBreed {
   slug: string;
   breed: string;
-  pokedexNumber?: number;
+  dogdexNumber?: number;
   group?: string;
   origin?: string;
   mediaUrl?: string;
@@ -194,6 +194,14 @@ export interface BffPredictionResponse {
   hasFeedback?: boolean;
 }
 
+// Cấu trúc cho một sản phẩm được gợi ý
+// CẬP NHẬT: Cấu trúc này giờ đây khớp với dữ liệu trả về từ BFF
+export interface RecommendedProduct {
+  category: string;
+  reason: string;
+  shopeeUrl: string;
+}
+
 // Cấu trúc dữ liệu chi tiết của giống chó được làm giàu bởi BFF
 // Nó chứa các trường được chọn lọc từ DogBreedWiki
 export interface EnrichedDogBreed {
@@ -215,7 +223,6 @@ export interface EnrichedDogBreed {
 
 // THÊM MỚI: Các kiểu dữ liệu cho Gói cước (Plan)
 export interface Plan {
-  id: string;
   name: string;
   slug: 'free' | 'starter' | 'professional' | 'enterprise' | 'guest';
   priceMonthly: number;
@@ -237,15 +244,18 @@ export interface PaginatedPlansResponse {
 
 // THÊM MỚI: Kiểu dữ liệu cho một Đăng ký (Subscription)
 export interface Subscription {
-  id: string;
-  user: {
+  _id: string; // Thêm _id để dùng làm key
+  userId: {
+    _id: string;
     name: string;
     email: string;
   };
-  plan: {
+  planId: {
+    _id: string;
     name: string;
   };
-  status: 'active' | 'pending' | 'cancelled' | 'expired';
+  status: 'active' | 'pending_approval' | 'canceled' | 'expired' | 'past_due' | 'unpaid';
   startDate: string;
   endDate: string | null;
+  createdAt: string;
 }

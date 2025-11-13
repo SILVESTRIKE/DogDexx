@@ -42,18 +42,18 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
     if (isAuthenticated && user) {
       try {
         // Sử dụng Promise.all để tải song song
-        const [pokedexResponse, achievementsResponse] = await Promise.all([
-          apiClient.getPokedex({ limit: 9999, isCollected: 'true', lang: locale }),
+        const [dogdexResponse, achievementsResponse] = await Promise.all([
+          apiClient.getDogDex({ limit: 9999, isCollected: 'true', lang: locale }),
           apiClient.getAchievements(locale)
         ]);
 
-        // Xử lý Pokedex
+        // Xử lý DogDex
         const collectedMap = new Map<string, { collectedAt: string | null; source: CollectionSource | null; }>();
-        pokedexResponse.breeds.forEach((b: any) => {
+        dogdexResponse.breeds.forEach((b: any) => {
           collectedMap.set(b.slug, { collectedAt: b.collectedAt, source: b.source });
         });
         setCollectedDogs(collectedMap);
-        setCollectionStats(pokedexResponse.stats);
+        setCollectionStats(dogdexResponse.stats);
 
         // Xử lý Achievements
         setUnlockedAchievements(achievementsResponse.achievements || []);

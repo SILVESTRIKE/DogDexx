@@ -22,7 +22,7 @@ export function ThemeToggle() {
   }
 
   return (
-    <div className="flex items-center gap-2 border p-1 rounded-full bg-muted h-9">
+    <div className="flex w-full items-center justify-between gap-2 border p-1 rounded-md bg-muted h-9">
       <Sun className={`h-5 w-5 p-0.5 transition-colors ${!isDarkMode ? 'text-primary' : 'text-muted-foreground'}`} />
       <Switch id="theme-switch" checked={isDarkMode} onCheckedChange={handleThemeChange} />
       <Moon className={`h-5 w-5 p-0.5 transition-colors ${isDarkMode ? 'text-primary' : 'text-muted-foreground'}`} />

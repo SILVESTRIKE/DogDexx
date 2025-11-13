@@ -44,8 +44,8 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">{t("footer.product") || "Product"}</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <Link href="/pokedex" className="hover:text-foreground transition">
-                  {t("footer.pokedex") || "Pokedex"}
+                <Link href="/dogdex" className="hover:text-foreground transition">
+                  {t("footer.dogdex") || "DogDex"}
                 </Link>
               </li>
               <li>
@@ -120,7 +120,7 @@ export default function Footer() {
         {/* Social Links & Copyright */}
         <div className="border-t pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <p className="text-sm text-muted-foreground">
-            {t("footer.copyright") || "© 2025 Dog Pokedex. All rights reserved."}
+            {t("footer.copyright") || "© 2025 Dog DogDex. All rights reserved."}
           </p>
 
           <div className="flex gap-4">

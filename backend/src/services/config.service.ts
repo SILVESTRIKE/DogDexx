@@ -3,22 +3,22 @@ import Configuration, {
   IConfiguration,
 } from '../models/config.model';
 import { AIModelService } from './ai_models.service';
+import { CONFIG_KEYS } from '../constants/config.constants';
 import { AppError } from '../errors';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
-const CONFIG_KEY = 'model_thresholds';
 
 export class ConfigService {
   /**
    * Lấy cấu hình AI hiện tại từ database, bao gồm cả model đang active.
    */
   public async getAiConfig(): Promise<IConfiguration> {
-    const configDoc = await Configuration.findOne({ key: CONFIG_KEY });
+    const configDoc = await Configuration.findOne({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
 
     if (!configDoc) {
       // Nếu không có config, tạo một cái mặc định và trả về
       console.warn("Configuration not found, creating a default one.");
-      return Configuration.create({ key: CONFIG_KEY });
+      return Configuration.create({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
     }
     return configDoc;
   }
@@ -28,7 +28,7 @@ export class ConfigService {
    */
   public async getFullConfigForAIService(): Promise<any> {
     const [config, activeModel] = await Promise.all([
-      Configuration.findOne({ key: CONFIG_KEY }),
+      Configuration.findOne({ key: CONFIG_KEYS.MODEL_THRESHOLDS }),
       AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION")
     ]);
 
@@ -53,7 +53,7 @@ export class ConfigService {
     }
     
     const updatedConfig = await Configuration.findOneAndUpdate(
-      { key: CONFIG_KEY },
+      { key: CONFIG_KEYS.MODEL_THRESHOLDS },
       { $set: dataToUpdate },
       { new: true, upsert: true, runValidators: true }
     );

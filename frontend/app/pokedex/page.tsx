@@ -4,10 +4,10 @@ import { useCollection } from "@/lib/collection-context";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useI18n } from "@/lib/i18n-context";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { PokedexHeader } from "@/components/pokedex-header";
+import { DogDexHeader } from "@/components/dogdex-header";
 import { DogGrid } from "@/components/dog-grid";
 
-export default function PokedexPage() {
+export default function DogDexPage() {
   const { t, locale } = useI18n();
   const router = useRouter();
   const pathname = usePathname();
@@ -48,7 +48,7 @@ export default function PokedexPage() {
   }, [searchQuery, sortBy, filterBy]);
 
   // MODIFIED: Bọc các hàm handlers trong useCallback để chúng không được tạo lại
-  // trên mỗi lần render, giúp memo của PokedexHeader hoạt động đúng.
+  // trên mỗi lần render, giúp memo của DogDexHeader hoạt động đúng.
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
   }, []);
@@ -72,7 +72,7 @@ export default function PokedexPage() {
 
   return (
     <main className="min-h-screen bg-background flex flex-col">
-      <PokedexHeader
+      <DogDexHeader
         collectionStats={collectionStats}
         totalCount={collectionStats?.totalBreeds ?? 0}
         searchQuery={searchQuery}

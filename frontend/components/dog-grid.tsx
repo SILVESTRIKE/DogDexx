@@ -44,7 +44,7 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
 
       try {
         const isCollectedParam = filter === "collected" ? "true" : filter === "uncollected" ? "false" : undefined;
-        const response = await apiClient.getPokedex({
+        const response = await apiClient.getDogDex({
           limit: 20,
           page: pagination.page,
           search: search || undefined,
@@ -111,12 +111,12 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
   }
 
   if (dogBreeds.length === 0 && !loading) {
-    return <div className="text-center py-12"><p className="text-muted-foreground text-lg">{t('pokedex.noResults')} {search}</p></div>;
+    return <div className="text-center py-12"><p className="text-muted-foreground text-lg">{t('dogdex.noResults')} {search}</p></div>;
   }
 
   return (
     <>
-      <div className="mb-4 text-sm text-muted-foreground">{t('pokedex.showingCount', { count: dogBreeds.length, total: pagination.total })}</div>
+      <div className="mb-4 text-sm text-muted-foreground">{t('dogdex.showingCount', { count: dogBreeds.length, total: pagination.total })}</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {dogBreeds.map((dog, index) => (
           <div ref={dogBreeds.length === index + 1 ? lastDogElementRef : null} key={dog.slug} id={`dog-card-${dog.slug}`}>
@@ -127,7 +127,7 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
       {loadingMore && (
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          <p className="ml-4 text-muted-foreground">{t('pokedex.loadingMore')}</p>
+          <p className="ml-4 text-muted-foreground">{t('dogdex.loadingMore')}</p>
         </div>
       )}
     </>

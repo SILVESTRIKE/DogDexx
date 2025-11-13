@@ -3,12 +3,13 @@ import mongoose from 'mongoose';
 
 // --- Schemas cho luồng USER ---
 export const SubmitFeedbackBodySchema = z.object({
-  predictionId: z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
+  prediction_id: z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
     message: 'Prediction ID không hợp lệ.',
   }),
   isCorrect: z.boolean(),
-  submittedLabel: z.string().trim().optional(),
+  user_submitted_label: z.string().trim().optional(),
   notes: z.string().trim().optional(),
+  file_path: z.string(),
 });
 
 // --- Schemas cho luồng ADMIN ---
@@ -26,7 +27,11 @@ export const GetFeedbacksQuerySchema = z.object({
 });
 
 export const UpdateFeedbackBodySchema = z.object({
-  status: z.enum(['pending_review', 'approved_for_training', 'rejected']).optional(),
+  status: z.enum(['pending_review', 'approved_for_training', 'rejected']),
+  admin_id: z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), {
+    message: 'Admin ID không hợp lệ.',
+  }).optional(),
+  reason: z.string().trim().optional(),
   notes: z.string().trim().optional(),
 });
 

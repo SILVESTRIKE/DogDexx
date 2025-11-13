@@ -16,6 +16,7 @@ import {
   getUsageStats,
   getHistories,
   browseMedia,
+  deleteMedia,
   getPlans,
   getSubscriptions,
   browseHistories,
@@ -29,6 +30,14 @@ import {
   createWikiBreed,
   updateWikiBreed,
   deleteWikiBreed,
+  // THÊM: Import các controller cho AI Model
+  getAIModels,
+  activateAIModel,
+  // THÊM: Import controller cho dataset
+  browseDatasets,
+  downloadDataset,
+  // THÊM: Import controller cho report
+  exportReport,
 } from '../controllers/bff_admin.controller';
 import { uploadSingle } from '../middlewares/upload.middleware';
 
@@ -53,6 +62,27 @@ router.get('/usage', getUsageStats);
 router.get('/histories', getHistories);
 router.get('/histories/browse', browseHistories);
 router.get('/media/browse', browseMedia);
+
+/**
+ * @swagger
+ * /bff/admin/media/{id}:
+ *   delete:
+ *     summary: (BFF-Admin) Xóa một media file
+ *     tags: [BFF-Admin-Media]
+ *     description: Xóa vĩnh viễn một media file và các bản ghi lịch sử, feedback liên quan.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *         description: ID của media cần xóa.
+ *     responses:
+ *       200: { description: Xóa thành công. }
+ *       404: { description: Không tìm thấy media. }
+ */
+router.delete('/media/:id', deleteMedia);
 
 // --- THAY ĐỔI: THÊM CÁC ENDPOINT MỚI ĐỂ QUẢN LÝ PLANS ---
 
@@ -251,6 +281,115 @@ router.put('/wiki/:slug', updateWikiBreed);
  *         description: Xóa thành công.
  */
 router.delete('/wiki/:slug', deleteWikiBreed);
+
+// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ AI MODELS ---
+
+/**
+ * @swagger
+ * /bff/admin/ai-models:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách tất cả AI models
+ *     tags: [BFF-Admin-AI-Models]
+ *     description: Lấy danh sách tất cả các AI model có trong hệ thống.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lấy danh sách thành công.
+ */
+router.get('/ai-models', getAIModels);
+
+/**
+ * @swagger
+ * /bff/admin/ai-models/{id}/activate:
+ *   post:
+ *     summary: (BFF-Admin) Kích hoạt một AI model
+ *     tags: [BFF-Admin-AI-Models]
+ *     description: Kích hoạt một model và vô hiệu hóa các model khác cùng tác vụ.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Kích hoạt thành công.
+ */
+router.post('/ai-models/:id/activate', activateAIModel);
+
+// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ DATASET ---
+
+/**
+ * @swagger
+ * /bff/admin/datasets/browse:
+ *   get:
+ *     summary: (BFF-Admin) Duyệt thư mục dataset
+ *     tags: [BFF-Admin-Datasets]
+ *     description: Duyệt cây thư mục dataset vật lý trên server.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: path
+ *         schema: { type: string, default: "" }
+ *         description: Đường dẫn tương đối bên trong thư mục dataset.
+ *     responses:
+ *       200: { description: Lấy nội dung thư mục thành công. }
+ */
+router.get('/datasets/browse', browseDatasets);
+
+/**
+ * @swagger
+ * /bff/admin/datasets/download:
+ *   get:
+ *     summary: (BFF-Admin) Tải về toàn bộ dataset
+ *     tags: [BFF-Admin-Datasets]
+ *     description: Tải về toàn bộ thư mục dataset dưới dạng file .zip.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Bắt đầu tải file zip.
+ *         content:
+ *           application/zip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.get('/datasets/download', downloadDataset);
+
+// --- THÊM MỚI: ENDPOINT ĐỂ XUẤT BÁO CÁO ---
+
+/**
+ * @swagger
+ * /bff/admin/reports/export:
+ *   get:
+ *     summary: (BFF-Admin) Xuất báo cáo hoạt động
+ *     tags: [BFF-Admin-Reports]
+ *     description: Tạo và tải về file báo cáo (Excel hoặc Word) trong một khoảng thời gian.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: format
+ *         required: true
+ *         schema: { type: string, enum: [excel, word] }
+ *         description: Định dạng file báo cáo.
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Bắt đầu tải file báo cáo.
+ */
+router.get('/reports/export', exportReport);
 
 // --- CÁC ROUTE CÒN LẠI GIỮ NGUYÊN ---
 router.get('/subscriptions', getSubscriptions);

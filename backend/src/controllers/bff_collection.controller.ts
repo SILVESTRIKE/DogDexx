@@ -10,11 +10,11 @@ import { BadRequestError, NotFoundError } from '../errors';
 import { Types } from 'mongoose';
 
 // Define a type for the enriched breed object sent to the frontend
-export type PokedexBreed = {
+export type DogDexBreed = {
   slug: string;
   breed: string;
   group?: string;
-  pokedexNumber?: number;
+  dogdexNumber?: number;
   origin?: string;
   mediaUrl?: string;
   rarity_level?: number;
@@ -23,7 +23,7 @@ export type PokedexBreed = {
   source: string | null;
 };
 
-export const getPokedex = async (req: Request, res: Response) => {
+export const getDogDex = async (req: Request, res: Response) => {
   const userId = req.user?._id;
   const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
 
@@ -91,13 +91,13 @@ export const getPokedex = async (req: Request, res: Response) => {
   ]);
 
   // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
-  let breedsResponse: PokedexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
+  let breedsResponse: DogDexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
     const collectionInfo = userCollectionMap.get(breed.slug);
     return {
       slug: breed.slug,
       breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
       group: breed.group,
-      pokedexNumber: breed.pokedexNumber,
+      dogdexNumber: breed.dogdexNumber,
       origin: breed.origin,
       mediaUrl: breed.mediaUrl,
       rarity_level: breed.rarity_level,
@@ -108,7 +108,7 @@ export const getPokedex = async (req: Request, res: Response) => {
   });
 
   // 5.5. Sắp xếp ở tầng ứng dụng bằng cách gọi service
-  breedsResponse = collectionService.sortPokedex(breedsResponse, sort as string);
+  breedsResponse = collectionService.sortDogDex(breedsResponse, sort as string);
 
   // 6. Trả về kết quả cuối cùng
   res.status(200).json({

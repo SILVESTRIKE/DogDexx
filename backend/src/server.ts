@@ -26,19 +26,13 @@ const startServer = async () => {
   }
   const PORT = process.env.PORT || 3000;
 
-  // THAY ĐỔI 3: Khởi tạo server và express-ws
   const server = http.createServer(app);
-  // Khởi tạo express-ws và lấy lại đối tượng app đã được "vá"
   const wsInstance = expressWs(app, server);
   const { app: wsApp } = wsInstance;
 
-  // THAY ĐỔI 4: Định nghĩa các route WebSocket bằng app.ws
-  // Middleware (optionalAuthMiddleware) được thêm vào giống như route HTTP thông thường.
-  // Middleware Fingerprint() đã chạy toàn cục trong app.ts nên không cần thêm ở đây.
   wsApp.ws('/bff/predict/stream', wsOptionalAuthMiddleware, bffPredictionController.handleStreamPrediction);
   wsApp.ws('/bff/live', wsOptionalAuthMiddleware, bffPredictionController.handleStreamPrediction);
 
-  // Khởi động server (giữ nguyên)
   server.listen(PORT, () => {
     logger.info(`[Express] Connect on http://localhost:${PORT}`);
     startSchedulers();

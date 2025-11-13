@@ -17,7 +17,7 @@ export default function TermsPage() {
               <h2 className="text-2xl font-bold text-foreground mb-4">{t("terms.intro") || "Agreement to Terms"}</h2>
               <p>
                 {t("terms.introText") ||
-                  "By accessing and using DogPokedex, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service."}
+                  "By accessing and using DogDogDex, you accept and agree to be bound by the terms and provision of this agreement. If you do not agree to abide by the above, please do not use this service."}
               </p>
             </section>
 
@@ -37,7 +37,7 @@ export default function TermsPage() {
               </h2>
               <p>
                 {t("terms.intellectualPropertyText") ||
-                  "The content, features, and functionality of DogPokedex are owned by DogPokedex, its licensors, or other providers of such material and are protected by international copyright, trademark, and other intellectual property laws."}
+                  "The content, features, and functionality of DogDogDex are owned by DogDogDex, its licensors, or other providers of such material and are protected by international copyright, trademark, and other intellectual property laws."}
               </p>
             </section>
 
@@ -45,7 +45,7 @@ export default function TermsPage() {
               <h2 className="text-2xl font-bold text-foreground mb-4">{t("terms.disclaimer") || "Disclaimer"}</h2>
               <p>
                 {t("terms.disclaimerText") ||
-                  "DogPokedex is provided on an 'AS IS' and 'AS AVAILABLE' basis. DogPokedex makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights."}
+                  "DogDogDex is provided on an 'AS IS' and 'AS AVAILABLE' basis. DogDogDex makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights."}
               </p>
             </section>
 
@@ -55,7 +55,7 @@ export default function TermsPage() {
               </h2>
               <p>
                 {t("terms.limitationText") ||
-                  "In no event shall DogPokedex or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on DogPokedex."}
+                  "In no event shall DogDogDex or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on DogDogDex."}
               </p>
             </section>
 
@@ -63,7 +63,7 @@ export default function TermsPage() {
               <h2 className="text-2xl font-bold text-foreground mb-4">{t("terms.contact") || "Contact Us"}</h2>
               <p>
                 {t("terms.contactText") ||
-                  "If you have any questions about these Terms of Service, please contact us at legal@dogpokedex.com."}
+                  "If you have any questions about these Terms of Service, please contact us at legal@dogdogdex.com."}
               </p>
             </section>
           </div>

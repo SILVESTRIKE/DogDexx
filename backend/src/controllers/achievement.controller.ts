@@ -7,7 +7,6 @@ export const getAchievements = async (req: Request, res: Response) => {
   const userId = req.user?._id || req.body.userId || req.query.userId;
   if (!userId) return res.status(400).json({ message: 'Missing userId' });
 
-  // Lấy bộ sưu tập của người dùng trước
   const [user, userCollections] = await Promise.all([
     userService.getById(userId.toString()),
     collectionService.getUserCollection(userId)
