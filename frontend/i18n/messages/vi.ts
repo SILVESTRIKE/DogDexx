@@ -40,6 +40,7 @@ export default {
     system: "Hệ thống",
     history: "Lịch sử",
     myLibrary: "Thư viện",
+    pricing: "Nâng cấp",
   },
   auth: {
     loginTitle: "Đăng nhập",

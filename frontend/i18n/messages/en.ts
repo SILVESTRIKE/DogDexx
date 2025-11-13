@@ -40,6 +40,7 @@ export default {
     system: "System",
     history: "History",
     myLibrary: "My Library",
+    pricing: "Pricing",
   },
   auth: {
     loginTitle: "Login",
