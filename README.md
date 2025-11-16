@@ -121,8 +121,8 @@ graph TD
         C -- Model Inference --> D[AI Service - Python/PyTorch]
         C -- Database Query --> E[Cơ sở dữ liệu - MongoDB]
         C -- Caching --> F[Cache - Redis]
-        C -- Generative AI --> G[Google Gemini API];
-        D -- Load Model --> H[Hugging Face Hub];
+        C -- Generative AI --> G[Google Gemini API]
+        D -- Load Model --> H[Hugging Face Hub]
     end
     
     B -.-> A
