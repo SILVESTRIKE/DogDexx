@@ -41,4 +41,23 @@ router.get('/plans', bffPublicController.getPublicPlans);
  */
 router.get('/plans/:slug', bffPublicController.getPublicPlanBySlug);
 
+/**
+ * @swagger
+ * /bff/public/contact:
+ *   post:
+ *     summary: "(BFF) Gửi form liên hệ"
+ *     tags: [BFF-Public]
+ *     description: Người dùng gửi phản hồi hoặc liên hệ qua form. Yêu cầu xác thực reCAPTCHA.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ContactPayload' # Bạn cần định nghĩa schema này trong file swagger
+ *     responses:
+ *       200:
+ *         description: Gửi liên hệ thành công.
+ */
+router.post('/contact', bffPublicController.handleContactForm);
+
 export default router;

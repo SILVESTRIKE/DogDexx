@@ -1,7 +1,7 @@
 import bcrypt from "bcryptjs";
 import { UserModel, UserDoc, UserRole, UnlockedAchievement } from "../models/user.model";
 import { OtpModel, OtpType } from "../models/otp.model";
-import { sendEmail } from "./email.service";
+import { emailService } from "./email.service";
 import { RegisterType } from "../types/zod/user.zod";
 import mongoose, { Types } from "mongoose";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
@@ -176,7 +176,7 @@ export const userService = {
       type: OtpType.EMAIL_VERIFICATION,
       expiresAt: expiresAt,
     }).save();
-    await sendEmail(user.email, "OTP Verification", `Your OTP code is: ${otpCode}`);
+    await emailService.sendEmail(user.email, "OTP Verification", `Your OTP code is: ${otpCode}`);
     return { message: "OTP đã được gửi đến email của bạn" };
   },
 

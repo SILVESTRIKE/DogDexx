@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
-import { userService, EnrichedUser } from "../services/user.service"; 
+import { userService, EnrichedUser } from "../services/user.service"; // THAY ĐỔI: Import EnrichedUser
 import { NotAuthorizedError } from "../errors";
 
 interface JwtPayload {
@@ -29,7 +29,7 @@ export const authMiddleware = async (
     }
 
     // Gán user đã được làm giàu vào req.user
-    req.user = user;
+    (req as any).user = user as EnrichedUser;
 
     next();
   } catch (error) {

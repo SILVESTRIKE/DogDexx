@@ -15,7 +15,10 @@ export const optionalAuthMiddleware: RequestHandler = async (req, res, next) => 
   // --- LOGIC ĐỒNG BỘ FINGERPRINT (giữ nguyên, nên đặt lên đầu) ---
   const visitorIdFromHeader = req.headers['x-visitor-id'] as string;
   if (visitorIdFromHeader) {
-    req.fingerprint = { hash: visitorIdFromHeader };
+    (req as any).fingerprint = {
+      ...(req as any).fingerprint,
+      hash: visitorIdFromHeader,
+    };
   }
 
   // Nếu không có header Authorization, coi như là khách và cho qua.
@@ -31,7 +34,7 @@ export const optionalAuthMiddleware: RequestHandler = async (req, res, next) => 
 
     if (user) {
       logger.info(`[OptionalAuth] Authenticated user ${user.username} (ID: ${user._id}) for request to ${req.originalUrl}`);
-      req.user = user;
+      (req as any).user = user as EnrichedUser;
       return next(); // Xác thực thành công, đi tiếp
     } else {
       // Token hợp lệ nhưng không tìm thấy user -> lỗi -> trả về 401

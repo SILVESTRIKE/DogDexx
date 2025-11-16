@@ -116,6 +116,9 @@ export default {
     processingFile: "Processing, please wait...",
     uploading: "Uploading...",
     detectionFailed: "Detection failed. Please try again.",
+    contactTitle: "Get in Touch",
+    contactDescription:
+      "Have questions, feedback, or suggestions? We'd love to hear from you!",
   },
   results: {
     title: "Detection Results",
@@ -208,6 +211,8 @@ export default {
     instruction2: "Keep camera steady",
     instruction3: "Center the dog in frame",
     instruction4: "System will auto-detect",
+    connected: "Connected to AI Service",
+    insufficientTokens: "Not enough tokens for streaming session.",
   },
   dogdex: {
     title: "My DogDex",
@@ -269,6 +274,9 @@ export default {
       collected: "Dogs Collected",
       achievements: "Achievements",
       completion: "Completion",
+      tokensRemaining: "Tokens this week: {remaining}/{limit}",
+      tokens: "Tokens",
+      guestTokens: "Trial Detections",
     },
     account: {
       title: "Account Information",
@@ -615,6 +623,19 @@ export default {
     upgrade: "Upgrade Now",
   },
   pricing: {
+    featureTokenLimit: "{count} Tokens / week",
+    featureStorage: "History Storage",
+    priority: "Priority Support",
+    customModels: "Custom Models",
+    faq: "Frequently Asked Questions",
+    faqQ1: "Can I change my plan at any time?",
+    faqA1:
+      "Yes, you can upgrade or downgrade your plan at any time. Changes will take effect immediately.",
+    faqQ2: "What payment methods do you accept?",
+    faqA2:
+      "We accept all major credit cards, PayPal, and bank transfers for enterprise plans.",
+    faqQ3: "Is there a free trial?",
+    faqA3: "Yes, the Free plan includes 10 detections per month with no credit card required.",
     title: "Simple, Transparent Pricing",
     description: "Choose the perfect plan for your needs",
     monthly: "Monthly",
@@ -628,12 +649,8 @@ export default {
     starterDescription: "For casual users",
     professionalDescription: "For power users",
     enterpriseDescription: "For large organizations",
-    detectionsPerMonth: "Detections per month",
     unlimited: "Unlimited",
-    storageGB: "Storage",
     apiAccess: "API Access",
-    priority: "Priority Support",
-    customModels: "Custom Models",
     getStarted: "Get Started",
     currentPlan: "Current Plan",
     upgrade: "Upgrade",
@@ -642,6 +659,8 @@ export default {
     noLimit: "No limit",
     included: "Included",
     notIncluded: "Not included",
+    perMonth: "/month",
+    perYear: "/year",
   },
   faq: "Frequently Asked Questions",
   faqQ4: "Do you offer refunds?",
@@ -662,11 +681,25 @@ export default {
     pay: "Pay",
     failed: "Payment failed",
   },
+  contact: {
+    title: "Contact Us",
+    description: "Fill out the form below and we'll get back to you as soon as possible.",
+    emailLabel: "Your Email",
+    emailPlaceholder: "you@example.com",
+    messageLabel: "Your Message",
+    messagePlaceholder: "Enter your message here...",
+    submit: "Send Message",
+    submitSuccess: "Your message has been sent successfully!",
+    submitError: "Failed to send message. Please try again later.",
+  },
   language: {
     toggle: "Toggle language",
   },
   profilePage: {
     upgradeSuccessTitle: "Upgrade Successful!",
     upgradeSuccessDescription: "Your plan has been upgraded to {planName}. Enjoy the new features!",
-  }
+  },
+  plans: {
+    title: "Plans"
+  },
 };

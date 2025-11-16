@@ -24,6 +24,25 @@ export class ConfigService {
   }
 
   /**
+   * Lấy cấu hình đầy đủ cho trang Admin, bao gồm cả model đang active.
+   */
+  public async getFullConfigForAdmin(): Promise<any> {
+    const [configDoc, activeModel] = await Promise.all([
+      this.getAiConfig(),
+      AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION")
+    ]);
+
+    const configObject = configDoc.toObject();
+
+    // Gộp thông tin model đang active vào config
+    if (activeModel) {
+      configObject.model_path = activeModel.path;
+    }
+
+    return configObject;
+  }
+
+  /**
    * Lấy cấu hình đầy đủ để gửi cho AI Service, bao gồm cả model đang active.
    */
   public async getFullConfigForAIService(): Promise<any> {
@@ -71,13 +90,11 @@ export class ConfigService {
    */
   public async reloadAiService(): Promise<{ message: string; details?: any }> {
     // Lấy cấu hình đầy đủ, bao gồm cả model đang active
-    const [config, activeModel] = await Promise.all([
-      this.getAiConfig(),
-      AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION")
-    ]);
+    const fullConfig = await this.getFullConfigForAIService();
+    const { activeModel, ...config } = fullConfig;
 
     const payload = {
-      ...config.toObject(),
+      ...config,
       model_path: activeModel?.fileName,
       huggingface_repo: activeModel?.huggingFaceRepo,
       labels_path: activeModel?.labelsFileName, // Thêm labels_path

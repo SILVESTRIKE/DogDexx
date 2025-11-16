@@ -15,6 +15,7 @@ import { AnalyticsEventName } from '../constants/analytics.constants';
 import { BatchProcessor } from '../utils/BatchProcessor.util';
 import { PREDICTION_SOURCES } from '../constants/prediction.constants';
 import { analyticsService } from './analytics.service';
+import { AIModelService } from './ai_models.service';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
@@ -44,6 +45,9 @@ export const predictionService = {
       if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
       directory_id = userDirectory._id;
     }
+
+    const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
+    const modelName = activeModel ? activeModel.name : 'unknown_model';
 
     const formData = new FormData();
     files.forEach(file => {
@@ -88,7 +92,7 @@ export const predictionService = {
       const newPrediction = await PredictionHistoryModel.create({
         user: userId, media: newMedia._id, mediaPath: newMedia.mediaPath,
         predictions: result.predictions, processedMediaPath: publicUrl, // Sửa lỗi: Thêm source
-        modelUsed: 'YOLOv8_image_batch', source: PREDICTION_SOURCES.IMAGE_UPLOAD,
+        modelUsed: modelName, source: PREDICTION_SOURCES.IMAGE_UPLOAD,
       });
 
       const populatedPrediction = await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([
@@ -128,6 +132,9 @@ export const predictionService = {
       name: originalFilename, mediaPath: mediaUrl, creator_id: userId, directory_id, type,
     });
     await newMedia.save();
+
+    const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
+    const modelName = activeModel ? activeModel.name : 'unknown_model';
 
     let predictionResult;
 
@@ -169,7 +176,7 @@ export const predictionService = {
     const newPrediction = await PredictionHistoryModel.create({
       user: userId, media: newMedia._id, mediaPath: newMedia.mediaPath,
       predictions: predictionResult.predictions, processedMediaPath: publicUrl,
-      modelUsed: `YOLOv8_${type}_upload`, source: `${type}_upload` as typeof PREDICTION_SOURCES[keyof typeof PREDICTION_SOURCES],
+      modelUsed: modelName, source: `${type}_upload` as typeof PREDICTION_SOURCES[keyof typeof PREDICTION_SOURCES],
     });
 
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
@@ -183,6 +190,9 @@ export const predictionService = {
     if (!payload || !payload.processed_media_base64 || !payload.detections) {
       throw new BadRequestError("Dữ liệu kết quả stream không hợp lệ.");
     }
+
+    const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
+    const modelName = activeModel ? activeModel.name : 'unknown_model';
 
     const base64Data = payload.processed_media_base64;
     const mediaBuffer = Buffer.from(base64Data, 'base64');
@@ -212,7 +222,7 @@ export const predictionService = {
     const newPrediction = await PredictionHistoryModel.create({
       user: userId, media: newMedia._id, mediaPath: publicUrl,
       predictions: payload.detections, processedMediaPath: publicUrl,
-      modelUsed: `YOLOv8_stream`, source: PREDICTION_SOURCES.STREAM_CAPTURE,
+      modelUsed: modelName, source: PREDICTION_SOURCES.STREAM_CAPTURE,
     });
 
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);

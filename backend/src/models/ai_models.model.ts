@@ -14,6 +14,7 @@ export type AIModelDoc = Document & {
   format: ModelFormatType;
   huggingFaceRepo: string;
   fileName: string;
+  path: string; // THÊM
   labelsFileName: string; // THÊM
   version: string;
   status: ModelStatusType;
@@ -43,6 +44,7 @@ const aiModelSchema = new Schema<AIModelDoc>(
     },
     huggingFaceRepo: { type: String, required: true, trim: true },
     fileName: { type: String, required: true, trim: true },
+    path: { type: String, required: true, trim: true },
     labelsFileName: { type: String, required: true, default: "labels.json" }, // THÊM
     version: { type: String, required: true, trim: true },
     status: {

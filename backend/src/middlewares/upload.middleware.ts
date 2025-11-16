@@ -3,7 +3,14 @@ import path from "path";
 import fs from "fs";
 import crypto from "crypto";
 import { Request } from "express";
-import { AVATAR_UPLOAD_DIR, MEDIA_UPLOAD_DIR } from "../constants/paths.constants";
+
+// --- Cấu hình chung ---
+const PUBLIC_DIR = "public";
+const UPLOADS_DIR = path.join(PUBLIC_DIR, "uploads");
+
+if (!fs.existsSync(PUBLIC_DIR)) {
+  fs.mkdirSync(PUBLIC_DIR);
+}
 
 const getFileTypeDir = (mimetype: string): string => {
   // Chỉ xử lý các loại file ảnh cho avatar
@@ -17,7 +24,6 @@ const getFileTypeDir = (mimetype: string): string => {
 const getWeekOfMonth = (date: Date) => {
   const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
   const dayOfMonth = date.getDate();
-  // Adjust for Sunday being 0
   const dayOfWeek = startOfMonth.getDay() === 0 ? 6 : startOfMonth.getDay() - 1;
   return Math.ceil((dayOfMonth + dayOfWeek) / 7);
 };
@@ -37,11 +43,11 @@ const predictionStorage = multer.diskStorage({
     if (req.user) {
       // Logged-in user
       const fileTypeDir = getFileTypeDir(file.mimetype);
-      fullPath = path.join(MEDIA_UPLOAD_DIR, fileTypeDir, year, month);
+      fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
     } else {
       // Anonymous user
       const week = `week-${getWeekOfMonth(now)}`;
-      fullPath = path.join(MEDIA_UPLOAD_DIR, "test", year, month, week);
+      fullPath = path.join(UPLOADS_DIR, "test", year, month, week);
     }
 
     fs.mkdirSync(fullPath, { recursive: true });
@@ -67,7 +73,7 @@ const predictionStorage = multer.diskStorage({
 // --- Storage cho avatar người dùng ---
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const fullPath = AVATAR_UPLOAD_DIR;
+    const fullPath = path.join(PUBLIC_DIR, "useravatar");
     fs.mkdirSync(fullPath, { recursive: true });
     cb(null, fullPath);
   },
@@ -143,9 +149,10 @@ export const uploadAvatar = multer({
 
 
 // Middleware mới cho việc upload model
+// SỬA: Chuyển từ .fields sang .single để cho phép các trường text khác đi kèm.
 export const uploadModelFiles = multer({
   storage: multer.memoryStorage(), // Lưu file vào bộ nhớ đệm thay vì ghi ra đĩa
   limits: {
     fileSize: 500 * 1024 * 1024, // Tăng giới hạn lên 500MB cho file model
   }
-}).fields([{ name: 'modelFile', maxCount: 1 }]);
+}).single('modelFile');

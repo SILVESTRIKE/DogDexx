@@ -107,15 +107,10 @@ export class AIModelService {
    * @param creator_id ID của người tải lên
    */
   static async uploadAndCreateModel(
-    files: { modelFile: Express.Multer.File[] },
+    modelFile: Express.Multer.File,
     data: CreateAIModelType,
     creator_id: Types.ObjectId
   ): Promise<AIModelDoc> {
-    const { modelFile } = files;
-
-    if (!modelFile || modelFile.length === 0) {
-      throw new AppError("Model file is required.");
-    }
 
     const hfToken = process.env.HUGGINGFACE_TOKEN;
     const repoId = process.env.HUGGINGFACE_REPO_ID;
@@ -125,14 +120,14 @@ export class AIModelService {
     }
 
     try {
-      console.log(`Uploading model file '${modelFile[0].originalname}' to Hugging Face repo '${repoId}'...`);
+      console.log(`Uploading model file '${modelFile.originalname}' to Hugging Face repo '${repoId}'...`);
       // 1. Upload file model
       await uploadFile({
         credentials: { accessToken: hfToken },
         repo: { type: 'model', name: repoId },
         file: {
           path: data.path, // This is the path within the repository
-          content: new Blob([new Uint8Array(modelFile[0].buffer)]), // Convert Buffer to Uint8Array before creating Blob
+          content: new Blob([new Uint8Array(modelFile.buffer)]), // Convert Buffer to Uint8Array before creating Blob
         },
       });
       console.log("Model file uploaded successfully.");

@@ -117,6 +117,9 @@ export default {
     processingFile: "Đang xử lý, vui lòng đợi...",
     uploading: "Đang tải lên...",
     detectionFailed: "Nhận diện thất bại. Vui lòng thử lại.",
+    contactTitle: "Liên hệ",
+    contactDescription:
+      "Có câu hỏi, phản hồi hoặc góp ý? Chúng tôi rất muốn nghe từ bạn!",
   },
   results: {
     title: "Kết quả nhận diện",
@@ -209,6 +212,8 @@ export default {
     instruction2: "Giữ camera ổn định",
     instruction3: "Đưa chó vào giữa khung hình",
     instruction4: "Hệ thống sẽ tự động nhận diện",
+    connected: "Đã kết nối đến dịch vụ AI",
+    insufficientTokens: "Không đủ token để bắt đầu phiên stream.",
   },
   dogdex: {
     title: "DogDex của tôi",
@@ -695,6 +700,17 @@ export default {
     cardPlaceholder: "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
     pay: "Thanh toán",
     failed: "Thanh toán thất bại",
+  },
+  contact: {
+    title: "Liên hệ với chúng tôi",
+    description: "Điền vào biểu mẫu dưới đây và chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.",
+    emailLabel: "Email của bạn",
+    emailPlaceholder: "ban@example.com",
+    messageLabel: "Nội dung tin nhắn",
+    messagePlaceholder: "Nhập tin nhắn của bạn tại đây...",
+    submit: "Gửi tin nhắn",
+    submitSuccess: "Tin nhắn của bạn đã được gửi thành công!",
+    submitError: "Gửi tin nhắn thất bại. Vui lòng thử lại sau.",
   },
   language: {
     toggle: "Chuyển đổi ngôn ngữ",

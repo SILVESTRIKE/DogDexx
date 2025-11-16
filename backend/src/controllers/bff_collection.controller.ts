@@ -74,8 +74,6 @@ export const getDogDex = async (req: Request, res: Response) => {
     
     // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
     const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
-    // SỬA LỖI: Nếu không có user, isCollected=true sẽ không hoạt động.
-    // Chỉ áp dụng filter này nếu có user.
     if (userId && isCollected === 'true') {
       // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
       options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
@@ -97,7 +95,7 @@ export const getDogDex = async (req: Request, res: Response) => {
       slug: breed.slug,
       breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
       group: breed.group,
-      dogdexNumber: breed.dogdexNumber,
+      dogdexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
       origin: breed.origin,
       mediaUrl: breed.mediaUrl,
       rarity_level: breed.rarity_level,
@@ -142,6 +140,7 @@ export const addBreed = async (req: Request, res: Response) => {
   // Bây giờ `user` chắc chắn không phải là null
   const achievements = await achievementService.processUserAchievements(user, userCollections, lang);
   const unlockedAchievements = achievements.filter(a => a.unlocked);
+  const unlockedAchievements = achievements.filter((a: any) => a.unlocked);
 
   const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
 
@@ -150,6 +149,7 @@ export const addBreed = async (req: Request, res: Response) => {
     isNew: false,
     totalCollected: userCollections.length,
     achievementsUnlocked: unlockedAchievements.map(a => a.key),
+    achievementsUnlocked: unlockedAchievements.map((a: any) => a.key),
     // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
     nextAchievement: nextAchievement
       ? {
@@ -168,6 +168,7 @@ export const getAchievements = async (req: Request, res: Response) => {
     ? req.query.lang as 'vi' | 'en'
     : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
+  if (!userId) throw new NotFoundError('User not found to get achievements.');
   const [user, userCollections, totalBreedsInSystem] = await Promise.all([
     userService.getById(userId.toString()),
     collectionService.getUserCollection(userId, lang),

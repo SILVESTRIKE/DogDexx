@@ -3,7 +3,7 @@ import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
 import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
 import { Types, model } from 'mongoose';
 import { UserModel, UserDoc } from '../models/user.model';
-import { sendEmail } from './email.service';
+import { emailService } from './email.service';
 import path from 'path';
 import fs from 'fs/promises'; // Assuming these constants exist
 import { MediaModel } from '../models/medias.model'; // THÊM: Import MediaModel
@@ -294,13 +294,19 @@ export const feedbackService = {
     correctedLabel); // Truyền correctedLabel vào đây
     await updatedFeedback.populate("user_id", "username email");
 
+    // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
+    await PredictionHistoryModel.updateOne(
+      { _id: updatedFeedback.prediction_id },
+      { $set: { isCorrect: updatedFeedback.isCorrect } }
+    );
+
     // Gửi email cảm ơn nếu có thông tin người dùng
     const user = updatedFeedback.user_id as any;
     if (user && user.email) {
       const subject = 'Cảm ơn bạn đã đóng góp cho DogBreedID!';
       const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${updatedFeedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
       
-      sendEmail(user.email, subject, text).catch(err => console.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
+      emailService.sendEmail(user.email, subject, text).catch(err => console.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
     }
 
     return updatedFeedback;
@@ -323,6 +329,12 @@ export const feedbackService = {
       reason: reason,
     });
     await updatedFeedback.populate("user_id", "username email");
+
+    // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
+    await PredictionHistoryModel.updateOne(
+      { _id: updatedFeedback.prediction_id },
+      { $set: { isCorrect: false } } // Khi từ chối, coi như dự đoán gốc là sai
+    );
 
     return updatedFeedback;
   },

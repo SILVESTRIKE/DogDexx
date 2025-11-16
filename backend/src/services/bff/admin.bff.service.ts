@@ -191,11 +191,7 @@ export class AdminBffService {
   }
 
   public async getModelConfig() {
-    const config = await this.configService.getAiConfig();
-    return {
-      message: 'Lấy cấu hình model thành công.',
-      data: config,
-    };
+    return this.configService.getFullConfigForAdmin();
   }
 
   public async updateModelConfig(modelId: string | undefined, otherConfigData: any) {
@@ -214,13 +210,10 @@ export class AdminBffService {
     };
   }
 
-  public async uploadModel(files: { modelFile: Express.Multer.File[] }, body: any, userId: Types.ObjectId) {
-    if (!files || typeof files !== 'object' || !('modelFile' in files) || !Array.isArray(files.modelFile)) {
-      throw new AppError("Model file is required.");
-    }
+  public async uploadModel(file: Express.Multer.File, body: any, userId: Types.ObjectId) {
     const data = CreateAIModelSchema.parse(body);
     const newModel = await AIModelService.uploadAndCreateModel(
-      files as { modelFile: Express.Multer.File[] },
+      file,
       data,
       userId
     );

@@ -163,8 +163,11 @@ export const getUsageStats = async (req: Request, res: Response, next: NextFunct
 };
 
 export const getModelConfig = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.getModelConfig();
-  res.status(200).json(result);
+  const fullConfig = await adminBffService.getModelConfig();
+  res.status(200).json({
+    message: 'Lấy cấu hình model thành công.',
+    data: fullConfig,
+  });
 };
 
 export const getHistories = async (req: Request, res: Response, next: NextFunction) => {
@@ -192,8 +195,9 @@ export const browseHistories = async (req: Request, res: Response, next: NextFun
 };
 
 export const updateModelConfig = async (req: Request, res: Response, next: NextFunction) => {
-  const { modelId, ...otherConfigData } = req.body;
-  const result = await adminBffService.updateModelConfig(modelId, otherConfigData);
+  // modelId không còn được quản lý ở đây, nó được xử lý bởi activateAIModel.
+  // Hàm này chỉ cập nhật các cấu hình khác như device, thresholds.
+  const result = await adminBffService.updateModelConfig(undefined, req.body);
   res.status(200).json(result);
 };
 
@@ -203,8 +207,11 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
 };
 
 export const uploadModel = async (req: Request, res: Response, next: NextFunction) => {
-  const files = req.files;
-  const result = await adminBffService.uploadModel(files as any, req.body, (req as any).user.id);
+  const file = req.file; // SỬA: Lấy file từ req.file (do dùng multer.single)
+  if (!file) {
+    throw new AppError("Model file is required.");
+  }
+  const result = await adminBffService.uploadModel(file, req.body, (req as any).user.id);
   res.status(201).json(result);
 };
 
@@ -300,13 +307,16 @@ export const deletePlan = async (req: Request, res: Response, next: NextFunction
 
 export const getWikiBreeds = async (req: Request, res: Response, next: NextFunction) => {
     const { page = 1, limit = 10, search, lang = 'vi' } = req.query as any;
-    const result = await adminBffService.getWikiBreeds({
+    const breedsResult = await adminBffService.getWikiBreeds({
         page: Number(page),
         limit: Number(limit),
         search,
         lang
     });
-    res.status(200).json(result);
+    // SỬA: Transform media URLs để đảm bảo frontend nhận được URL đầy đủ
+    const transformedData = transformMediaURLs(req, breedsResult.data);
+
+    res.status(200).json({ ...breedsResult, data: transformedData });
 };
 
 export const createWikiBreed = async (req: Request, res: Response, next: NextFunction) => {

@@ -383,8 +383,8 @@ export const bffPredictionController = {
       if (!predictionHistory) {
         throw new NotFoundError("Không tìm thấy lịch sử dự đoán.");
       }
-      // SỬA LỖI: Lấy mediaPath một cách an toàn, nó có thể không tồn tại (ví dụ: stream)
-      const file_path = (predictionHistory.media as any)?.mediaPath;
+      
+      const file_path = (predictionHistory.media as any)?.path;
 
       const feedback = await feedbackService.submitFeedback(userId, {
         prediction_id,
@@ -855,7 +855,7 @@ export const bffPredictionController = {
 
       // 2. Lưu kết quả vào cache
       if (redisClient && recommendations) {
-        await redisClient.set(cacheKey, recommendations, { EX: 3600 * 24 }); // Cache trong 24 giờ
+        await redisClient.set(cacheKey, recommendations, { EX: REDIS_KEYS.CACHE_24H_SECONDS }); // Cache trong 24 giờ
       }
 
       logger.info(`[BFF Controller] 🩺 Sending response for '${breedSlug}'.`);
@@ -898,7 +898,7 @@ export const bffPredictionController = {
       
       // 2. Lưu kết quả vào cache trước khi parse và gửi đi
       if (redisClient && productsJsonString && productsJsonString.length > 2) { // Chỉ cache nếu có nội dung
-        await redisClient.set(cacheKey, productsJsonString, { EX: 3600 * 24 }); // Cache trong 24 giờ
+        await redisClient.set(cacheKey, productsJsonString, { EX: REDIS_KEYS.CACHE_24H_SECONDS }); // Cache trong 24 giờ
       }
 
       try {

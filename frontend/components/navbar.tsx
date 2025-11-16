@@ -61,7 +61,6 @@ export function Navbar() {
     { href: "/achievements", label: t("nav.achievements"), auth: true },
     { href: "/history", label: t("nav.history"), auth: true },
     { href: "/about", label: t("nav.about"), auth: false },
-    { href: "/results", label: t("nav.results"), auth: false },
     { href: "/pricing", label: t("nav.pricing"), auth: true },
   ], [t]);
 

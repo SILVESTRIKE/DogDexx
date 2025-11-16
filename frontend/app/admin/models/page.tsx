@@ -140,8 +140,8 @@ export default function ModelsPage() {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div className="space-y-2">
-                <Label htmlFor="model_path">Model Path</Label>
-                <Input id="model_path" name="model_path" value={config?.model_path || ""} onChange={handleInputChange} />
+                <Label htmlFor="model_path">Active Model Path</Label>
+                <Input id="model_path" name="model_path" value={config?.model_path || ""} readOnly disabled />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="device">Device</Label>

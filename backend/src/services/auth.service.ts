@@ -2,11 +2,13 @@ import bcrypt from "bcryptjs";
 import { userService } from "./user.service";
 import { UserModel, UserDoc } from "../models/user.model";
 import { tokenService } from "./token.service";
-import { RefreshTokenModel } from "../models/refreshToken.model";
 import { NotAuthorizedError, BadRequestError, ConflictError } from "../errors";
-import { OtpModel, OtpType } from "../models/otp.model";
-import { sendEmail } from "./email.service";
+import { OtpModel, OtpType } from "../models/otp.model";;
+import { emailService } from "./email.service";
 import crypto from "crypto";
+import { redisClient } from "../utils/redis.util";
+import { REDIS_KEYS } from "../constants/redis.constants";
+import { logger } from "../utils/logger.util";
 
 async function saveOtp(email: string, otp: string, type: OtpType) {
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -20,7 +22,7 @@ async function sendOtpEmail(
   text: string
 ) {
   try {
-    await sendEmail(email, subject, text.replace("{{otp}}", otp));
+    await emailService.sendEmail(email, subject, text.replace("{{otp}}", otp));
     console.log("Noi dung email:", text.replace("{{otp}}", otp));
   } catch (error) {
     console.error("Lỗi gửi mail:", error);
@@ -33,7 +35,6 @@ export const authService = {
   email: string,
   password: string
 ): Promise<{
-  // Sử dụng Omit để đảm bảo kiểu trả về không bao giờ chứa password
   user: Omit<UserDoc, 'password'>; 
   accessToken: string;
   refreshToken: string;
@@ -174,9 +175,13 @@ export const authService = {
     await userDoc.save();
 
     await OtpModel.deleteMany({ email, type: OtpType.PASSWORD_RESET });
-    await RefreshTokenModel.deleteMany({
-      user: (userDoc._id as any).toString(),
-    });
+    // Xóa tất cả các refresh token của người dùng trong Redis
+    if (redisClient) {
+      const userId = (userDoc._id as any).toString();
+      const keys = await redisClient.keys(`${REDIS_KEYS.REFRESH_TOKEN_PREFIX}${userId}:*`);
+      if (keys.length > 0) await redisClient.del(keys);
+      logger.info(`[AuthService] Deleted ${keys.length} refresh tokens for user ${userId} after password reset.`);
+    }
 
     return { message: "Mật khẩu đã được đặt lại thành công." };
   },

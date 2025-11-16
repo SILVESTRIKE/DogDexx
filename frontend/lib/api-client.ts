@@ -866,6 +866,19 @@ export class ApiClient {
       true
     );
   }
+
+  // THÊM MỚI: Gửi form liên hệ
+  async submitContactForm(payload: {
+    email: string;
+    message: string;
+    captchaToken: string;
+  }): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      "/bff/public/contact",
+      { method: "POST", body: JSON.stringify(payload) },
+      false
+    );
+  }
 }
 
 export const apiClient = new ApiClient(API_BASE_URL);

@@ -39,14 +39,13 @@ import {
   // THÊM: Import controller cho report
   exportReport,
 } from '../controllers/bff_admin.controller';
-import { uploadSingle } from '../middlewares/upload.middleware';
+import { uploadSingle, uploadModelFiles } from '../middlewares/upload.middleware';
 
 const router = Router();
 
 // Tất cả các route trong file này đều yêu cầu quyền admin
 router.use(authMiddleware, checkAllowedRoles(['admin']));
 
-// --- CÁC ROUTE HIỆN CÓ GIỮ NGUYÊN ---
 router.get('/dashboard', getDashboard);
 router.get('/feedback', getFeedback);
 router.post('/feedback/:id/approve', approveFeedback);
@@ -57,7 +56,7 @@ router.put('/users/:id', updateUser);
 router.get('/model/config', getModelConfig);
 router.put('/model/config', updateModelConfig);
 router.get('/alerts', getAlerts);
-router.post('/models/upload', uploadSingle, uploadModel); // Giả sử uploadSingle là middleware phù hợp
+router.post('/models/upload', uploadModelFiles, uploadModel); // Giả sử uploadSingle là middleware phù hợp
 router.get('/usage', getUsageStats);
 router.get('/histories', getHistories);
 router.get('/histories/browse', browseHistories);

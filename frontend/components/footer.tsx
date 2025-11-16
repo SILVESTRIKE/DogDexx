@@ -71,7 +71,7 @@ export default function Footer() {
             <h4 className="font-semibold mb-4">{t("footer.support") || "Support"}</h4>
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li>
-                <Link href="/" className="hover:text-foreground transition">
+                <Link href="/contact" className="hover:text-foreground transition">
                   {t("footer.help") || "Help Center"}
                 </Link>
               </li>

@@ -23,11 +23,8 @@ if (!redisUrl) {
     logger.error('[Redis] Redis Client Error', err);
   });
 
-  // Bắt đầu kết nối
   client.connect();
 
-  // Không export ở đây
 }
 
-// Export một lần duy nhất ở cuối file
 export const redisClient = client;

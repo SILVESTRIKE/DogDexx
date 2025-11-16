@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation"
 import { apiClient } from "@/lib/api-client"
 import { useMounted } from '@/hooks/use-mounted'
 import { toast } from "sonner"
+import { ContactForm } from "@/components/contact-form"
 
 export default function Home() {
   const mounted = useMounted()
@@ -303,6 +304,17 @@ export default function Home() {
               <h3 className="font-semibold mb-2">{t("home.feature3Title")}</h3>
               <p className="text-sm text-muted-foreground">{t("home.feature3Description")}</p>
             </Card>
+          </div>
+
+          {/* Contact Section */}
+          <div className="mt-24">
+            <div className="text-center mb-10">
+              <h2 className="text-4xl font-bold">{t("home.contactTitle") || "Liên hệ với chúng tôi"}</h2>
+              <p className="text-lg text-muted-foreground mt-2 text-balance">
+                {t("home.contactDescription") || "Có câu hỏi hoặc phản hồi? Chúng tôi luôn sẵn lòng lắng nghe."}
+              </p>
+            </div>
+            <ContactForm />
           </div>
         </div>
       </div>
