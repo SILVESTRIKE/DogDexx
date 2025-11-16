@@ -1,4 +1,4 @@
-import { PlainUser } from "../../services/user.service";
+import { EnrichedUser } from "../../services/user.service";
 
 interface TrialPayload {
   trialId: string;
@@ -8,7 +8,7 @@ interface TrialPayload {
 declare global {
   namespace Express {
     export interface Request {
-      user?: PlainUser;
+      user?: EnrichedUser;
       trial?: TrialPayload;
       fingerprint?: {
         hash: string;

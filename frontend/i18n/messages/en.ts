@@ -40,7 +40,7 @@ export default {
     system: "System",
     history: "History",
     myLibrary: "My Library",
-    pricing: "Pricing",
+    pricing: "Upgrade",
   },
   auth: {
     loginTitle: "Login",
@@ -126,6 +126,7 @@ export default {
     viewDetails: "View Details",
     detectAnother: "Detect Another",
     characteristics: "Characteristics",
+    commonHealthIssues: "Common Health Issues",
     origin: "Origin",
     size: "Size",
     lifespan: "Lifespan",

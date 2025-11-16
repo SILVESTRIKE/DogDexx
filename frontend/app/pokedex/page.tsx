@@ -4,7 +4,7 @@ import { useCollection } from "@/lib/collection-context";
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useI18n } from "@/lib/i18n-context";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { DogDexHeader } from "@/components/dogdex-header";
+import { DogDexHeader } from "@/components/pokedex-header";
 import { DogGrid } from "@/components/dog-grid";
 
 export default function DogDexPage() {

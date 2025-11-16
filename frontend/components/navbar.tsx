@@ -1,7 +1,7 @@
 "use client"
 
-import Link from "next/link"
-import { useEffect, useMemo, useRef, useState } from "react"
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { usePathname, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { I18nContextType, useI18n } from "@/lib/i18n-context"
@@ -22,6 +22,7 @@ import { LanguageToggle } from "@/components/language-toggle"
 import { cn } from "@/lib/utils";
 import { Menu } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import React from "react";
 
 export function Navbar() {
   const { user, logout, isLoading, isAuthenticated, isAuthModalOpen, setAuthModalOpen, authModalMode, setAuthModalMode } = useAuth()
@@ -33,10 +34,10 @@ export function Navbar() {
   const navContainerRef = useRef<HTMLDivElement>(null)
   const [indicatorStyle, setIndicatorStyle] = useState({})
 
-  const handleAuthClick = (mode: "login" | "register") => {    
+  const handleAuthClick = useCallback((mode: "login" | "register") => {
     setAuthModalMode(mode)
     setAuthModalOpen(true)
-  }
+  }, [setAuthModalMode, setAuthModalOpen]);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10)
@@ -56,7 +57,7 @@ export function Navbar() {
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
     { href: "/live", label: t("nav.live"), auth: false },
-    { href: "/dogdex", label: t("nav.dogdex"), auth: false },
+    { href: "/pokedex", label: t("nav.dogdex"), auth: false },
     { href: "/achievements", label: t("nav.achievements"), auth: true },
     { href: "/history", label: t("nav.history"), auth: true },
     { href: "/about", label: t("nav.about"), auth: false },
@@ -116,9 +117,18 @@ export function Navbar() {
   const allMobileLinks = useMemo(() => (
     <>
       {mobileNavLinks}
+      <DropdownMenuSeparator />
+      {user && (
+        <DropdownMenuItem className="focus:bg-transparent cursor-default">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground w-full">
+            <Coins className="h-4 w-4 text-amber-500" />
+            <span>{t("nav.tokens")}:</span>
+            <span className="font-mono ml-auto">{user.remainingTokens}/{user.tokenAllotment}</span>
+          </div>
+        </DropdownMenuItem>
+      )}
       {!isAuthenticated && (
         <>
-          <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => handleAuthClick("login")} className="cursor-pointer">
             {t("nav.login")}
           </DropdownMenuItem>
@@ -128,7 +138,7 @@ export function Navbar() {
         </>
       )}
     </>
-  ), [mobileNavLinks, isAuthenticated, t, handleAuthClick]);
+  ), [mobileNavLinks, isAuthenticated, t, handleAuthClick, user]);
 
 
 
@@ -155,7 +165,10 @@ export function Navbar() {
           <DropdownMenuContent align="end">
             <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer"><User className="h-4 w-4 mr-2" />{t("nav.profile")}</Link></DropdownMenuItem>
             {user.role === "admin" && (
-              <><DropdownMenuSeparator /><DropdownMenuItem asChild><Link href="/admin" className="cursor-pointer"><Shield className="h-4 w-4 mr-2" />{t("nav.adminPanel")}</Link></DropdownMenuItem></>
+              <React.Fragment key="admin-menu">
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild><Link href="/admin" className="cursor-pointer"><Shield className="h-4 w-4 mr-2" />{t("nav.adminPanel")}</Link></DropdownMenuItem>
+              </React.Fragment>
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive">{t("nav.logout")}</DropdownMenuItem>
@@ -163,33 +176,23 @@ export function Navbar() {
         </DropdownMenu>
       )
     }
-
-    // Nếu chưa đăng nhập nhưng có thông tin user (trường hợp guest)
-    if (!isAuthenticated && user) {
-      return (
-        <div className="flex items-center gap-3">
+    
+    // Not authenticated (guest or loading)
+    return (
+      <div className="flex items-center gap-3">
+        {user && ( // Show token for guest users
           <div className="hidden sm:flex items-center gap-2 rounded-full bg-muted px-3 py-1 text-sm font-medium text-muted-foreground">
             <Coins className="h-4 w-4 text-amber-500" />
             <span className="font-mono">{user.remainingTokens}/{user.tokenAllotment}</span>
           </div>
-          <div className="hidden md:flex items-center gap-3">
-            <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
-            <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
-          </div>
-        </div>
-      )
-    }
-
-    // Trường hợp 3: Chưa có thông tin gì (đang tải hoặc chưa có phiên)
-    return (
-      <div className="flex items-center gap-3">
+        )}
         <div className="hidden md:flex items-center gap-3">
           <Button onClick={() => handleAuthClick("login")} variant="outline" className="rounded-full h-9">{t("nav.login")}</Button>
           <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9">{t("nav.register")}</Button>
         </div>
       </div>
     )
-  }, [isLoading, isAuthenticated, user, user?.remainingTokens, t, logout, mobileNavLinks, pathname, handleAuthClick])
+  }, [isAuthenticated, user, t, logout, handleAuthClick])
 
   return (
     <>

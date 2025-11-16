@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
-import { userService, EnrichedUser } from "./user.service";
-import { UserModel } from "../models/user.model";
+import { userService } from "./user.service";
+import { UserModel, UserDoc } from "../models/user.model";
 import { tokenService } from "./token.service";
 import { RefreshTokenModel } from "../models/refreshToken.model";
 import { NotAuthorizedError, BadRequestError, ConflictError } from "../errors";
@@ -30,45 +30,40 @@ async function sendOtpEmail(
 
 export const authService = {
   async login(
-    email: string,
-    password: string
-  ): Promise<{
-    user: EnrichedUser;
-    accessToken: string;
-    refreshToken: string;
-  }> {
-    // SỬA LỖI: Lấy trực tiếp Mongoose document để đảm bảo có trường password
-    const userDoc = await UserModel.findOne({ email, isDeleted: false }).select('+password');
-    if (!userDoc || !userDoc.password) {
-      throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
-    }
+  email: string,
+  password: string
+): Promise<{
+  // Sử dụng Omit để đảm bảo kiểu trả về không bao giờ chứa password
+  user: Omit<UserDoc, 'password'>; 
+  accessToken: string;
+  refreshToken: string;
+}> {
+  const userWithPassword = await UserModel.findOne({ email, isDeleted: false }).select('+password');
 
-    const isMatch = await bcrypt.compare(password, userDoc.password);
-    // Sau khi so sánh, xóa trường password khỏi bộ nhớ để bảo mật
-    if (!isMatch) {
-      throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
-    }
+  if (!userWithPassword || !userWithPassword.password) {
+    throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
+  }
 
-    if (!userDoc.verify) {
-      await this.resendVerificationOtp(userDoc.email).catch((err) =>
-        console.log(err.message)
-      );
-      throw new BadRequestError(
-        "Tài khoản chưa được xác thực. OTP mới đã được gửi đến email của bạn."
-      );
-    }
+  const isMatch = await bcrypt.compare(password, userWithPassword.password);
+  if (!isMatch) {
+    throw new NotAuthorizedError("Email hoặc mật khẩu không chính xác.");
+  }
 
-    const tokens = await tokenService.createTokens(userDoc);
+  if (!userWithPassword.verify) {
+    await this.resendVerificationOtp(userWithPassword.email).catch((err) =>
+      console.log(err.message)
+    );
+    throw new BadRequestError(
+      "Tài khoản chưa được xác thực. OTP mới đã được gửi đến email của bạn."
+    );
+  }
 
-    // LÀM GIÀU DỮ LIỆU: Sau khi xác thực thành công, gọi service để làm giàu thông tin user
-    const enrichedUser = await userService.getById(userDoc.id);
+  const tokens = await tokenService.createTokens(userWithPassword);
 
-    if (!enrichedUser) {
-      throw new NotAuthorizedError("Không thể lấy thông tin chi tiết người dùng sau khi đăng nhập.");
-    }
+  const userObject = userWithPassword.toObject();
 
-    return { user: enrichedUser as EnrichedUser, ...tokens };
-  },
+  return { user: userObject, ...tokens };
+},
 
   async logout(refreshToken: string): Promise<void> {
     if (!refreshToken) {

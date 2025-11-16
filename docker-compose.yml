@@ -1,0 +1,47 @@
+version: '3.8'
+services:
+  nginx:
+    image: nginx:stable-alpine
+    container_name: dog_breed_nginx
+    ports:
+      - "80:80"
+      - "443:443" # Dành cho HTTPS sau này
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf 
+      # Volume để Nginx có thể phục vụ file đã upload trực tiếp
+      - ./backend/uploads:/var/www/uploads
+    depends_on:
+      - frontend
+      - backend
+      - ai_service
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend # Build context là thư mục frontend
+      dockerfile: Dockerfile
+    container_name: dog_breed_frontend
+    restart: unless-stopped
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+
+  backend:
+    build: ./backend
+    container_name: dog_breed_backend
+    volumes:
+      - ./backend:/server
+      - /server/node_modules
+    restart: unless-stopped
+    depends_on:
+      - ai_service
+    env_file:
+      - ./backend/.env
+
+  ai_service:
+    build: ./ai_service
+    container_name: dog_breed_ai_service
+    env_file:
+      - ./ai_service/.env
+    restart: unless-stopped

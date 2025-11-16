@@ -4,7 +4,6 @@ import { logger } from "../utils/logger.util";
 import { redisClient } from "../utils/redis.util"; // Import Redis client
 import { tokenConfig } from "../config/token.config";
 import { REDIS_KEYS } from "../constants/redis.constants";
-import axios from "axios";
 import { Builder, By, until, WebDriver, Capabilities } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome';
 import 'chromedriver'; 
@@ -12,17 +11,28 @@ dotenv.config();
 
 // 1. Kiểm tra API Key ngay từ đầu để báo lỗi sớm
 const apiKey = process.env.GOOGLE_API_KEY;
+const healthApiKey = process.env.GOOGLE_API_KEY_HealthRec;
+const proApiKey = process.env.GOOGLE_API_KEY_ProRec;
 if (!apiKey) {
   throw new Error("GOOGLE_API_KEY is not defined in the .env file");
 }
+if (!healthApiKey) {
+  throw new Error("GOOGLE_API_KEY_HealthRec is not defined in the .env file");
+}
+if (!proApiKey) {
+  throw new Error("GOOGLE_API_KEY_ProRec is not defined in the .env file");
+}
 const ACCESSTRADE_API_BASE = "https://fast.accesstrade.com.vn";
 const genAI = new GoogleGenerativeAI(apiKey);
+const healthAI = new GoogleGenerativeAI(healthApiKey);
+const proRecAI = new GoogleGenerativeAI(proApiKey);
+
 const SHOPEE_CAMPAIGN_ID = "128"; // ID chiến dịch của Shopee trên AccessTrade
 
 // 2. Khởi tạo model một lần duy nhất để tái sử dụng
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-
-// Interface cho lịch sử chat lưu trong Redis
+const healthModel = healthAI.getGenerativeModel({ model: "gemini-flash-latest" });
+const proRecModel = proRecAI.getGenerativeModel({ model: "gemini-flash-latest" });
 interface RedisChatSession {
   lang: "vi" | "en";
   history: { role: string; parts: { text: string }[] }[];
@@ -216,6 +226,29 @@ Yêu cầu:
     return { reply: errorMessage };
   }
 }
+
+// Helper function for retrying promises with exponential backoff
+async function withRetry<T>(
+  fn: () => Promise<T>,
+  retries = 3,
+  initialDelay = 1000,
+  operationName = "Gemini API call"
+): Promise<T> {
+  let lastError: any;
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const delay = initialDelay * Math.pow(2, i); // Exponential backoff
+      logger.warn(`[Retry] ${operationName} failed on attempt ${i + 1}/${retries}. Retrying in ${delay}ms...`);
+      if (i < retries - 1) {
+        await sleep(delay);
+      }
+    }
+  }
+  throw lastError;
+}
 export async function getHealthRecommendations(
   breed: string,
   healthIssues: string[],
@@ -224,48 +257,94 @@ export async function getHealthRecommendations(
   try {
     const issuesString = healthIssues.join(", ");
 
-    // ====================== PROMPT MỚI - ĐỊNH DẠNG LIST ======================
+    // ====================== PROMPT NÂNG CẤP - HƯỚNG DẪN CHĂM SÓC TOÀN DIỆN ======================
     const prompt =
       lang === "en"
-        ? `As a veterinary expert, provide practical care recommendations for a ${breed} dog for these health issues: ${issuesString}.
+        ? `As a veterinary expert, create a comprehensive care guide for a ${breed} dog.
+
+The guide must include the following sections:
+- Nutrition and Diet
+- Daily Exercise Requirements
+- Grooming and Healthcare
+- Vaccination Schedule
+- For the "Vaccination Schedule" section, provide a general schedule based on this information:
+  - **Core Vaccines:** Parvovirus, Distemper, Adenovirus (Hepatitis), Parainfluenza (DAPP/DHPP), and Rabies.
+  - **Puppy Schedule:** Start at 6-8 weeks old, repeat every 3-4 weeks until 16 weeks old.
+  - **Adult Schedule:** Booster DAPP/DHPP 1 year after the final puppy shot, then every 3 years; Rabies as required by law.
+  - **Non-Core Vaccines:** Mention consulting a vet for non-core vaccines (e.g., Bordetella, Leptospirosis) based on the dog's lifestyle.
+- Apartment Living Considerations
+- Specific advice for these health issues: ${issuesString}
 
 CRITICAL REQUIREMENTS:
 - DO NOT use a Markdown table. Use lists.
-- For each health issue, use a Level 3 Markdown header (e.g., "### Hip Dysplasia").
-- Under each header, provide a bulleted list of the 2-3 most important preventive measures using a hyphen (-).
+- Use a hyphen (-) for bullet points, not an asterisk (*).
+- You can use Markdown for bolding text (e.g., **Core Vaccines**) within the list items.
+- For each section (e.g., "Nutrition and Diet", "Daily Exercise Requirements"), use a Level 3 Markdown header.
+- For each specific health issue from the list, also create a separate Level 3 Markdown header (e.g., "### Hip Dysplasia").
+- Under each header, provide a bulleted list of the 2-4 most important recommendations using a hyphen (-).
 - Keep the advice concise, professional, and easy to understand.
 - Do not include any introductory or concluding paragraphs. Just the headers and lists.
 
 Example:
-### Health Issue A
-- Do this one short thing.
-- Do this other short thing.
+### Nutrition and Diet
+- Recommendation 1.
+- Recommendation 2.
 
-### Health Issue B
-- Do this third short thing.
+### Daily Exercise Requirements
+- Recommendation 3.
+- Recommendation 4.
+
+### Hip Dysplasia
+- Preventive measure 1.
+- Preventive measure 2.
 `
-        : `Với vai trò là chuyên gia thú y, hãy đưa ra các khuyến nghị chăm sóc cho chó ${breed} đối với các vấn đề sức khỏe sau: ${issuesString}.
+        : `Với vai trò là chuyên gia thú y, hãy tạo một hướng dẫn chăm sóc toàn diện cho chó ${breed}.
+
+Hướng dẫn phải bao gồm các mục sau:
+- Chế độ dinh dưỡng và khẩu phần
+- Thời gian vận động cần thiết mỗi ngày
+- Cách chăm sóc bộ lông và sức khỏe
+- Lịch tiêm phòng
+- Đối với mục "Lịch tiêm phòng", hãy cung cấp lịch trình chung dựa trên thông tin sau:
+  - **Vắc xin cốt lõi (Cần thiết):** Parvovirus, Distemper, Adenovirus (Viêm gan), Parainfluenza (DAPP/DHPP), và Rabies (Bệnh dại).
+  - **Lịch cho chó con:** Bắt đầu từ 6-8 tuần tuổi và nhắc lại mỗi 3-4 tuần cho đến 16 tuần tuổi.
+  - **Lịch cho chó trưởng thành:** Tiêm nhắc lại vắc xin DAPP/DHPP 1 năm sau loạt tiêm cuối cùng, sau đó 3 năm/lần; Vắc xin dại theo quy định pháp luật.
+  - **Vắc xin không cốt lõi:** Đề cập việc tham khảo ý kiến bác sĩ thú y về các vắc xin không cốt lõi (ví dụ: Bordetella, Leptospirosis) dựa trên môi trường sống của chó.
+- Lưu ý khi nuôi trong môi trường căn hộ
+- Lời khuyên cụ thể cho các vấn đề sức khỏe sau: ${issuesString}
 
 YÊU CẦU QUAN TRỌNG:
 - KHÔNG sử dụng định dạng bảng Markdown. Hãy dùng danh sách.
-- Với mỗi vấn đề sức khỏe, hãy sử dụng tiêu đề Markdown cấp 3 (ví dụ: "### Loạn sản khớp háng").
-- Bên dưới mỗi tiêu đề, cung cấp một danh sách gạch đầu dòng từ 2-3 biện pháp phòng ngừa quan trọng nhất, sử dụng dấu gạch ngang (-).
+- Sử dụng dấu gạch ngang (-) cho các gạch đầu dòng, không dùng dấu hoa thị (*).
+- Có thể sử dụng Markdown để in đậm chữ (ví dụ: **Vắc xin cốt lõi**) bên trong các mục của danh sách.
+- Với mỗi mục (ví dụ: "Chế độ dinh dưỡng và khẩu phần", "Thời gian vận động cần thiết mỗi ngày"), hãy sử dụng tiêu đề Markdown cấp 3.
+- Với mỗi vấn đề sức khỏe cụ thể trong danh sách, cũng tạo một tiêu đề Markdown cấp 3 riêng (ví dụ: "### Loạn sản khớp háng").
+- Bên dưới mỗi tiêu đề, cung cấp một danh sách gạch đầu dòng từ 2-4 khuyến nghị quan trọng nhất, sử dụng dấu gạch ngang (-).
 - Giữ cho lời khuyên ngắn gọn, chuyên nghiệp và dễ hiểu.
 - Không thêm bất kỳ đoạn văn giới thiệu hay kết luận nào. Chỉ cần các tiêu đề và danh sách.
 
 Ví dụ:
-### Tên Bệnh A
-- Làm hành động 1 ngắn gọn.
-- Làm hành động 2 ngắn gọn.
+### Chế độ dinh dưỡng và khẩu phần
+- Khuyến nghị 1.
+- Khuyến nghị 2.
 
-### Tên Bệnh B
-- Làm hành động 3 ngắn gọn.
+### Thời gian vận động cần thiết mỗi ngày
+- Khuyến nghị 3.
+- Khuyến nghị 4.
+
+### Loạn sản khớp háng
+- Biện pháp phòng ngừa 1.
+- Biện pháp phòng ngừa 2.
 `;
-    // =======================================================================
+    // ==========================================================================================
 
-    const result = await model.generateContent(prompt);
-    const reply = result.response.text();
-    return reply;
+    const operation = () => healthModel.generateContent(prompt);
+    
+    // Sử dụng hàm withRetry để gọi API
+    const result = await withRetry(operation, 3, 1000, `HealthRec for ${breed}`);
+    
+    return result.response.text();
+
   } catch (error) {
     logger.error(
       `[Gemini Service Error] Failed to get health recommendations for breed '${breed}':`,
@@ -410,7 +489,7 @@ Return as a valid JSON array.`
 3. "reason": Một câu ngắn giải thích TẠI SAO giống chó ${breed} cần loại sản phẩm này.
 Trả về dưới dạng một mảng JSON hợp lệ.`;
 
-        const resultFromAI = await model.generateContent(prompt);
+        const resultFromAI = await proRecModel.generateContent(prompt);
         const rawReply = resultFromAI.response.text();
         logger.info(`[Gemini Products] Phản hồi thô từ Gemini: ${rawReply}`);
         

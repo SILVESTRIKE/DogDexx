@@ -23,6 +23,18 @@ interface HealthBlock {
   items: string[];
 }
 
+// Cấu trúc dữ liệu mới để phân loại các mục
+interface StructuredHealthData {
+  generalCare: HealthBlock[];
+  commonIssues: HealthBlock[];
+}
+
+// Helper component to render simple markdown (bold)
+const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
+  const html = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+};
+
 // ==============================================================================
 // BƯỚC 2: CẬP NHẬT COMPONENT CHÍNH
 // ==============================================================================
@@ -58,22 +70,36 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
 
   // BƯỚC 3: PHÂN TÍCH DỮ LIỆU TỪ AI THÀNH CẤU TRÚC PHÙ HỢP VỚI ACCORDION
   const structuredData = useMemo(() => {
-    if (!recommendations) return [];
+    if (!recommendations) return { generalCare: [], commonIssues: [] };
 
-    const blocks: HealthBlock[] = [];
+    const generalCare: HealthBlock[] = [];
+    const commonIssues: HealthBlock[] = [];
     let currentBlock: HealthBlock | null = null;
+
+    // Từ khóa để xác định các mục chăm sóc chung (có thể cần điều chỉnh nếu prompt thay đổi)
+    const generalCareKeywords = [
+        "nutrition", "dinh dưỡng", 
+        "exercise", "vận động", 
+        "grooming", "chăm sóc bộ lông", 
+        "vaccination", "tiêm phòng", 
+        "apartment", "căn hộ"
+    ];
 
     recommendations.split('\n').forEach(line => {
       const trimmedLine = line.trim();
       if (trimmedLine.startsWith('### ')) {
         currentBlock = { title: trimmedLine.substring(4), items: [] };
-        blocks.push(currentBlock);
+        // Phân loại vào nhóm generalCare hoặc commonIssues
+        if (generalCareKeywords.some(keyword => currentBlock!.title.toLowerCase().includes(keyword))) {
+          generalCare.push(currentBlock);
+        } else {
+          commonIssues.push(currentBlock);
+        }
       } else if (trimmedLine.startsWith('- ') && currentBlock) {
         currentBlock.items.push(trimmedLine.substring(2));
       }
     });
-
-    return blocks;
+    return { generalCare, commonIssues };
   }, [recommendations]);
 
 
@@ -92,7 +118,7 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
     );
   }
 
-  if (error || structuredData.length === 0) {
+  if (error || (structuredData.generalCare.length === 0 && structuredData.commonIssues.length === 0)) {
     return null; // Không hiển thị gì nếu có lỗi hoặc không có dữ liệu
   }
 
@@ -107,24 +133,47 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
       </CardHeader>
       <CardContent>
         <Accordion type="single" collapsible className="w-full">
-          {structuredData.map((block, index) => (
+          {/* Render các mục chăm sóc chung */}
+          {structuredData.generalCare.map((block, index) => (
             <AccordionItem value={`item-${index}`} key={index}>
-              {/* Tên bệnh sẽ là phần bấm để sổ ra/đóng lại */}
               <AccordionTrigger className="text-base text-left font-semibold">
                 {block.title}
               </AccordionTrigger>
-              {/* Nội dung khuyến nghị sẽ nằm ở đây */}
               <AccordionContent>
                 <ul className="list-disc list-inside space-y-2 pl-2">
                   {block.items.map((item, itemIndex) => (
-                    <li key={itemIndex}>
-                      {item}
-                    </li>
+                    <li key={itemIndex}><SimpleMarkdown text={item} /></li>
                   ))}
                 </ul>
               </AccordionContent>
             </AccordionItem>
           ))}
+
+          {/* Render mục gộp cho các vấn đề sức khỏe */}
+          {structuredData.commonIssues.length > 0 && (
+            <AccordionItem value="common-health-issues">
+              <AccordionTrigger className="text-base text-left font-semibold">
+                {t('results.commonHealthIssues')}
+              </AccordionTrigger>
+              <AccordionContent>
+                {/* Accordion lồng bên trong */}
+                <Accordion type="single" collapsible className="w-full pl-4 border-l-2 border-border">
+                  {structuredData.commonIssues.map((issue, index) => (
+                    <AccordionItem value={`issue-${index}`} key={`issue-${index}`}>
+                      <AccordionTrigger className="text-base text-left">
+                        {issue.title}
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        <ul className="list-disc list-inside space-y-2 pl-2">
+                          {issue.items.map((item, itemIndex) => <li key={itemIndex}><SimpleMarkdown text={item} /></li>)}
+                        </ul>
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
+              </AccordionContent>
+            </AccordionItem>
+          )}
         </Accordion>
       </CardContent>
     </Card>

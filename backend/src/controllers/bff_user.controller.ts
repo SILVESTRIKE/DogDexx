@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { userService, EnrichedUser } from '../services/user.service';
+import { userService } from '../services/user.service';
 import { authService } from '../services/auth.service';
 import { Types } from 'mongoose';
 import { collectionService } from '../services/user_collections.service';

@@ -26,6 +26,7 @@ import {
   Award,
   Stethoscope
 } from "lucide-react"
+import {HealthRecommendations} from "@/components/health_rec"
 import { useI18n } from "@/lib/i18n-context"
 import React, { useEffect, useState } from "react" // Import React
 import { apiClient } from "@/lib/api-client"
@@ -121,7 +122,7 @@ export default function DogDetailPage() {
               />
             </div>
             <div className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full text-lg shadow-lg">
-              #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '???'}
+              #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '000'}
             </div>
             
           </div>
@@ -381,9 +382,10 @@ export default function DogDetailPage() {
             </CardContent>
           </Card>
         </div>
+        <HealthRecommendations breedSlug={dog.slug} breedName={dog.breed} />
 
         {/* Trainable Skills */}
-        <Card className="border-2 mb-8">
+        <Card className="border-2 my-8">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Award className="h-5 w-5 text-chart-1" />
@@ -400,7 +402,6 @@ export default function DogDetailPage() {
             </div>
           </CardContent>
         </Card>
-
         {/* Fun Fact */}
         <Card className="border-2 border-yellow-500 bg-yellow-500/5">
           <CardHeader>

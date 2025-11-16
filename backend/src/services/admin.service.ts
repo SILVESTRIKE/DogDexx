@@ -4,7 +4,7 @@ import { FeedbackModel } from "../models/feedback.model";
 import { MediaModel, MediaDoc } from "../models/medias.model";
 import { DirectoryModel } from "../models/directory.model";
 import { AnalyticsEventModel } from "../models/analytics_event.model";
-import { userService, EnrichedUser } from "./user.service";
+import { userService } from "./user.service";
 import { UserCollectionModel } from "../models/user_collection.model";
 import { NotFoundError } from "../errors";
 import {

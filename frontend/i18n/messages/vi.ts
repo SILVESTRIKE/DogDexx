@@ -127,6 +127,7 @@ export default {
     viewDetails: "Xem chi tiết",
     detectAnother: "Nhận diện ảnh khác",
     characteristics: "Đặc điểm",
+    commonHealthIssues: "Vấn đề sức khỏe thường gặp",
     origin: "Xuất xứ",
     size: "Kích thước",
     lifespan: "Tuổi thọ",
