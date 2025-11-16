@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Brain, Upload, Download, Play, Pause, Save, RotateCcw } from "lucide-react"
+import { Brain, Upload, Play, Pause, Save, RotateCcw } from "lucide-react"
 import { useState, useEffect, useCallback } from "react"
 import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
@@ -189,7 +189,7 @@ export default function ModelsPage() {
       {/* Available Models */}
       <div>
         <h3 className="text-xl font-bold mb-4">Các Model có sẵn</h3>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-2">
           {models.map((model) => (
             <Card key={model.id}>
               <CardHeader>
@@ -205,16 +205,7 @@ export default function ModelsPage() {
                 <CardDescription>Version {model.version}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Accuracy</span>
-                    <span className="font-medium">N/A</span>
-                  </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Avg Speed</span>
-                    <span className="font-medium">N/A</span>
-                  </div>
-                </div>
+                
                 <div className="flex gap-2">
                   {model.status === "ACTIVE" ? (
                     <Button variant="outline" size="sm" className="flex-1 bg-transparent" disabled>
@@ -227,9 +218,7 @@ export default function ModelsPage() {
                       Kích hoạt
                     </Button>
                   )}
-                  <Button variant="outline" size="sm">
-                    <Download className="h-4 w-4" />
-                  </Button>
+                  
                 </div>
               </CardContent>
             </Card>
