@@ -20,8 +20,11 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Copy only the necessary files from the builder stage
+# Thay vì copy toàn bộ node_modules, chỉ copy package.json và chạy npm install --omit=dev
+# Điều này đảm bảo chỉ các package production được cài đặt, giảm kích thước image.
 COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/node_modules ./
+RUN npm install --omit=dev --ignore-scripts
+# COPY --from=builder /app/node_modules ./
 COPY --from=builder /app/dist ./
 
 # Expose the port the app runs on

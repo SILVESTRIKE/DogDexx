@@ -340,6 +340,21 @@ export default function FeedbackManagement() {
               </div>
             </CardHeader>
             <CardContent>
+              {/* THÊM MỚI: Tabs để lọc theo trạng thái */}
+              <div className="mb-4">
+                <Tabs
+                  value={statusFilter}
+                  onValueChange={setStatusFilter}
+                  className="w-full"
+                >
+                  <TabsList>
+                    <TabsTrigger value="all">{t('admin.feedback.filters.all')}</TabsTrigger>
+                    <TabsTrigger value="pending_review">{t('admin.feedback.filters.pending')}</TabsTrigger>
+                    <TabsTrigger value="approved_for_training">{t('admin.feedback.filters.approved')}</TabsTrigger>
+                    <TabsTrigger value="rejected">{t('admin.feedback.filters.rejected')}</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+              </div>
               <Table>
                 <TableHeader>
                   <TableRow>

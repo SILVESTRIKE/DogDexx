@@ -108,7 +108,7 @@ export default function PricingPage() {
                 }`}
               >
                 {plan.isFeatured && (
-                  <Badge className="mb-4 w-fit">{t("pricing.featured")}</Badge>
+                  <Badge className="mb-4 w-fit">{t("pricing.professional")}</Badge>
                 )}
 
                 <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>

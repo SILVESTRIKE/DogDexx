@@ -52,19 +52,20 @@ export const feedbackService = {
         await fs.access(sourcePath); // Kiểm tra file có tồn tại không
         await fs.mkdir(destinationDir, { recursive: true });
 
-        // **LOGIC MỚI: Sao chép file từ stream, di chuyển file từ upload**
-        if (prediction.source === PREDICTION_SOURCES.STREAM_CAPTURE) {
-          await fs.copyFile(sourcePath, destinationPath);
-          console.log(`[Feedback Service] Copied stream capture file to ${destinationPath}`);
-          // Không cần cập nhật DB vì file gốc vẫn còn
-        } else {
+        // **LOGIC CẬP NHẬT: Chỉ di chuyển file ảnh, không di chuyển video hoặc stream**
+        // - Ảnh upload: Di chuyển file gốc vào thư mục 'pending' và cập nhật đường dẫn trong DB.
+        // - Video upload & Stream capture: Giữ nguyên file gốc, chỉ lưu đường dẫn vào feedback.
+        if (prediction.source === PREDICTION_SOURCES.IMAGE_UPLOAD) {
           await fs.rename(sourcePath, destinationPath);
-          // SỬA LỖI: Cập nhật lại mediaPath trong MediaModel sau khi di chuyển file
+          // Cập nhật lại mediaPath trong MediaModel sau khi di chuyển file
           if (prediction.media) {
             const relativeDestPath = path.relative(process.cwd(), destinationPath).replace(/\\/g, '/');
             await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: relativeDestPath } });
             console.log(`[Feedback Service] Moved file and updated Media entry ${prediction.media} to new path: ${relativeDestPath}`);
           }
+        } else {
+          // Đối với video hoặc stream, không di chuyển file, chỉ ghi nhận đường dẫn gốc.
+          console.log(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
         }
       } catch (error) {
         console.warn(`[Feedback Service] Could not process file from ${sourcePath} to ${destinationPath}. It might not exist. Error: ${(error as Error).message}`);
@@ -77,7 +78,10 @@ export const feedbackService = {
       isCorrect: isCorrect,
       user_submitted_label: user_submitted_label,
       notes: notes,
-      file_path: destinationPath, // Lưu đường dẫn mới của file
+      // CẬP NHẬT: Nếu là ảnh, lưu đường dẫn mới. Nếu không, lưu đường dẫn cũ.
+      file_path: prediction.source === PREDICTION_SOURCES.IMAGE_UPLOAD 
+        ? destinationPath 
+        : file_path,
       status: 'pending_review',
     });
 
@@ -297,7 +301,7 @@ export const feedbackService = {
     // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
     await PredictionHistoryModel.updateOne(
       { _id: updatedFeedback.prediction_id },
-      { $set: { isCorrect: updatedFeedback.isCorrect } }
+      { $set: { isCorrect: false } }
     );
 
     // Gửi email cảm ơn nếu có thông tin người dùng
@@ -333,7 +337,7 @@ export const feedbackService = {
     // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
     await PredictionHistoryModel.updateOne(
       { _id: updatedFeedback.prediction_id },
-      { $set: { isCorrect: false } } // Khi từ chối, coi như dự đoán gốc là sai
+      { $set: { isCorrect: true } } // Khi từ chối, coi như dự đoán gốc là sai
     );
 
     return updatedFeedback;

@@ -10,10 +10,9 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false, // Tắt các header `X-RateLimit-*` cũ
 
   keyGenerator: (req: Request): string => {
-    // SỬA LỖI: Ưu tiên fingerprint, nếu không có thì dùng req.ip.
-    // express-rate-limit sẽ tự động xử lý IPv6 một cách an toàn khi key là địa chỉ IP.
-    // Thêm fallback 'unknown' để đảm bảo hàm luôn trả về một string.
-    return req.fingerprint?.hash || (req.ip ? ipKeyGenerator(req.ip) : 'unknown');
+    // Ưu tiên fingerprint. Nếu không có, sử dụng ipKeyGenerator để lấy key từ IP.
+    // ipKeyGenerator(req) sẽ xử lý đúng cả IPv4 và IPv6.
+    return req.fingerprint?.hash || (ipKeyGenerator as unknown as (req: Request) => string)(req);
   },
 
   skip: (req: Request): boolean => {
@@ -22,6 +21,6 @@ export const apiLimiter = rateLimit({
   },
 
   handler: (req, res, next) => {
-    next(new TooMuchReqError("Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 1 giờ."));
+    next(new TooMuchReqError("Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút."));
   },
 });

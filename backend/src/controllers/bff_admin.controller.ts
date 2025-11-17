@@ -54,7 +54,7 @@ function transformHistoryForAdmin(req: Request, historyDoc: any) {
     id: transformedHistory.id,
     user: user ? { id: user._id, name: user.username, email: user.email } : { id: null, name: 'Guest', email: null },
     media: {
-      type: transformedHistory.media.type,
+      type: transformedHistory.media.type.startsWith('image') ? 'image' : 'video',
       url: transformedHistory.media.mediaUrl,
       name: transformedHistory.media.name,
     },

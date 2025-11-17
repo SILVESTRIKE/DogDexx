@@ -26,6 +26,10 @@ services:
       - ./frontend:/app
       - /app/node_modules
       - /app/.next
+    ports:
+      - "3000:3000" # Expose Next.js dev server
+    environment:
+      - NODE_ENV=development
 
   backend:
     build: ./backend
@@ -38,10 +42,14 @@ services:
       - ai_service
     env_file:
       - ./backend/.env
+    ports:
+      - "5000:5000" # Expose backend API for development/direct access
 
   ai_service:
     build: ./ai_service
     container_name: dog_breed_ai_service
+    # SỬA LỖI: Truyền biến môi trường từ file .env của backend vào container.
+    # Điều này đảm bảo ai_service có thể kết nối tới MongoDB.
     env_file:
-      - ./ai_service/.env
+      - ./backend/.env
     restart: unless-stopped
