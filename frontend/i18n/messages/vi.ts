@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: "DogDex AI",
+    appName: "DogDex",
     loading: "Đang tải...",
     error: "Đã có lỗi xảy ra",
     success: "Thành công",
@@ -41,6 +41,7 @@ export default {
     history: "Lịch sử",
     myLibrary: "Thư viện",
     pricing: "Nâng cấp",
+    tokens: "Tokens",
   },
   auth: {
     loginTitle: "Đăng nhập",
@@ -548,6 +549,7 @@ export default {
       errors: {
         noUsersFound: "Không tìm thấy người dùng nào",
         usersByPlan: "Người dùng theo Gói",
+        userPageIndicator: "Hiển thị {start}-{end} trên {total} người dùng",
       },
     },
     transactions: {

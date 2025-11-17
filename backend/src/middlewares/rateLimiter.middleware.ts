@@ -4,8 +4,8 @@ import { TooMuchReqError } from "../errors";
 import { UserDoc } from "../models/user.model";
 
 export const apiLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 giờ
-  max: 500, // Giới hạn mỗi IP/user là 500 yêu cầu mỗi giờ
+  windowMs: 15 * 60 * 1000, // 15 phút
+  max: 100, // Giới hạn mỗi IP/user là 100 yêu cầu mỗi 15 phút
   standardHeaders: true, // Trả về thông tin rate limit trong header `RateLimit-*`
   legacyHeaders: false, // Tắt các header `X-RateLimit-*` cũ
 

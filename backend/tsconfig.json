@@ -113,5 +113,5 @@
 
   },
   "exclude": ["node_modules", "../frontend"],
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts", "src/types/**/*.d.ts"]
 }

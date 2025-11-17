@@ -18,7 +18,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     // authService -> userService đã trả về user được làm giàu
     const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
     const collection = await collectionService.getUserCollection(new Types.ObjectId(user.id), lang);
-
     res.status(200).json({
       message: "Đăng nhập thành công!",
       user: transformMediaURLs(req, user),

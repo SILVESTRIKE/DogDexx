@@ -23,7 +23,7 @@ export const CreateAIModelSchema = z.object({
   
   // THÊM: Thêm các trường bắt buộc còn thiếu
   format: modelFormatTypes,
-  huggingFaceRepo: z.string().min(1, "Hugging Face repository is required"),
+  // huggingFaceRepo: z.string().min(1, "Hugging Face repository is required"),
   fileName: z.string().min(1, "File name is required"),
   path: z.string().min(1, "Path is required"),
   

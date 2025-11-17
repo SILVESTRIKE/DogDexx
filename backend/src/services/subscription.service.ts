@@ -9,7 +9,6 @@ import { logger } from "../utils/logger.util";
 import { PlanService } from "./plan.service"; // THÊM MỚI: Import PlanService
 import { FilterQuery, Types } from 'mongoose';
 
-// XÓA: Không cần giả lập URL nữa
 export const subscriptionService = {
   /**
    * Lấy danh sách tất cả các gói cước công khai có sẵn.
@@ -215,9 +214,11 @@ export const subscriptionService = {
       // 5. Cập nhật giao dịch
       transaction.status = 'completed';
       transaction.gatewayTransactionId = transId;
-      transaction.rawIpnResponse = JSON.stringify(ipnPayload);
+      transaction.rawIpnResponse = JSON.stringify(ipnPayload); // Lưu lại toàn bộ payload để debug
       logger.info(`[MoMo IPN] Transaction status for orderId ${orderId} is being updated to 'completed'.`);
 
+      // LƯU LẠI GIAO DỊCH TRƯỚC KHI TIẾP TỤC
+      await transaction.save(); 
       // 6. Tạo hoặc cập nhật Subscription
       const now = new Date();
       const periodEnd = new Date(now);
@@ -239,16 +240,16 @@ export const subscriptionService = {
         currentPeriodEnd: periodEnd,
       });
 
+      // Cập nhật subscriptionId cho transaction và lưu lại lần nữa
       transaction.subscriptionId = newSubscription._id;
       await transaction.save();
 
       logger.info(`[MoMo IPN] Transaction and Subscription for orderId ${orderId} updated successfully.`);
-
-      // 7. Cập nhật thông tin người dùng
-      user.plan = plan.slug as typeof user.plan; // Sửa lỗi: Ép kiểu để khớp với type 'Plan'
-      user.remainingTokens = plan.tokenAllotment; // Reset token theo gói mới
-      user.subscriptionId = newSubscription._id.toString(); // Lưu ID subscription mới nhất
-      await user.save();
+      
+      // 7. CẬP NHẬT THÔNG TIN NGƯỜI DÙNG (FIX)
+      await UserModel.findByIdAndUpdate(user._id, {
+        $set: { plan: plan.slug, remainingTokens: plan.tokenAllotment, subscriptionId: newSubscription._id.toString() }
+      });
 
       logger.info(`[MoMo IPN] User ${user.id} successfully upgraded to plan '${plan.slug}'. Processing finished.`);
 
@@ -256,8 +257,8 @@ export const subscriptionService = {
       logger.warn(`[MoMo IPN] Payment for orderId ${orderId} failed. Reason: ${message} (code: ${resultCode})`);
       transaction.status = 'failed';
       transaction.rawIpnResponse = JSON.stringify(ipnPayload);
+      await transaction.save(); // LƯU LẠI GIAO DỊCH SAU KHI CẬP NHẬT
       logger.info(`[MoMo IPN] Transaction status for orderId ${orderId} is being updated to 'failed'.`);
-      await transaction.save();
     }
   }
 };

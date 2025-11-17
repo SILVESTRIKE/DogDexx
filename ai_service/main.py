@@ -88,7 +88,7 @@ class Config:
                 full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
             
             if not config_doc and not active_model_doc:
-                 print("⚠️ No configuration or active model found in DB. Using hardcoded defaults.")
+                print("⚠️ No configuration or active model found in DB. Using hardcoded defaults.")
 
             self.apply_config_and_load_model(full_config)
         
@@ -131,7 +131,7 @@ class Config:
         try:
             # Kiểm tra lại file tồn tại sau khi có thể đã download
             if not os.path.exists(self.MODEL_PATH):
-                 raise FileNotFoundError(f"Model file not found at {self.MODEL_PATH} even after download attempt.")
+                raise FileNotFoundError(f"Model file not found at {self.MODEL_PATH} even after download attempt.")
 
             print(f"Loading model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
             self.model = YOLO(self.MODEL_PATH) 
@@ -164,11 +164,6 @@ class Config:
         self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
 
 
-# Define the save directory relative to this script's location
-SAVE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "public", "processed/images")
-)
-
 
 # ==============================================================================
 # 2. INITIALIZATION
@@ -185,10 +180,6 @@ except RuntimeError as e:
     print(f"❌ FATAL STARTUP ERROR: {e}")
     # Thoát khỏi script với mã lỗi, ngăn Uvicorn khởi động.
     sys.exit(1)
-
-os.makedirs(SAVE_DIR, exist_ok=True)
-print(f"Annotated frames will be saved to: {SAVE_DIR}")
-
 # ==============================================================================
 # 3. HELPER FUNCTIONS
 # ==============================================================================

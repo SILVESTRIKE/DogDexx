@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import { userService } from "./user.service";
 import { UserModel, UserDoc } from "../models/user.model";
 import { tokenService } from "./token.service";
-import { NotAuthorizedError, BadRequestError, ConflictError } from "../errors";
+import { NotAuthorizedError, BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { OtpModel, OtpType } from "../models/otp.model";;
 import { emailService } from "./email.service";
 import crypto from "crypto";
@@ -35,7 +35,7 @@ export const authService = {
   email: string,
   password: string
 ): Promise<{
-  user: Omit<UserDoc, 'password'>; 
+  user: Awaited<ReturnType<typeof userService.getById>>; // Sử dụng kiểu EnrichedUser từ userService
   accessToken: string;
   refreshToken: string;
 }> {
@@ -59,11 +59,15 @@ export const authService = {
     );
   }
 
+  // Lấy user đã được làm giàu với tokenAllotment
+  const enrichedUser = await userService.getById(userWithPassword.id);
+  if (!enrichedUser) {
+    throw new NotFoundError("Không thể lấy thông tin chi tiết người dùng sau khi đăng nhập.");
+  }
+
   const tokens = await tokenService.createTokens(userWithPassword);
 
-  const userObject = userWithPassword.toObject();
-
-  return { user: userObject, ...tokens };
+  return { user: enrichedUser, ...tokens };
 },
 
   async logout(refreshToken: string): Promise<void> {

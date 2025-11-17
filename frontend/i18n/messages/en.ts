@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: "DogDex AI",
+    appName: "DogDex",
     loading: "Loading...",
     error: "An error occurred",
     success: "Success",
@@ -41,6 +41,7 @@ export default {
     history: "History",
     myLibrary: "My Library",
     pricing: "Upgrade",
+    tokens: "Tokens",
   },
   auth: {
     loginTitle: "Login",
@@ -547,6 +548,7 @@ export default {
       errors: {
         noUsersFound: "No users found",
         usersByPlan: "Users by Plan",
+        userPageIndicator: "Showing {start}-{end} of {total} users",
       },
     },
     transactions: {

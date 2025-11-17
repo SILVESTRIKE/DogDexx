@@ -1,11 +1,5 @@
 import { Request } from 'express';
 
-/**
- * Hàm đệ quy để chuyển đổi các trường `...Path` thành `...Url` trong một đối tượng hoặc mảng.
- * @param data Dữ liệu đầu vào (object hoặc array).
- * @param baseUrl URL gốc của server (ví dụ: http://localhost:3000).
- * @returns Dữ liệu đã được chuyển đổi.
- */
 const transformPaths = (data: any, baseUrl: string): any => {
     if (data === null || typeof data !== 'object' || data instanceof Date) return data;
     if (Array.isArray(data)) return data.map(item => transformPaths(item, baseUrl));
