@@ -43,7 +43,7 @@ services:
     env_file:
       - ./backend/.env
     ports:
-      - "5000:5000" # Expose backend API for development/direct access
+      - "5000:5000" 
 
   ai_service:
     build: ./ai_service

@@ -17,8 +17,7 @@ WORKDIR /app
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/.next ./.next
-# Cài đặt lại production dependencies thay vì copy toàn bộ node_modules
-# Điều này giúp giảm kích thước image cuối cùng.
+
 RUN npm install --omit=dev
 
 EXPOSE 3001
