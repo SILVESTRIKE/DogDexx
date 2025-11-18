@@ -4,8 +4,9 @@ import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
 import { uploadAvatar } from '../middlewares/upload.middleware';
-import { RegisterSchema } from '../types/zod/user.zod';
+import { RegisterSchema, ForgotPasswordSchema, ResetPasswordSchema } from '../types/zod/user.zod';
 import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
+import { forgotPassword, resetPassword, deleteCurrentUser } from '../controllers/bff_user.controller';
 const router = Router();
 
 /**
@@ -96,6 +97,57 @@ router.post('/verify-otp', verifyOtp);
 
 /**
  * @swagger
+ * /bff/user/forgot-password:
+ *   post:
+ *     summary: (BFF) Gửi mã reset mật khẩu
+ *     tags: [BFF-User]
+ *     description: Gửi mã OTP để reset mật khẩu về email.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *     responses:
+ *       200:
+ *         description: Mã đã được gửi.
+ */
+router.post('/forgot-password', validateData(ForgotPasswordSchema.shape.body, 'body'), forgotPassword);
+
+/**
+ * @swagger
+ * /bff/user/reset-password:
+ *   post:
+ *     summary: (BFF) Đặt lại mật khẩu bằng OTP
+ *     tags: [BFF-User]
+ *     description: Đặt mật khẩu mới sử dụng mã OTP gửi tới email.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *               otp:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *                 format: password
+ *     responses:
+ *       200:
+ *         description: Mật khẩu đã được reset.
+ */
+router.post('/reset-password', validateData(ResetPasswordSchema.shape.body, 'body'), resetPassword);
+
+/**
+ * @swagger
  * /bff/user/profile:
  *   get:
  *     summary: (BFF) Lấy thông tin hồ sơ tổng hợp
@@ -147,6 +199,21 @@ router.get('/profile', authMiddleware, getProfile);
  *         description: Chưa xác thực.
  */
 router.put('/profile', authMiddleware, uploadAvatar, updateProfile);
+
+/**
+ * @swagger
+ * /bff/user/profile:
+ *   delete:
+ *     summary: (BFF) Xóa tài khoản hiện tại
+ *     tags: [BFF-User]
+ *     security:
+ *       - bearerAuth: []
+ *     description: Xóa tài khoản người dùng hiện tại. Hành động này sẽ xóa dữ liệu người dùng theo chính sách xóa của hệ thống.
+ *     responses:
+ *       200:
+ *         description: Tài khoản đã được xóa thành công.
+ */
+router.delete('/profile', authMiddleware, deleteCurrentUser);
 
 /**
  * @swagger

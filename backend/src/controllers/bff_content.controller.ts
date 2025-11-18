@@ -6,7 +6,7 @@ import { wikiController } from './dogs_wiki.controller';
 import { collectionService } from '../services/user_collections.service';
 import { predictionHistoryService } from '../services/prediction_history.service';
 import { logger } from '../utils/logger.util';
-import { MediaController } from './medias.controller';
+import { MediaController, DirectoryController } from './medias.controller';
 import { NotFoundError } from '../errors';
 
 export const getBreedDetail = async (req: Request, res: Response, next: NextFunction) => {
@@ -52,4 +52,46 @@ export const getBreeds = (req: Request, res: Response, next: NextFunction) => {
 export const uploadMedia = (req: Request, res: Response, next: NextFunction) => {
   // This is a core function, better handled by the existing medias.controller.
   return MediaController.uploadSingle(req, res);
+};
+
+// --- BFF wrappers for media & directories ---
+export const listMedia = (req: Request, res: Response, next: NextFunction) => {
+  return MediaController.getMedias(req, res);
+};
+
+export const getMediaById = (req: Request, res: Response, next: NextFunction) => {
+  return MediaController.getMediaById(req, res);
+};
+
+export const updateMedia = (req: Request, res: Response, next: NextFunction) => {
+  return MediaController.updateMediaInfo(req, res);
+};
+
+export const deleteMedia = (req: Request, res: Response, next: NextFunction) => {
+  return MediaController.deleteMedia(req, res);
+};
+
+// Directory wrappers
+export const createDirectory = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.create(req, res);
+};
+
+export const getDirectories = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.getAll(req, res);
+};
+
+export const getDirectoryContent = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.getContent(req, res);
+};
+
+export const renameDirectory = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.rename(req, res);
+};
+
+export const moveDirectory = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.move(req, res);
+};
+
+export const deleteDirectory = (req: Request, res: Response, next: NextFunction) => {
+  return DirectoryController.softDelete(req, res);
 };

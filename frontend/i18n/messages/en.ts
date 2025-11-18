@@ -74,6 +74,15 @@ export default {
     verify: "Verify",
     otpSuccess: "Verification successful! Please log in.",
     optional: "optional",
+    // Forgot / Reset password
+    forgotPassword: "Forgot password?",
+    forgotSent: "A reset code has been sent to your email.",
+    sendResetCode: "Send reset code",
+    backToLogin: "Back to login",
+    resetSuccess: "Password reset successful. Please login.",
+    newPassword: "New Password",
+    otp: "OTP",
+    resetPasswordButton: "Reset Password",
   },
   about: {
     title: "About DogDex AI",

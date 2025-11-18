@@ -104,8 +104,8 @@ export class MediaController {
   }
 
   static async getMediaById(req: Request, res: Response) {
-    // req.params.id đã được Zod middleware validate và transform thành number
-    const media_id = (req.params as any).id as number;
+    // req.params.id is validated as an ObjectId string by Zod
+    const media_id = (req.params as any).id as string;
 
     const media = await MediaService.findById(media_id);
     if (!media) {
@@ -116,7 +116,7 @@ export class MediaController {
   }
 
   static async updateMediaInfo(req: Request, res: Response) {
-    const id = (req.params as any).id as number;
+    const id = (req.params as any).id as string;
 
     const updatedMedia = await MediaService.updateInfoMedia(id, req.body);
     if (!updatedMedia) {
@@ -127,7 +127,7 @@ export class MediaController {
   }
 
   static async deleteMedia(req: Request, res: Response) {
-    const media_id = (req.params as any).id as number;
+    const media_id = (req.params as any).id as string;
 
     const isDeleted = await MediaService.softDeleteMedia(media_id);
     if (!isDeleted) {
@@ -206,30 +206,28 @@ export class DirectoryController {
     });
   }
   static async softDelete(req: Request, res: Response) {
-    const directoryId = (req.params as any).id as number;
+    const directoryId = (req.params as any).id as string;
 
-    const directory = await DirectoryService.findById(directoryId.toString());
+    const directory = await DirectoryService.findById(directoryId);
     if (!directory) {
       throw new ConflictError(`Directory with ID ${directoryId} not exist.`);
     }
 
-    await DirectoryService.softDeleteRecursive(directoryId.toString());
+    await DirectoryService.softDeleteRecursive(directoryId);
 
     res.status(204).send();
   }
   static async getBreadcrumb(req: Request, res: Response) {
-    const directoryId = parseInt(req.params.id);
-    const breadcrumb = await DirectoryService.getBreadcrumb(
-      directoryId.toString()
-    );
+    const directoryId = req.params.id as string;
+    const breadcrumb = await DirectoryService.getBreadcrumb(directoryId);
     res.status(200).json(breadcrumb);
   }
   static async rename(req: Request, res: Response) {
-    const directoryId = parseInt(req.params.id);
+    const directoryId = req.params.id as string;
     const { name } = req.body;
 
     const updatedDirectory = await DirectoryService.rename(
-      directoryId.toString(),
+      directoryId,
       name
     );
     if (!updatedDirectory) {
@@ -239,7 +237,7 @@ export class DirectoryController {
     res.status(200).json(updatedDirectory);
   }
   static async move(req: Request, res: Response) {
-    const directoryId = parseInt(req.params.id);
+    const directoryId = req.params.id as string;
     const { parent_id } = req.body;
 
     if (parent_id) {
@@ -250,7 +248,7 @@ export class DirectoryController {
     }
 
     const movedDirectory = await DirectoryService.move(
-      directoryId.toString(),
+      directoryId,
       parent_id
     );
     if (!movedDirectory) {

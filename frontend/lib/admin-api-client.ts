@@ -214,7 +214,7 @@ export class AdminApiClient {
   // Core User Management (Admin)
   async deleteUser(userId: string) {
     return this.client.request<void>(
-      `/api/users/${userId}`,
+      `/bff/admin/users/${userId}`,
       { method: "DELETE" },
       true
     );

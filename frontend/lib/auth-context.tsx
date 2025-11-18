@@ -167,6 +167,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return response;
   };
 
+  const deleteAccount = useCallback(async () => {
+    try {
+      await apiClient.deleteCurrentUser();
+      TokenManager.clearTokens();
+      setUser(null);
+      toast({ title: t('account.deletedTitle') || 'Account deleted', description: t('account.deletedMessage') || 'Your account has been deleted.' });
+      await refetchUser();
+    } catch (err) {
+      console.error('Failed to delete account:', err);
+      throw err;
+    }
+  }, [refetchUser, t, toast]);
+
   const value = {
     user,
     isAuthenticated: !!user?.email, 
@@ -175,6 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     register,
     verifyOtp,
+    deleteAccount,
     setUser,
     refetchUser,
     isAuthModalOpen,

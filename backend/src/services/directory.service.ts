@@ -24,8 +24,9 @@ export class DirectoryService {
 
   static async softDeleteRecursive(directoryId: string): Promise<void> {
     // Cập nhật tất cả media trong thư mục này sang trạng thái đã xóa
+    // NOTE: field in MediaModel is `directory_id`, not `directory_name`.
     await MediaModel.updateMany(
-      { directory_name: directoryId, isDeleted: false },
+      { directory_id: directoryId, isDeleted: false },
       { $set: { isDeleted: true } }
     );
 

@@ -15,9 +15,20 @@ export const errorHandlerMiddleware = (
       errors: err.serializeErrors(),
     });
   }
-
-  res.status(500).send({
+  // In development, include the original error message and stack to help debugging.
+  const isProd = process.env.NODE_ENV === 'production';
+  const defaultMessage = 'Something went wrong';
+  const errorMessage = isProd ? defaultMessage : (err as any)?.message || defaultMessage;
+  const payload: any = {
     success: false,
-    errors: [{ message: "Something went wrong" }],
-  });
+    errors: [
+      { message: errorMessage }
+    ],
+  };
+  if (!isProd) {
+    // Attach stack for local debugging (don't expose in production)
+    (payload.errors[0] as any).stack = (err as any)?.stack;
+  }
+
+  res.status(500).send(payload);
 };

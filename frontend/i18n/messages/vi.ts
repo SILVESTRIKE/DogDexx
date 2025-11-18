@@ -75,6 +75,15 @@ export default {
     verify: "Xác thực",
     otpSuccess: "Xác thực thành công! Vui lòng đăng nhập.",
     optional: "tùy chọn",
+    // Quên / Đặt lại mật khẩu
+    forgotPassword: "Quên mật khẩu?",
+    forgotSent: "Mã đặt lại đã được gửi đến email của bạn.",
+    sendResetCode: "Gửi mã đặt lại",
+    backToLogin: "Quay về đăng nhập",
+    resetSuccess: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập.",
+    newPassword: "Mật khẩu mới",
+    otp: "Mã OTP",
+    resetPasswordButton: "Đặt lại mật khẩu",
   },
   about: {
     title: "Về DogDex AI",

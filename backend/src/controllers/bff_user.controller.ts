@@ -11,6 +11,7 @@ import { REDIS_KEYS } from '../constants/redis.constants';
 import { redisClient } from '../utils/redis.util';
 import { tokenConfig } from '../config/token.config';
 import { NextFunction } from 'express';
+import { userController } from './user.controller';
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { user, accessToken, refreshToken } = await authService.login(req.body.email, req.body.password);
@@ -197,4 +198,30 @@ export const handleMomoIpn = async (req: Request, res: Response, next: NextFunct
     } catch (error) {
       next(error);
     }
+
   }
+
+// --- BFF wrappers for forgot/reset password (forward to existing user controller)
+export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    return userController.forgotPassword(req as any, res as any);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    return userController.resetPassword(req as any, res as any);
+  } catch (error) {
+    next(error);
+  }
+};
+ 
+export const deleteCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    return userController.deleteCurrentUser(req as any, res as any);
+  } catch (error) {
+    next(error);
+  }
+};

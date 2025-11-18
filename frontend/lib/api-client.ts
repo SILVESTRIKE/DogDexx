@@ -402,6 +402,30 @@ export class ApiClient {
     });
   }
 
+  // Auth endpoints (non-BFF)
+  async forgotPassword(email: string) {
+    // Use BFF endpoint for unified behavior
+    return this.request<any>("/bff/user/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  }
+
+  async resetPassword(email: string, otp: string, password: string) {
+    // Use BFF endpoint for unified behavior
+    return this.request<any>("/bff/user/reset-password", {
+      method: "POST",
+      body: JSON.stringify({ email, otp, password }),
+    });
+  }
+
+  // Delete current user (requires auth)
+  async deleteCurrentUser() {
+    return this.request<any>("/bff/user/profile", {
+      method: "DELETE",
+    }, true);
+  }
+
   async getProfile() {
     return this.request<import("./types").ProfileResponse>(
       "/bff/user/profile",

@@ -22,8 +22,8 @@ interface QueryFilters {
 
 export const feedbackService = {
   // --- Dành cho USER ---
-  async submitFeedback(userId: Types.ObjectId, data: { prediction_id: string; isCorrect: boolean; user_submitted_label?: string; notes?: string; file_path: string; }) {
-    const { prediction_id, isCorrect, user_submitted_label, notes, file_path } = data;
+  async submitFeedback(userId: Types.ObjectId, data: { prediction_id: string; isCorrect: boolean; user_submitted_label?: string; notes?: string; file_path?: string; }) {
+    const { prediction_id, isCorrect, user_submitted_label, notes } = data;
 
     // Yêu cầu người dùng phải đăng nhập
     if (!userId) throw new NotAuthorizedError('Bạn phải đăng nhập để gửi phản hồi.');
@@ -38,6 +38,12 @@ export const feedbackService = {
     if (existingFeedback) {
       throw new BadRequestError('Bạn đã gửi phản hồi cho kết quả này rồi.');
     }
+
+    // SỬA LỖI: Lấy file_path từ prediction.mediaPath nếu không được cung cấp.
+    // Điều này hỗ trợ feedback cho video/stream (lưu trên Cloudinary) mà không cần client gửi đường dẫn.
+    const file_path = data.file_path || prediction.mediaPath;
+    if (!file_path) throw new BadRequestError('Không tìm thấy đường dẫn file cho phản hồi này.');
+
 
     let destinationPath = file_path; // Giữ lại đường dẫn cũ nếu không có hành động nào với file
 

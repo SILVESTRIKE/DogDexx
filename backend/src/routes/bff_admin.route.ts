@@ -9,6 +9,7 @@ import {
   getUsers,
   createUser,
   updateUser,
+  deleteUser,
   getModelConfig,
   updateModelConfig,
   getAlerts,
@@ -53,6 +54,7 @@ router.post('/feedback/:id/reject', rejectFeedback);
 router.get('/users', getUsers);
 router.post('/users', createUser);
 router.put('/users/:id', updateUser);
+router.delete('/users/:id', deleteUser);
 router.get('/model/config', getModelConfig);
 router.put('/model/config', updateModelConfig);
 router.get('/alerts', getAlerts);

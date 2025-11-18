@@ -12,11 +12,11 @@ import {
   RenameDirectoryZodSchema,
   MoveDirectoryZodSchema,
 } from "../types/zod/medias.zod";
-import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
+import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware"; // Giả sử bạn có file này
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { deleteMedia as adminDeleteMedia } from '../controllers/bff_admin.controller';
 import { bffPredictionController } from '../controllers/bff_prediction.controller';
-
+import {checkAllowedRoles} from "../middlewares/role.middleware"
 const router = Router();
 
 // =================================================================
@@ -1002,11 +1002,8 @@ router.get(
 // Route mới cho admin xóa media
 router.delete(
   "/bff/admin/media/:id",
-  authMiddleware,
-  (req, res, next) => { // Middleware kiểm tra quyền admin
-    if (req.user?.role !== 'admin') return res.status(403).json({ message: 'Không có quyền truy cập' });
-    next();
-  },
+  authMiddleware, // Đảm bảo đã đăng nhập
+  checkAllowedRoles(['admin']), // Chỉ cho phép admin
   adminDeleteMedia
 );
 

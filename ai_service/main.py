@@ -14,6 +14,7 @@ import traceback
 import imageio
 import sys
 from typing import List, Dict, Any
+import time
 from dotenv import load_dotenv
 from ultralytics.utils.plotting import Annotator, colors
 
@@ -29,6 +30,12 @@ MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
 
 TRACKER_CONFIG = "bytetrack.yaml"
+
+# Performance tuning (env): skip frames and/or downscale before running model to speed up processing.
+# Set VIDEO_FRAME_SKIP=2 to process every 2nd frame (i.e., skip 1 of 2). Default 1 = process all frames.
+VIDEO_FRAME_SKIP = int(os.getenv("VIDEO_FRAME_SKIP") or "1")
+# Set VIDEO_PROCESS_WIDTH to target width in pixels (e.g., 640). 0 means keep original width.
+VIDEO_PROCESS_WIDTH = int(os.getenv("VIDEO_PROCESS_WIDTH") or "0")
 
 # --- Dynamic Configuration Holder ---
 class Config:
@@ -455,6 +462,68 @@ async def predict_from_video_file(file: UploadFile = File(...)):
 
         print(f"Original dims: {width}x{height}. Processing at: {processed_width}x{processed_height}")
 
+        # # Optional preprocessing: create a reduced temporary video by sampling frames and/or downscaling.
+        # tmp_reduced_path = None
+        # try:
+        #     if VIDEO_FRAME_SKIP > 1 or (VIDEO_PROCESS_WIDTH and VIDEO_PROCESS_WIDTH > 0 and VIDEO_PROCESS_WIDTH < width):
+        #         print(f"Preprocessing video: frame_skip={VIDEO_FRAME_SKIP}, target_width={VIDEO_PROCESS_WIDTH}")
+        #         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_reduced:
+        #             tmp_reduced_path = tmp_reduced.name
+
+        #         # Determine target dimensions
+        #         target_width = VIDEO_PROCESS_WIDTH if VIDEO_PROCESS_WIDTH and VIDEO_PROCESS_WIDTH > 0 else width
+        #         # Maintain aspect ratio
+        #         aspect = height / width if width > 0 else 1
+        #         target_height = int(target_width * aspect)
+        #         # Ensure even dims
+        #         target_width = target_width - (target_width % 2)
+        #         target_height = target_height - (target_height % 2)
+
+        #         writer = imageio.get_writer(
+        #             tmp_reduced_path,
+        #             fps=fps if fps and fps > 0 else 25,
+        #             codec="libx264",
+        #             pixelformat="yuv420p",
+        #         )
+
+        #         reader = imageio.get_reader(tmp_in_path)
+        #         frame_index = 0
+        #         try:
+        #             for frame in reader:
+        #                 # frame is in RGB (imageio), convert to BGR for cv2 operations
+        #                 if frame_index % VIDEO_FRAME_SKIP == 0:
+        #                     try:
+        #                         bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+        #                         if target_width != width:
+        #                             bgr = cv2.resize(bgr, (target_width, target_height), interpolation=cv2.INTER_LINEAR)
+        #                         # convert back to RGB for writer
+        #                         rgb_frame = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
+        #                         writer.append_data(rgb_frame)
+        #                     except Exception as ex_frame:
+        #                         print(f"Warning: preprocessing skipped a frame due to error: {ex_frame}")
+        #                 frame_index += 1
+        #         finally:
+        #             try:
+        #                 reader.close()
+        #             except Exception:
+        #                 pass
+        #             try:
+        #                 writer.close()
+        #             except Exception:
+        #                 pass
+
+        #         # Update the source to the reduced file
+        #         source_for_model = tmp_reduced_path
+        #         # Update processed dims to the target dims
+        #         processed_width = target_width
+        #         processed_height = target_height
+        #         print(f"Preprocessing complete. Reduced video saved to {tmp_reduced_path}")
+        #     else:
+        #         source_for_model = tmp_in_path
+        # except Exception as preprocess_err:
+        #     print(f"Warning: preprocessing failed, falling back to original video. Error: {preprocess_err}")
+        #     source_for_model = tmp_in_path
+
         video_writer = imageio.get_writer(
             tmp_out_path,
             fps=fps,
@@ -467,7 +536,6 @@ async def predict_from_video_file(file: UploadFile = File(...)):
 
         results_generator = config.model.track( 
             source=tmp_in_path,
-
             conf=config.VIDEO_CONF_THRESHOLD,
             persist=True,
             verbose=False,

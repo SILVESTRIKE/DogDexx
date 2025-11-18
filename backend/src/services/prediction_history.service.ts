@@ -1,4 +1,5 @@
 import { PredictionHistoryModel, PredictionHistoryDoc } from '../models/prediction_history.model';
+import { FeedbackModel } from '../models/feedback.model';
 import { ConflictError, NotAuthorizedError } from '../errors';
 import { UserModel } from '../models/user.model';
 import { Types, FilterQuery } from 'mongoose';
@@ -212,7 +213,9 @@ export const predictionHistoryService = {
 
     if (hardDelete) {
       // Xóa vĩnh viễn
-      // Cân nhắc: có nên xóa cả feedback liên quan không? Hiện tại là không.
+      // Xóa vĩnh viễn
+      // Đồng thời xóa các feedback liên quan để tránh orphaned documents
+      await FeedbackModel.deleteMany({ prediction_id: history._id });
       await PredictionHistoryModel.deleteOne({ _id: historyId });
     } else {
       // Xóa mềm
@@ -223,6 +226,8 @@ export const predictionHistoryService = {
       history.isDeleted = true;
       history.updatedAt = new Date();
       await history.save();
+      // Soft-delete any related feedbacks as well
+      await FeedbackModel.updateMany({ prediction_id: history._id }, { $set: { isDeleted: true } });
     }
   },
 

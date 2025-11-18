@@ -1,5 +1,8 @@
 import { Router } from 'express';
-import { getBreedDetail, getBreeds, uploadMedia } from '../controllers/bff_content.controller';
+import { getBreedDetail, getBreeds, uploadMedia,
+	listMedia, getMediaById, updateMedia, deleteMedia,
+	createDirectory, getDirectories, getDirectoryContent, renameDirectory, moveDirectory, deleteDirectory
+} from '../controllers/bff_content.controller';
 import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { uploadSingle } from '../middlewares/upload.middleware';
@@ -67,5 +70,19 @@ router.get('/breeds', getBreeds);
  *         description: Tải lên thành công.
  */
 router.post('/media/upload', authMiddleware, uploadSingle, uploadMedia);
+
+// BFF media management wrappers
+router.get('/media', optionalAuthMiddleware, listMedia);
+router.get('/media/:id', optionalAuthMiddleware, getMediaById);
+router.patch('/media/:id', authMiddleware, updateMedia);
+router.delete('/media/:id', authMiddleware, deleteMedia);
+
+// BFF directory management wrappers
+router.post('/directories', authMiddleware, createDirectory);
+router.get('/directories', authMiddleware, getDirectories);
+router.get('/directories/content/:id', authMiddleware, getDirectoryContent);
+router.patch('/directories/:id/rename', authMiddleware, renameDirectory);
+router.patch('/directories/:id/move', authMiddleware, moveDirectory);
+router.delete('/directories/:id', authMiddleware, deleteDirectory);
 
 export default router;

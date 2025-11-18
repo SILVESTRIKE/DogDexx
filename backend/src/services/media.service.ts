@@ -35,19 +35,19 @@ export class MediaService {
   }
 
   static async updateInfoMedia(
-    _id: number,
+    _id: string,
     data: z.infer<typeof UpdateMediaInfoZodSchema>
   ): Promise<MediaDoc | null> {
-    return MediaModel.findByIdAndUpdate(
+    return MediaModel.findOneAndUpdate(
       { _id, isDeleted: false },
       { $set: data },
       { new: true }
     );
   }
 
-  static async softDeleteMedia(_id: number): Promise<MediaDoc | null> {
-    const media = await MediaModel.findByIdAndUpdate(
-      _id,
+  static async softDeleteMedia(_id: string): Promise<MediaDoc | null> {
+    const media = await MediaModel.findOneAndUpdate(
+      { _id, isDeleted: false },
       { isDeleted: true },
       { new: true }
     );
@@ -116,11 +116,11 @@ export class MediaService {
     if (type) filter.type = new RegExp(`^${type}/`, "i");
 
     if (startDate || endDate) {
-      filter.created_date = {};
+      filter.createdAt = {};
       if (startDate) {
         const start = new Date(`${startDate}T00:00:00.000Z`);
         if (!isNaN(start.getTime())) {
-          filter.created_date.$gte = start;
+          filter.createdAt.$gte = start;
         } else {
           throw new Error(
             "Invalid startDate format. Expected format: YYYY-MM-DD"
@@ -130,7 +130,7 @@ export class MediaService {
       if (endDate) {
         const end = new Date(`${endDate}T23:59:59.999Z`);
         if (!isNaN(end.getTime())) {
-          filter.created_date.$lt = end;
+          filter.createdAt.$lt = end;
         } else {
           throw new Error(
             "Invalid endDate format. Expected format: YYYY-MM-DD"
@@ -138,7 +138,7 @@ export class MediaService {
         }
       }
     }
-    const sortOptions: Record<string, number> = { created_date: -1 };
+    const sortOptions: Record<string, number> = { createdAt: -1 };
     const [totalItems, data] = await Promise.all([
       MediaModel.countDocuments(filter),
       MediaModel.find(filter)
@@ -153,7 +153,7 @@ export class MediaService {
     };
   }
 
-  static async findById(id: number): Promise<MediaDoc | null> {
+  static async findById(id: string): Promise<MediaDoc | null> {
     const result = await MediaModel.findOne({ _id: id, isDeleted: false });
     return result;
   }
@@ -226,7 +226,7 @@ export class MediaService {
       filter.name = new RegExp(search, "i");
     }
 
-    const sortOptions: Record<string, number> = { created_date: -1 };
+    const sortOptions: Record<string, number> = { createdAt: -1 };
 
     const [totalItems, data] = await Promise.all([
       MediaModel.countDocuments(filter),

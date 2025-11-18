@@ -3,6 +3,7 @@ import axios from "axios";
 import FormData from "form-data";
 import sharp from 'sharp';
 import path from "path";
+import { spawnSync } from 'child_process';
 import { Readable } from 'stream'; // THÊM: Import Readable từ stream
 import { Types } from 'mongoose';
 import { UploadApiResponse } from 'cloudinary';
@@ -20,8 +21,95 @@ import { analyticsService } from './analytics.service';
 import { AIModelService } from './ai_models.service';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+// Configurable timeout (ms) for calls to the AI service. Defaults to 10 minutes.
+const AI_SERVICE_TIMEOUT_MS = Number(process.env.AI_SERVICE_TIMEOUT_MS) || 600000;
 const MAX_IMAGE_DIMENSION = 1280; // Giới hạn kích thước ảnh
 const VIDEO_TARGET_BITRATE = '1000k'; // Giới hạn bitrate cho video
+
+// Video preprocessing (before sending to AI service) - configurable via env
+const VIDEO_PREPROCESS_ENABLED = process.env.VIDEO_PREPROCESS_ENABLED !== '0';
+const VIDEO_PREPROCESS_MAX_WIDTH = Number(process.env.VIDEO_PREPROCESS_MAX_WIDTH) || 640; // px
+const VIDEO_PREPROCESS_TARGET_FPS = Number(process.env.VIDEO_PREPROCESS_TARGET_FPS) || 15; // fps
+const VIDEO_PREPROCESS_BITRATE = process.env.VIDEO_PREPROCESS_BITRATE || '500k';
+const VIDEO_PREPROCESS_PRESET = process.env.VIDEO_PREPROCESS_PRESET || 'veryfast';
+
+// Try to configure fluent-ffmpeg with a usable ffmpeg/ffprobe binary.
+// Priority: explicit env vars -> @ffmpeg-installer/ffmpeg or ffmpeg-static -> system PATH
+let FFMPEG_AVAILABLE = false;
+let FFMPEG_PROBE_MESSAGE = '';
+try {
+  const ffmpegLib = require('fluent-ffmpeg');
+
+  const probeFfmpeg = (): string | null => {
+    const envPath = process.env.FFMPEG_PATH || process.env.FFMPEG;
+    if (envPath) {
+      try {
+        const r = spawnSync(envPath, ['-version']);
+        if (r.status === 0) return envPath;
+      } catch (e) {}
+    }
+
+    // Try system 'ffmpeg' on PATH
+    try {
+      const r2 = spawnSync('ffmpeg', ['-version']);
+      if (r2.status === 0) return 'ffmpeg';
+    } catch (e) {}
+
+    // Try packaged installers
+    try {
+      // @ffmpeg-installer/ffmpeg exposes `.path`
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const installer = require('@ffmpeg-installer/ffmpeg');
+      if (installer && installer.path) return installer.path;
+    } catch (e) {}
+
+    try {
+      // ffmpeg-static returns a path string
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const staticF = require('ffmpeg-static');
+      if (staticF) return staticF;
+    } catch (e) {}
+
+    return null;
+  };
+
+  const ffmpegPath = probeFfmpeg();
+  if (ffmpegPath) {
+    try {
+      ffmpegLib.setFfmpegPath(ffmpegPath);
+      FFMPEG_AVAILABLE = true;
+    } catch (e) {
+      FFMPEG_PROBE_MESSAGE = String(e || 'failed to set ffmpeg path');
+    }
+  } else {
+    FFMPEG_PROBE_MESSAGE = 'ffmpeg binary not found (set FFMPEG_PATH or install ffmpeg or add @ffmpeg-installer/ffmpeg or ffmpeg-static).';
+  }
+
+  // try to set ffprobe too (optional)
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const ffprobeInstaller = require('@ffprobe-installer/ffprobe');
+    if (ffprobeInstaller && ffprobeInstaller.path) {
+      ffmpegLib.setFfprobePath(ffprobeInstaller.path);
+    }
+  } catch (e) {
+    try {
+      // ffprobe-static may export path
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const ffprobeStatic = require('ffprobe-static');
+      if (ffprobeStatic && ffprobeStatic.path) ffmpegLib.setFfprobePath(ffprobeStatic.path);
+    } catch (e) {}
+  }
+} catch (e) {
+  // fluent-ffmpeg not installed/usable — we'll skip preprocessing gracefully
+  FFMPEG_PROBE_MESSAGE = 'fluent-ffmpeg module not installed.';
+}
+
+if (!FFMPEG_AVAILABLE) {
+  logger.warn(`[PredictionService] Video preprocessing disabled: ${FFMPEG_PROBE_MESSAGE}`);
+} else {
+  logger.info('[PredictionService] ffmpeg configured for video preprocessing.');
+}
 
 /**
  * THÊM: Tối ưu hóa buffer ảnh bằng Sharp
@@ -46,39 +134,80 @@ const optimizeImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
  * @returns Buffer video đã được tối ưu hóa
  */
 const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
-    // SỬA LỖI: Import 'fluent-ffmpeg' bên trong hàm để tránh lỗi nếu ffmpeg không được cài đặt toàn cục trong môi trường dev.
-    // Điều này giúp môi trường phát triển cục bộ không bị ảnh hưởng.
-    const ffmpeg = require('fluent-ffmpeg');
+  // If ffmpeg wasn't configured earlier, skip preprocessing to avoid runtime crashes.
+  if (!FFMPEG_AVAILABLE) {
+    logger.warn('[PredictionService] Skipping video preprocessing because ffmpeg is not available.');
+    return Promise.resolve(buffer);
+  }
 
+  // fluent-ffmpeg should be available/configured at module init
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const ffmpeg = require('fluent-ffmpeg');
+
+  // If preprocessing disabled, fallback to previous milder optimization
+  if (!VIDEO_PREPROCESS_ENABLED) {
     return new Promise((resolve, reject) => {
-        // SỬA LỖI: Định kiểu rõ ràng cho mảng chunks là Buffer[]
-        const chunks: Buffer[] = [];
-        // SỬA LỖI: Chuyển Buffer thành Readable stream
-        const readableStream = new Readable();
-        readableStream.push(buffer);
-        readableStream.push(null); // Báo hiệu kết thúc stream
+      const chunks: Buffer[] = [];
+      const readableStream = new Readable();
+      readableStream.push(buffer);
+      readableStream.push(null);
 
-        // BỎ: Không còn setFfmpegPath nữa. Giả định ffmpeg đã có trong PATH của môi trường thực thi (Docker).
-        // Điều này làm cho code linh hoạt hơn và không phụ thuộc vào `ffmpeg-static`.
-        const command = ffmpeg()
-            .input(readableStream) // Truyền stream vào ffmpeg
-            .videoBitrate(VIDEO_TARGET_BITRATE)
-            // Thêm các tùy chọn để xử lý nhanh hơn và tương thích rộng rãi
-            .withVideoCodec('libx264')
-            .addOption('-preset', 'fast')
-            .addOption('-movflags', 'frag_keyframe+empty_moov')
-            .outputFormat('mp4')
-            .on('end', () => resolve(Buffer.concat(chunks)))
-            .on('error', (err: Error) => {
-                // Ghi log chi tiết hơn để dễ debug
-                logger.error('[FFMPEG Error] Lỗi trong quá trình xử lý video.', err);
-                reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`));
-            });
-        
-        const outputStream = command.pipe();
-        // SỬA LỖI: Định kiểu rõ ràng cho tham số 'chunk' là Buffer
-        outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      const command = ffmpeg()
+        .input(readableStream)
+        .videoBitrate(VIDEO_TARGET_BITRATE)
+        .withVideoCodec('libx264')
+        .addOption('-preset', 'fast')
+        .addOption('-movflags', 'frag_keyframe+empty_moov')
+        .outputFormat('mp4')
+        .on('end', () => resolve(Buffer.concat(chunks)))
+        .on('error', (err: Error) => {
+          logger.error('[FFMPEG Error] Lỗi trong quá trình xử lý video (fallback).', err);
+          reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`));
+        });
+
+      const outputStream = command.pipe();
+      outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
     });
+  }
+
+  // Preprocess: aggressively re-encode with lower resolution, lower fps and bitrate
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const readableStream = new Readable();
+    readableStream.push(buffer);
+    readableStream.push(null);
+
+    try {
+      // scale filter: limit width and keep aspect ratio (use -2 for even height)
+      // SỬA LỖI: Đảm bảo video không bị phóng to và giữ đúng tỷ lệ khung hình.
+      // 'force_original_aspect_ratio=decrease' đảm bảo video chỉ được thu nhỏ nếu nó lớn hơn kích thước mục tiêu.
+      const scaleFilter = `scale=${VIDEO_PREPROCESS_MAX_WIDTH}:-2:force_original_aspect_ratio=decrease`;
+
+
+      const command = ffmpeg()
+        .input(readableStream)
+        .withVideoCodec('libx264')
+        .videoBitrate(VIDEO_PREPROCESS_BITRATE)
+        .addOption('-preset', VIDEO_PREPROCESS_PRESET)
+        .addOption('-movflags', 'frag_keyframe+empty_moov')
+        .addOption('-vf', scaleFilter)
+        .addOption('-r', String(VIDEO_PREPROCESS_TARGET_FPS))
+        .addOption('-profile:v', 'baseline')
+        .outputFormat('mp4')
+        .on('end', () => resolve(Buffer.concat(chunks)))
+        .on('error', (err: Error) => {
+          logger.error('[FFMPEG Error] Lỗi trong quá trình tiền xử lý video.', err);
+          reject(new Error(`Lỗi khi tiền xử lý video: ${err.message}`));
+        });
+
+      const outputStream = command.pipe();
+      outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+    } catch (err: any) {
+      logger.error('[PredictionService] Exception while trying to preprocess video buffer:', err);
+      // fallback: resolve with original buffer
+      resolve(buffer);
+    }
+  });
 };
 
 interface StreamResultPayload {
@@ -244,20 +373,29 @@ export const predictionService = {
     // ================= SỬA LỖI: Bọc trong try...catch =================
     try {
         const sendToAIService = async () => {
-            // THAY ĐỔI: Tối ưu hóa media trước khi gửi
-            let optimizedBuffer: Buffer;
-            if (type === 'image') {
-                optimizedBuffer = await optimizeImageBuffer(file.buffer);
-            } else {
-                optimizedBuffer = await optimizeVideoBuffer(file.buffer);
-            }
+        // THAY ĐỔI: Tối ưu hóa media trước khi gửi.
+        // In some dev environments ffmpeg/ flent-ffmpeg may not be available.
+        // Allow skipping video optimization by setting SKIP_VIDEO_OPTIMIZATION=1 in env.
+        let optimizedBuffer: Buffer;
+        if (type === 'image') {
+          optimizedBuffer = await optimizeImageBuffer(file.buffer);
+        } else {
+          const skipOpt = process.env.SKIP_VIDEO_OPTIMIZATION === '1' || process.env.SKIP_VIDEO_OPTIMIZATION === 'true';
+          if (skipOpt) {
+            logger.warn('[PredictionService] SKIP_VIDEO_OPTIMIZATION enabled — sending raw video buffer to AI service');
+            optimizedBuffer = file.buffer;
+          } else {
+            optimizedBuffer = await optimizeVideoBuffer(file.buffer);
+          }
+        }
             const formData = new FormData();
             formData.append("file", optimizedBuffer, { filename: file.originalname });
             
             const endpoint = type === 'image' ? '/predict/image' : '/predict/video';
+            logger.info(`[PredictionService] Calling AI service ${AI_SERVICE_URL}${endpoint} with timeout=${AI_SERVICE_TIMEOUT_MS}ms`);
             const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
-                headers: { ...formData.getHeaders() },
-                timeout: 300000,
+              headers: { ...formData.getHeaders() },
+              timeout: AI_SERVICE_TIMEOUT_MS,
             });
             return response.data;
         };

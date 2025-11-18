@@ -23,6 +23,9 @@ const transformPaths = (req: Request, data: any): any => {
     const createFullUrl = (dbPath: string) => {
         if (!dbPath) return dbPath;
 
+        // If dbPath is already a full URL, return as-is
+        if (/^https?:\/\//i.test(dbPath)) return dbPath;
+
         // 1. Xử lý các đường dẫn Cloudinary (bắt đầu bằng 'public/')
         if (dbPath.startsWith('public/') && CLOUD_NAME) {
             // Xác định loại tài nguyên (image/video) dựa trên đường dẫn.

@@ -34,7 +34,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   const [otp, setOtp] = useState("")
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [view, setView] = useState<"form" | "otp">("form")
+  const [view, setView] = useState<"form" | "otp" | "forgot" | "reset">("form")
   const [message, setMessage] = useState("")
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,101 +116,193 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </DialogDescription>
         </DialogHeader>
 
-        {view === "form" ? (
-          <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
-            {mode === "register" && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
+        {(() => {
+          // Render body based on view to avoid nested ternary issues
+          switch (view) {
+            case 'form':
+              return (
+                <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
+                  {mode === "register" && (
+                    <>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="register-firstName">{t("auth.firstName")} ({t('auth.optional')})</Label>
+                          <Input id="register-firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Văn" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="register-lastName">{t("auth.lastName")} ({t('auth.optional')})</Label>
+                          <Input id="register-lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="A" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="register-username">{t("auth.username")}</Label>
+                        <Input
+                          id="register-username"
+                          type="text"
+                          value={username}
+                          onChange={(e) => {
+                            const slug = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
+                            setUsername(slug);
+                          }}
+                          placeholder={t("auth.usernamePlaceholder")}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="register-avatar">{t("auth.avatar")}</Label>
+                        <Input
+                          id="register-avatar"
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) setAvatar(e.target.files[0]);
+                          }}
+                          className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                      </div>
+                    </>
+                  )}
                   <div className="space-y-2">
-                    <Label htmlFor="firstName">{t("auth.firstName")} ({t('auth.optional')})</Label>
-                    <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} placeholder="Văn" />
+                    <Label htmlFor={`${mode}-email`}>{t("auth.email")}</Label>
+                    <Input
+                      id={`${mode}-email`}
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder={t("auth.emailPlaceholder")}
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="lastName">{t("auth.lastName")} ({t('auth.optional')})</Label>
-                    <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} placeholder="A" />
+                    <Label htmlFor={`${mode}-password`}>{t("auth.password")}</Label>
+                    <Input
+                      id={`${mode}-password`}
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder={t("auth.passwordPlaceholder")}
+                      required
+                      disabled={isLoading}
+                    />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="username">{t("auth.username")}</Label>
-                  <Input
-                    id="username"
-                    type="text"
-                    value={username}
-                    onChange={(e) => {
-                      // Tự động chuyển đổi username thành dạng slug (chữ thường, không dấu, không cách)
-                      const slug = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '');
-                      setUsername(slug);
-                    }}
-                    placeholder={t("auth.usernamePlaceholder")}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="avatar">{t("auth.avatar")}</Label>
-                  <Input
-                    id="avatar"
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setAvatar(e.target.files[0])
-                      }
-                    }}
-                    className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </div>
-              </>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">{t("auth.email")}</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder={t("auth.emailPlaceholder")}
-                required
-                disabled={isLoading}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">{t("auth.password")}</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={t("auth.passwordPlaceholder")}
-                required
-                disabled={isLoading}
-              />
-            </div>
-          </form>
-        ) : (
-          <form id="otp-form" onSubmit={handleSubmit} className="space-y-4 flex flex-col items-center">
-            <Label htmlFor="otp">{t('auth.enterOtp')}</Label>
-            <InputOTP maxLength={6} value={otp} onChange={setOtp}>
-              <InputOTPGroup>
-                <InputOTPSlot index={0} />
-                <InputOTPSlot index={1} />
-                <InputOTPSlot index={2} />
-                <InputOTPSlot index={3} />
-                <InputOTPSlot index={4} />
-                <InputOTPSlot index={5} />
-              </InputOTPGroup>
-            </InputOTP>
-            <p className="text-sm text-muted-foreground">{message}</p>
-          </form>
-        )}
+                  {mode === 'login' && (
+                    <div className="text-right">
+                      <button type="button" onClick={() => setView('forgot')} className="text-sm text-primary hover:underline">
+                        {t('auth.forgotPassword')}
+                      </button>
+                    </div>
+                  )}
+                </form>
+              );
+            case 'otp':
+              return (
+                <form id="otp-form" onSubmit={handleSubmit} className="space-y-4 flex flex-col items-center">
+                  <Label htmlFor="otp">{t('auth.enterOtp')}</Label>
+                  <InputOTP maxLength={6} value={otp} onChange={setOtp}>
+                    <InputOTPGroup>
+                      <InputOTPSlot index={0} />
+                      <InputOTPSlot index={1} />
+                      <InputOTPSlot index={2} />
+                      <InputOTPSlot index={3} />
+                      <InputOTPSlot index={4} />
+                      <InputOTPSlot index={5} />
+                    </InputOTPGroup>
+                  </InputOTP>
+                  <p className="text-sm text-muted-foreground">{message}</p>
+                </form>
+              );
+            case 'forgot':
+              return (
+                <form id="forgot-form" onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsLoading(true);
+                  try {
+                    const res = await (await import('@/lib/api-client')).apiClient.forgotPassword(email);
+                    setMessage(res?.message || t('auth.forgotSent'));
+                    setView('reset');
+                  } catch (err: any) {
+                    toast.error(err.message || t('auth.errorGeneral'));
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="forgot-email">{t('auth.email')}</Label>
+                    <Input id="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? t('auth.processing') : t('auth.sendResetCode')}</Button>
+                  <div className="text-center text-sm">
+                    <button type="button" onClick={() => setView('form')} className="text-primary hover:underline">{t('auth.backToLogin')}</button>
+                  </div>
+                </form>
+              );
+            case 'reset':
+              return (
+                <form id="reset-form" onSubmit={async (e) => {
+                  e.preventDefault();
+                  setIsLoading(true);
+                  try {
+                    const api = (await import('@/lib/api-client')).apiClient;
+                    await api.resetPassword(email, otp, password);
+                    toast.success(t('auth.resetSuccess'));
+                    setView('form');
+                    setMessage('');
+                    onSwitchMode('login');
+                  } catch (err: any) {
+                    toast.error(err.message || t('auth.errorGeneral'));
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email">{t('auth.email')}</Label>
+                    <Input id="reset-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-otp">{t('auth.otp')}</Label>
+                    <Input id="reset-otp" value={otp} onChange={(e) => setOtp(e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-password">{t('auth.newPassword')}</Label>
+                    <Input id="reset-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? t('auth.processing') : t('auth.resetPasswordButton')}</Button>
+                  <div className="text-center text-sm">
+                    <button type="button" onClick={() => setView('form')} className="text-primary hover:underline">{t('auth.backToLogin')}</button>
+                  </div>
+                </form>
+              );
+            default:
+              return null;
+          }
+        })()}
 
         {error && <p className="text-sm text-red-500 text-center">{error}</p>}
         {message && !error && <p className="text-sm text-green-600 text-center">{message}</p>}
 
-        <Button type="submit" form={view === 'form' ? 'auth-form' : 'otp-form'} className="w-full" disabled={isLoading}>
+        <Button
+          type="submit"
+          form={
+            view === 'form'
+              ? 'auth-form'
+              : view === 'otp'
+              ? 'otp-form'
+              : view === 'forgot'
+              ? 'forgot-form'
+              : 'reset-form'
+          }
+          className="w-full"
+          disabled={isLoading}
+        >
           {isLoading
             ? t("auth.processing")
             : view === "otp"
             ? t("auth.verify")
+            : view === "forgot"
+            ? t('auth.sendResetCode')
+            : view === "reset"
+            ? t('auth.resetPasswordButton')
             : mode === "login"
             ? t("auth.loginButton")
             : t("auth.registerButton")}

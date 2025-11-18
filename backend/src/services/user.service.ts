@@ -7,6 +7,9 @@ import mongoose, { Types } from "mongoose";
 import { BadRequestError, ConflictError, NotFoundError } from "../errors";
 import { DirectoryModel } from "../models/directory.model";
 import { MediaModel } from "../models/medias.model";
+import { PredictionHistoryModel } from '../models/prediction_history.model';
+import { FeedbackModel } from '../models/feedback.model';
+import { RefreshTokenModel } from '../models/refreshToken.model';
 import { PlanModel } from "../models/plan.model";
 
 // Định nghĩa kiểu dữ liệu cho user đã được làm giàu
@@ -181,11 +184,26 @@ export const userService = {
   },
 
   async deleteUser(id: string): Promise<boolean> {
-    const result = await UserModel.updateOne(
-      { _id: id, isDeleted: false },
-      { isDeleted: true }
-    );
-    if (result.modifiedCount === 0) throw new ConflictError("Không tìm thấy người dùng để xóa.");
+    const user = await UserModel.findOne({ _id: id, isDeleted: false });
+    if (!user) throw new ConflictError("Không tìm thấy người dùng để xóa.");
+
+    // Soft-delete the user
+    await UserModel.updateOne({ _id: id }, { $set: { isDeleted: true } });
+
+    // Soft-delete related resources to avoid orphaned documents
+    await Promise.all([
+      MediaModel.updateMany({ creator_id: user._id }, { $set: { isDeleted: true } }),
+      DirectoryModel.updateMany({ creator_id: user._id }, { $set: { isDeleted: true } }),
+      PredictionHistoryModel.updateMany({ user: user._id }, { $set: { isDeleted: true } }),
+      FeedbackModel.updateMany({ user_id: user._id }, { $set: { isDeleted: true } }),
+      RefreshTokenModel.updateMany({ user: user._id }, { $set: { isDeleted: true } }),
+    ]);
+
+    // Delete OTP records for this user's email (cleanup)
+    if (user.email) {
+      await OtpModel.deleteMany({ email: user.email });
+    }
+
     return true;
   },
 

@@ -5,6 +5,7 @@ import { transformMediaURLs } from '../utils/media.util';
 import { AppError } from '../errors';
 import { sendFileToClient } from '../utils/file.util';
 import * as ExcelJS from 'exceljs';
+import { userController } from './user.controller';
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -337,6 +338,15 @@ export const deleteWikiBreed = async (req: Request, res: Response, next: NextFun
     const { lang = 'vi' } = req.query as any;
     const result = await adminBffService.deleteWikiBreed(slug, lang);
     res.status(200).json(result);
+};
+
+// --- BFF wrapper for admin deleting a user (for frontend admin UI)
+export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    return userController.adminDeleteUser(req as any, res as any);
+  } catch (error) {
+    next(error);
+  }
 };
 
 /**
