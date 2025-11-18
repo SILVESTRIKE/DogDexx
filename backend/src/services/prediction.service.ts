@@ -3,6 +3,7 @@ import axios from "axios";
 import FormData from "form-data";
 import sharp from 'sharp';
 import ffmpeg from 'fluent-ffmpeg';
+import ffmpegStatic from 'ffmpeg-static'; // THÊM: Import đường dẫn ffmpeg
 import path from "path";
 import { Readable } from 'stream'; // THÊM: Import Readable từ stream
 import { Types } from 'mongoose';
@@ -53,6 +54,12 @@ const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
         const readableStream = new Readable();
         readableStream.push(buffer);
         readableStream.push(null); // Báo hiệu kết thúc stream
+
+        // SỬA LỖI: Chỉ định đường dẫn đến ffmpeg executable
+        if (!ffmpegStatic) {
+            return reject(new Error('ffmpeg-static không tìm thấy.'));
+        }
+        ffmpeg.setFfmpegPath(ffmpegStatic);
 
         ffmpeg()
             .input(readableStream) // Truyền stream vào ffmpeg
