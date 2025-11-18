@@ -7,7 +7,7 @@ import { Types } from 'mongoose';
 import { UploadApiResponse } from 'cloudinary';
 // THAY ĐỔI: Import cloudinary để có thể upload
 import { cloudinary } from '../config/cloudinary.config'; 
-
+import { logger } from '../utils/logger.util';
 import { PredictionHistoryModel, PredictionHistoryDoc, IYoloPrediction } from "../models/prediction_history.model";
 import { UserDoc } from "../models/user.model";
 import { DirectoryModel } from "../models/directory.model";
@@ -73,6 +73,7 @@ export const predictionService = {
     return batchProcessor.getProgress(predictionId);
   },
 
+
   makeBatchPredictions: async (
     userId: Types.ObjectId | undefined,
     files: Express.Multer.File[],
@@ -80,104 +81,86 @@ export const predictionService = {
   ): Promise<PredictionHistoryDoc[]> => {
     if (!files.length) throw new BadRequestError("Không có file nào được cung cấp.");
 
-    let directory_id: Types.ObjectId | undefined;
-    if (userId) {
-      const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });
-      if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
-      directory_id = userDirectory._id;
+    // ================= SỬA LỖI: Bọc trong try...catch =================
+    try {
+        let directory_id: Types.ObjectId | undefined;
+        if (userId) {
+            const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });
+            if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
+            directory_id = userDirectory._id;
+        }
+
+        const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
+        const modelName = activeModel ? activeModel.name : 'unknown_model';
+
+        const response = await axios.post(`${AI_SERVICE_URL}/predict/images_by_urls`, {
+            urls: files.map(file => file.path)
+        });
+
+        const batchResults = response.data.results;
+        const predictions: PredictionHistoryDoc[] = [];
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const result = batchResults[i];
+            
+            const extension = path.extname(file.originalname);
+            const mediaPathForDb = `${file.filename}${extension}`;
+
+            const newMedia = new MediaModel({
+                name: file.originalname, 
+                mediaPath: mediaPathForDb,
+                creator_id: userId, 
+                directory_id, 
+                type: 'image',
+            });
+            await newMedia.save();
+
+            if (!result?.predictions || !result?.processed_media_base64) {
+                logger.error(`[PredictionService] Kết quả không hợp lệ cho file (batch) ${file.originalname}`);
+                continue;
+            }
+
+            const processedMediaPathForDb = await uploadBase64ToCloudinary(
+                result.processed_media_base64,
+                'public/processed/images'
+            );
+            
+            const newPrediction = await PredictionHistoryModel.create({
+                user: userId, 
+                media: newMedia._id, 
+                mediaPath: newMedia.mediaPath,
+                predictions: result.predictions, 
+                processedMediaPath: processedMediaPathForDb,
+                modelUsed: modelName, 
+                source: PREDICTION_SOURCES.IMAGE_UPLOAD,
+            });
+
+            const populatedPrediction = await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([
+                { path: "user", select: "-password" },
+                { path: "media" }
+            ]);
+            predictions.push(populatedPrediction);
+        }
+
+        analyticsService.trackEvent({
+            eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
+            req,
+            eventData: { fileCount: files.length }
+        });
+
+        return predictions;
+
+    } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+            logger.error(`[PredictionService] Lỗi Axios khi gọi AI Service (batch): ${error.message}`);
+            logger.error(`[PredictionService] Phản hồi từ AI Service (nếu có):`, error.response?.data);
+        } else {
+            logger.error(`[PredictionService] Lỗi không xác định trong makeBatchPredictions:`, error);
+        }
+        throw new Error("Không thể xử lý dự đoán hàng loạt do có lỗi từ dịch vụ AI.");
     }
-
-    const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
-    const modelName = activeModel ? activeModel.name : 'unknown_model';
-
-    // THAY ĐỔI: Gửi URL đến AI Service thay vì stream file
-    // Lưu ý: AI Service của bạn cần được cập nhật để chấp nhận một danh sách các URL
-    const response = await axios.post(`${AI_SERVICE_URL}/predict/images_by_urls`, {
-        urls: files.map(file => file.path) // file.path bây giờ là URL Cloudinary
-    }).catch(error => {
-      console.error("Lỗi khi gọi AI Service:", error.response?.data || error.message);
-      throw new BadRequestError("Không thể kết nối đến dịch vụ AI.");
-    });
-
-    // // Code cũ gửi file stream
-    // const formData = new FormData();
-    // files.forEach(file => {
-    //   formData.append("files", fs.createReadStream(file.path), { filename: file.originalname });
-    // });
-    // const response = await axios.post(`${AI_SERVICE_URL}/predict/images`, formData, {
-    //   headers: { ...formData.getHeaders() },
-    //   timeout: 180000,
-    // }).catch(error => { ... });
-
-    const batchResults = response.data.results;
-    const predictions: PredictionHistoryDoc[] = [];
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const result = batchResults[i];
-      
-      // THAY ĐỔI: Xây dựng mediaPath để lưu vào DB từ public_id (file.filename)
-      const extension = path.extname(file.originalname);
-      const mediaPathForDb = `${file.filename}${extension}`;
-
-      const newMedia = new MediaModel({
-        name: file.originalname, 
-        mediaPath: mediaPathForDb, // << Lưu đường dẫn tương đối giống hệt cấu trúc cũ
-        creator_id: userId, 
-        directory_id, 
-        type: 'image',
-      });
-      await newMedia.save();
-
-      // // Code cũ lưu mediaPath từ file.path cục bộ
-      // const newMedia = new MediaModel({
-      //   name: file.originalname, mediaPath: file.path, creator_id: userId, directory_id, type: 'image',
-      // });
-
-      if (!result?.predictions || !result?.processed_media_base64) {
-        console.error(`Kết quả không hợp lệ cho file ${file.originalname}`);
-        continue;
-      }
-
-      // THAY ĐỔI: Upload ảnh đã xử lý lên Cloudinary
-      const processedMediaPathForDb = await uploadBase64ToCloudinary(
-          result.processed_media_base64,
-          'public/processed/images'
-      );
-      
-      // // Code cũ ghi file đã xử lý ra đĩa
-      // const base64Data = result.processed_media_base64;
-      // const mediaBuffer = Buffer.from(base64Data, 'base64');
-      // const uniqueFilename = `${uuidv4()}.jpg`;
-      // const publicDir = path.join(__dirname, `../../public/processed/images`);
-      // const publicUrl = `/public/processed/images/${uniqueFilename}`;
-      // fs.mkdirSync(publicDir, { recursive: true });
-      // fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);
-
-      const newPrediction = await PredictionHistoryModel.create({
-        user: userId, 
-        media: newMedia._id, 
-        mediaPath: newMedia.mediaPath,
-        predictions: result.predictions, 
-        processedMediaPath: processedMediaPathForDb, // << Lưu đường dẫn tương đối từ Cloudinary
-        modelUsed: modelName, 
-        source: PREDICTION_SOURCES.IMAGE_UPLOAD,
-      });
-
-      const populatedPrediction = await newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([
-        { path: "user", select: "-password" },
-        { path: "media" }
-      ]);
-      predictions.push(populatedPrediction);
-    }
-
-    analyticsService.trackEvent({
-      eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
-      req,
-      eventData: { fileCount: files.length }
-    });
-
-    return predictions;
+    // ================= KẾT THÚC SỬA LỖI =================
   },
 
   makePrediction: async (
@@ -198,99 +181,88 @@ export const predictionService = {
     const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
     const modelName = activeModel ? activeModel.name : 'unknown_model';
 
-    // --- BẮT ĐẦU TỐI ƯU HÓA SONG SONG ---
+    // ================= SỬA LỖI: Bọc trong try...catch =================
+    try {
+        const sendToAIService = async () => {
+            const formData = new FormData();
+            formData.append("file", file.buffer, { filename: file.originalname });
+            
+            const endpoint = type === 'image' ? '/predict/image' : '/predict/video';
+            const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
+                headers: { ...formData.getHeaders() },
+                timeout: 300000,
+            });
+            return response.data;
+        };
 
-    // Tác vụ 1: Gửi file buffer trực tiếp cho AI Service
-    const sendToAIService = async () => {
-        const formData = new FormData();
-        // Gửi buffer thay vì đọc từ đĩa
-        formData.append("file", file.buffer, { filename: file.originalname });
-        
-        const endpoint = type === 'image' ? '/predict/image' : '/predict/video';
-        const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
-            headers: { ...formData.getHeaders() },
-            timeout: 300000, // 5 phút timeout
+        const uploadOriginalToCloudinary = async () => {
+            const timestamp = Date.now();
+            const filenameWithoutExt = `${path.parse(file.originalname).name}_${timestamp}`;
+            const folder = `public/uploads/${type}s`;
+            
+            const result = await uploadBufferToCloudinary(file.buffer, filenameWithoutExt, folder, type);
+            return `${result.public_id}.${result.format}`;
+        };
+
+        console.log("Bắt đầu xử lý AI và upload file gốc song song...");
+        const [predictionResult, originalMediaPathForDb] = await Promise.all([
+            sendToAIService(),
+            uploadOriginalToCloudinary()
+        ]);
+        console.log("Xử lý AI và upload file gốc đã hoàn tất.");
+
+        if (!predictionResult?.predictions || !predictionResult?.processed_media_base64) {
+          throw new Error("Kết quả từ AI service không hợp lệ.");
+        }
+
+        const newMedia = new MediaModel({
+          name: file.originalname,
+          mediaPath: originalMediaPathForDb,
+          creator_id: userId,
+          directory_id,
+          type,
         });
-        return response.data;
-    };
-
-    // Tác vụ 2: Upload file gốc (buffer) lên Cloudinary
-    const uploadOriginalToCloudinary = async () => {
-        // Tạo public_id cho file gốc
-        const timestamp = Date.now();
-        const filenameWithoutExt = `${path.parse(file.originalname).name}_${timestamp}`;
-        const folder = `public/uploads/${type}s`; // ví dụ: public/uploads/images
+        await newMedia.save();
         
-        const result = await uploadBufferToCloudinary(file.buffer, filenameWithoutExt, folder, type);
+        console.log("Đang upload file đã xử lý...");
+        const processedFolder = `public/processed/${type}s`;
+        const processedMediaPathForDb = await uploadBase64ToCloudinary(
+            predictionResult.processed_media_base64,
+            processedFolder,
+            type
+        );
+        console.log("Upload file đã xử lý hoàn tất.");
         
-        // Trả về đường dẫn tương đối để lưu vào DB
-        return `${result.public_id}.${result.format}`;
-    };
+        analyticsService.trackEvent({
+          eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
+          req,
+          eventData: { mediaType: type, filename: file.originalname }
+        });
 
-    // Chạy cả 2 tác vụ cùng lúc và chờ cả hai hoàn thành
-    console.log("Bắt đầu xử lý AI và upload file gốc song song...");
-    const [predictionResult, originalMediaPathForDb] = await Promise.all([
-        sendToAIService(),
-        uploadOriginalToCloudinary()
-    ]);
-    console.log("Xử lý AI và upload file gốc đã hoàn tất.");
+        const newPrediction = await PredictionHistoryModel.create({
+          user: userId, 
+          media: newMedia._id, 
+          mediaPath: newMedia.mediaPath,
+          predictions: predictionResult.predictions, 
+          processedMediaPath: processedMediaPathForDb,
+          modelUsed: modelName, 
+          source: `${type}_upload` as any,
+        });
+        
+        return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
 
-    if (!predictionResult?.predictions || !predictionResult?.processed_media_base64) {
-      throw new Error("Kết quả từ AI service không hợp lệ.");
+    } catch (error: any) {
+        if (axios.isAxiosError(error)) {
+            logger.error(`[PredictionService] Lỗi Axios khi gọi AI Service: ${error.message}`);
+            logger.error(`[PredictionService] Phản hồi từ AI Service (nếu có):`, error.response?.data);
+        } else {
+            logger.error(`[PredictionService] Lỗi không xác định trong makePrediction:`, error);
+        }
+        
+        throw new Error("Không thể xử lý dự đoán do có lỗi từ dịch vụ AI.");
     }
-    
-    // --- KẾT THÚC TỐI ƯU HÓA ---
-
-    // Lưu media gốc vào DB
-    const newMedia = new MediaModel({
-      name: file.originalname,
-      mediaPath: originalMediaPathForDb, // << Dùng kết quả từ Tác vụ 2
-      creator_id: userId,
-      directory_id,
-      type,
-    });
-    await newMedia.save();
-    
-    // Tác vụ cuối: Upload file đã xử lý lên Cloudinary
-    console.log("Đang upload file đã xử lý...");
-    const processedFolder = `public/processed/${type}s`;
-    const processedMediaPathForDb = await uploadBase64ToCloudinary(
-        predictionResult.processed_media_base64,
-        processedFolder,
-        type
-    );
-    console.log("Upload file đã xử lý hoàn tất.");
-    
-    // // Code cũ ghi file ra đĩa
-    // const base64Data = predictionResult.processed_media_base64;
-    // const mediaBuffer = Buffer.from(base64Data, 'base64');
-    // const fileExtension = type === 'video' ? 'mp4' : 'jpg';
-    // const publicFolder = type === 'video' ? 'processed/videos' : 'processed/images';
-    // const uniqueFilename = `${uuidv4()}.${fileExtension}`;
-    // const publicDir = path.join(__dirname, `../../public/${publicFolder}`);
-    // const publicUrl = `/public/${publicFolder}/${uniqueFilename}`;
-    // fs.mkdirSync(publicDir, { recursive: true });
-    // fs.writeFileSync(path.join(publicDir, uniqueFilename), mediaBuffer);
-    
-    analyticsService.trackEvent({
-      eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
-      req,
-      eventData: { mediaType: type, filename: file.originalname }
-    });
-
-    const newPrediction = await PredictionHistoryModel.create({
-      user: userId, 
-      media: newMedia._id, 
-      mediaPath: newMedia.mediaPath,
-      predictions: predictionResult.predictions, 
-      processedMediaPath: processedMediaPathForDb,
-      modelUsed: modelName, 
-      source: `${type}_upload` as any,
-    });
-    
-    return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
+    // ================= KẾT THÚC SỬA LỖI =================
   },
-
   saveStreamPrediction: async (
     userId: Types.ObjectId | undefined,
     payload: StreamResultPayload,
