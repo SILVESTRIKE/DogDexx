@@ -10,10 +10,7 @@ if (!redisUrl) {
 } else {
   client = createClient({
     url: redisUrl,
-    socket: {
-      tls: true,
-      rejectUnauthorized: false, // Dòng này QUAN TRỌNG NHẤT
-    },
+    
   });
 
   client.on("connect", () => {});
