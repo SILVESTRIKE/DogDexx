@@ -205,7 +205,7 @@ export const getAchievements = async (req: Request, res: Response) => {
       title: ach.name,
       description: ach.description,
       icon: ach.icon || '🏆',
-      requiredCount: ach.condition.value,
+      requiredCount: ach.condition?.value || 0, // <-- Sửa ở đây
       unlocked: ach.unlocked,
       unlockedAt: unlockedMap.get(ach.key) || null,
     }))

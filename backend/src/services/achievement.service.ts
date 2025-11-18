@@ -35,7 +35,7 @@ export const achievementService = {
     const achievementsWithStatus = allAchievementDefinitions.map(ach => {
       // "Phẳng hóa" (flatten) dữ liệu ngôn ngữ tại đây
       const flattenedAch = {
-        ...ach,
+        ...ach.toObject(),
         name: ach.name[lang],
         description: ach.description[lang],
       };

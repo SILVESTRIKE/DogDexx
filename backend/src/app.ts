@@ -10,16 +10,6 @@ import Fingerprint from 'express-fingerprint';
 import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
 import { corsMiddleware } from "./middlewares/cors.middleware";
 import { configureViewEngine } from "./config/viewEngine";
-import authRoutes from "./routes/auth.route";
-import userRoutes from "./routes/user.route";
-import { predictionRoutes } from "./routes/prediction.route";
-import { mediasRouter } from "./routes/medias.route";
-import { wikiRoutes } from "./routes/dogs_wiki.route";
-import { collectionRoutes } from "./routes/user_collection.route";
-import { adminFeedbackRouter } from "./routes/feedback.route";
-import { predictionHistoryRouter } from "./routes/prediction_history.route";
-import { adminPredictionHistoryRouter } from "./routes/admin_prediction_history.route";
-import aiModelsRoutes from "./routes/ai_models.route";
 import analyticsRoutes from "./routes/analytics.route";
 import "./utils/redis.util";
 
@@ -30,7 +20,6 @@ import bffContentRoutes from './routes/bff_content.route';
 import bffAdminRoutes from './routes/bff_admin.route';
 import bffPublicRoutes from './routes/bff_public.route';
 
-import achievementRoute from './routes/achievement.route';
 import swaggerUi from "swagger-ui-express";
 import swaggerJSDoc from "swagger-jsdoc";
 import { options as swaggerOptions } from "../swaggerConfig.js";

@@ -139,9 +139,9 @@ export default function PricingPage() {
                   {plan.features?.map((feature, idx) => (
                     <div key={idx} className="flex items-start gap-3">
                       {feature.included ? (
-                        <Check className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <Check className="h-5 w-5 text-green-500 shrink-0 mt-0.5" />
                       ) : (
-                        <X className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+                        <X className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                       )}
                       <span className={`text-sm ${feature.included ? "" : "text-muted-foreground"}`}>
                         {feature.name}
@@ -200,7 +200,7 @@ export default function PricingPage() {
           </div>
         </div>
         <div className="grid md:grid-cols-3 gap-6 mb-12 pb-12 border-b">
-          <div className="bg-gradient-to-br from-primary/10 to-primary/5 rounded-lg p-6 text-center">
+          <div className="bg-linear-to-br from-primary/10 to-primary/5 rounded-lg p-6 text-center">
             <h3 className="font-semibold mb-2">{t("footer.adSection1Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {t("footer.adSection1Description")}
@@ -210,7 +210,7 @@ export default function PricingPage() {
             </Link>
           </div>
 
-          <div className="bg-gradient-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-6 text-center">
+          <div className="bg-linear-to-br from-blue-500/10 to-blue-500/5 rounded-lg p-6 text-center">
             <h3 className="font-semibold mb-2">{t("footer.adSection2Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {t("footer.adSection2Description")}
@@ -220,7 +220,7 @@ export default function PricingPage() {
             </Link>
           </div>
 
-          <div className="bg-gradient-to-br from-green-500/10 to-green-500/5 rounded-lg p-6 text-center">
+          <div className="bg-linear-to-br from-green-500/10 to-green-500/5 rounded-lg p-6 text-center">
             <h3 className="font-semibold mb-2">{t("footer.adSection3Title")}</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {t("footer.adSection3Description")}
