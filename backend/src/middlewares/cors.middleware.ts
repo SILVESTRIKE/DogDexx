@@ -4,6 +4,7 @@ import cors from 'cors';
 const allowedOrigins = [
   'http://localhost:3001', // Frontend dev
   'http://localhost:3000', // Backend dev
+  "https://dogdex-frontend.vercel.app"
   // Thêm các domain của bạn ở đây khi deploy
 ];
 
