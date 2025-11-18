@@ -2,8 +2,6 @@ import { Request } from 'express';
 import axios from "axios";
 import FormData from "form-data";
 import sharp from 'sharp';
-import ffmpeg from 'fluent-ffmpeg';
-import ffmpegStatic from 'ffmpeg-static'; // THÊM: Import đường dẫn ffmpeg
 import path from "path";
 import { Readable } from 'stream'; // THÊM: Import Readable từ stream
 import { Types } from 'mongoose';
@@ -48,20 +46,21 @@ const optimizeImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
  * @returns Buffer video đã được tối ưu hóa
  */
 const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
+    // SỬA LỖI: Import 'fluent-ffmpeg' bên trong hàm để tránh lỗi nếu ffmpeg không được cài đặt toàn cục trong môi trường dev.
+    // Điều này giúp môi trường phát triển cục bộ không bị ảnh hưởng.
+    const ffmpeg = require('fluent-ffmpeg');
+
     return new Promise((resolve, reject) => {
-        const chunks: any[] = [];
+        // SỬA LỖI: Định kiểu rõ ràng cho mảng chunks là Buffer[]
+        const chunks: Buffer[] = [];
         // SỬA LỖI: Chuyển Buffer thành Readable stream
         const readableStream = new Readable();
         readableStream.push(buffer);
         readableStream.push(null); // Báo hiệu kết thúc stream
 
-        // SỬA LỖI: Chỉ định đường dẫn đến ffmpeg executable
-        if (!ffmpegStatic) {
-            return reject(new Error('ffmpeg-static không tìm thấy.'));
-        }
-        ffmpeg.setFfmpegPath(ffmpegStatic);
-
-        ffmpeg()
+        // BỎ: Không còn setFfmpegPath nữa. Giả định ffmpeg đã có trong PATH của môi trường thực thi (Docker).
+        // Điều này làm cho code linh hoạt hơn và không phụ thuộc vào `ffmpeg-static`.
+        const command = ffmpeg()
             .input(readableStream) // Truyền stream vào ffmpeg
             .videoBitrate(VIDEO_TARGET_BITRATE)
             // Thêm các tùy chọn để xử lý nhanh hơn và tương thích rộng rãi
@@ -70,9 +69,15 @@ const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
             .addOption('-movflags', 'frag_keyframe+empty_moov')
             .outputFormat('mp4')
             .on('end', () => resolve(Buffer.concat(chunks)))
-            .on('error', (err) => reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`)))
-            .pipe()
-            .on('data', (chunk) => chunks.push(chunk));
+            .on('error', (err: Error) => {
+                // Ghi log chi tiết hơn để dễ debug
+                logger.error('[FFMPEG Error] Lỗi trong quá trình xử lý video.', err);
+                reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`));
+            });
+        
+        const outputStream = command.pipe();
+        // SỬA LỖI: Định kiểu rõ ràng cho tham số 'chunk' là Buffer
+        outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
     });
 };
 

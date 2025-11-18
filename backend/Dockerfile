@@ -15,6 +15,8 @@ FROM node:20-alpine
 
 WORKDIR /server
 
+RUN apk add --no-cache ffmpeg vips
+
 COPY --from=builder /server/package*.json ./
 RUN npm install --omit=dev --ignore-scripts
 
