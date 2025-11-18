@@ -210,7 +210,7 @@ export class AdminService {
       // Tìm các thư mục có parent_id là directoryId hiện tại
       DirectoryModel.find({ parent_id: directoryId, isDeleted: false }).sort({ name: 1 }).lean(),
       // Tìm các file media có directory_id là directoryId hiện tại
-      MediaModel.find({ directory_id: directoryId, isDeleted: false }).sort({ createdAt: -1 }).lean()
+      MediaModel.find({ directory_id: directoryId, isDeleted: false }).sort({ createdAt: -1 })
     ]);
 
     console.log(`[CORE_SERVICE] Kết quả từ CSDL: tìm thấy ${subDirectories.length} thư mục con, ${mediaFiles.length} media files.`);

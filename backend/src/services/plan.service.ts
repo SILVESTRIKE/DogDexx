@@ -35,8 +35,7 @@ export const PlanService = {
       PlanModel.find(finalFilter)
         .sort({ order: 1, createdAt: -1 })
         .skip(skip)
-        .limit(limit)
-        .lean(),
+        .limit(limit),
       PlanModel.countDocuments(finalFilter),
     ]);
 
@@ -58,7 +57,6 @@ export const PlanService = {
   async getPublicPlans(): Promise<PlanDoc[]> {
     return PlanModel.find({ isDeleted: false})
       .sort({ order: 1 })
-      .lean()
       .exec();
   },
 
@@ -69,7 +67,7 @@ export const PlanService = {
    */
   async getOne(query: IPlanQuery): Promise<PlanDoc | null> {
     const finalQuery = { isDeleted: false, ...query };
-    return PlanModel.findOne(finalQuery).lean();
+    return PlanModel.findOne(finalQuery);
   },
 
   async getBySlug(slug: string): Promise<PlanDoc> {
@@ -101,7 +99,7 @@ export const PlanService = {
       id,
       { $set: updateData },
       { new: true, runValidators: true }
-    ).lean();
+    );
     if (!updatedPlan)
       throw new NotFoundError(
         `Không tìm thấy gói cước với ID: ${id} để cập nhật.`
@@ -119,7 +117,7 @@ export const PlanService = {
       id,
       { $set: { isDeleted: true } },
       { new: true }
-    ).lean();
+    );
     if (!deletedPlan)
       throw new NotFoundError(`Không tìm thấy gói cước với ID: ${id} để xóa.`);
     return deletedPlan;

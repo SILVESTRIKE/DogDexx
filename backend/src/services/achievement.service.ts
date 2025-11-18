@@ -76,7 +76,7 @@ export const achievementService = {
    */
   async getAllAchievementDefinitions(): Promise<IAchievement[]> {
     if (!cachedAchievements) {
-      cachedAchievements = await Achievement.find().lean();
+      cachedAchievements = await Achievement.find();
     } 
     return cachedAchievements as IAchievement[];
   },
