@@ -181,7 +181,7 @@ export const getAchievements = async (req: Request, res: Response) => {
   }
 
   const achievementsResult = await achievementService.processUserAchievements(user, userCollections, lang);
-  const unlockedMap = new Map(user.achievements.map((ua: any) => [ua.key, ua.unlockedAt]));
+  const unlockedMap = new Map(user.achievements.map(ua => [ua.key, ua.unlockedAt]));
   const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
   const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
 
