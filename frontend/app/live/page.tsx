@@ -28,6 +28,9 @@ export default function LiveDetectionPage() {
   const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const [isConnecting, setIsConnecting] = useState(false); // State mới để quản lý trạng thái kết nối
 
+  // THAY ĐỔI: Xác định chiều rộng mục tiêu cho khung hình stream
+  const STREAM_FRAME_WIDTH = 640;
+
   const initializeWebSocket = async () => {
     try {
       const ws = await apiClient.connectStreamPrediction(); // SỬ DỤNG HÀM MỚI
@@ -126,13 +129,20 @@ export default function LiveDetectionPage() {
       return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // THAY ĐỔI: Resize khung hình tại trình duyệt trước khi gửi đi
+    // Tính toán kích thước mới dựa trên chiều rộng mục tiêu và giữ nguyên tỷ lệ
+    const aspectRatio = video.videoHeight / video.videoWidth;
+    const targetWidth = STREAM_FRAME_WIDTH;
+    const targetHeight = Math.round(targetWidth * aspectRatio);
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
     const ctx = canvas.getContext("2d");
 
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    // Vẽ lại video vào canvas với kích thước đã được resize
+    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
     // Giảm chất lượng (0.6) để tăng tốc độ truyền tải
     const dataUrl = canvas.toDataURL("image/jpeg", 0.6);

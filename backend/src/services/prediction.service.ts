@@ -1,11 +1,12 @@
 import { Request } from 'express';
 import axios from "axios";
 import FormData from "form-data";
+import sharp from 'sharp';
+import ffmpeg from 'fluent-ffmpeg';
 import path from "path";
-import { v4 as uuidv4 } from 'uuid';
+import { Readable } from 'stream'; // THÊM: Import Readable từ stream
 import { Types } from 'mongoose';
 import { UploadApiResponse } from 'cloudinary';
-// THAY ĐỔI: Import cloudinary để có thể upload
 import { cloudinary } from '../config/cloudinary.config'; 
 import { logger } from '../utils/logger.util';
 import { PredictionHistoryModel, PredictionHistoryDoc, IYoloPrediction } from "../models/prediction_history.model";
@@ -20,6 +21,53 @@ import { analyticsService } from './analytics.service';
 import { AIModelService } from './ai_models.service';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
+const MAX_IMAGE_DIMENSION = 1280; // Giới hạn kích thước ảnh
+const VIDEO_TARGET_BITRATE = '1000k'; // Giới hạn bitrate cho video
+
+/**
+ * THÊM: Tối ưu hóa buffer ảnh bằng Sharp
+ * Resize ảnh nếu nó lớn hơn MAX_IMAGE_DIMENSION và nén lại.
+ * @param buffer Buffer ảnh gốc
+ * @returns Buffer ảnh đã được tối ưu hóa
+ */
+const optimizeImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
+    const image = sharp(buffer);
+    const metadata = await image.metadata();
+
+    if ((metadata.width && metadata.width > MAX_IMAGE_DIMENSION) || (metadata.height && metadata.height > MAX_IMAGE_DIMENSION)) {
+        image.resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, { fit: 'inside', withoutEnlargement: true });
+    }
+
+    return image.jpeg({ quality: 85 }).toBuffer();
+};
+
+/**
+ * THÊM: Tối ưu hóa buffer video bằng fluent-ffmpeg
+ * @param buffer Buffer video gốc
+ * @returns Buffer video đã được tối ưu hóa
+ */
+const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
+    return new Promise((resolve, reject) => {
+        const chunks: any[] = [];
+        // SỬA LỖI: Chuyển Buffer thành Readable stream
+        const readableStream = new Readable();
+        readableStream.push(buffer);
+        readableStream.push(null); // Báo hiệu kết thúc stream
+
+        ffmpeg()
+            .input(readableStream) // Truyền stream vào ffmpeg
+            .videoBitrate(VIDEO_TARGET_BITRATE)
+            // Thêm các tùy chọn để xử lý nhanh hơn và tương thích rộng rãi
+            .withVideoCodec('libx264')
+            .addOption('-preset', 'fast')
+            .addOption('-movflags', 'frag_keyframe+empty_moov')
+            .outputFormat('mp4')
+            .on('end', () => resolve(Buffer.concat(chunks)))
+            .on('error', (err) => reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`)))
+            .pipe()
+            .on('data', (chunk) => chunks.push(chunk));
+    });
+};
 
 interface StreamResultPayload {
   processed_media_base64: string;
@@ -184,8 +232,15 @@ export const predictionService = {
     // ================= SỬA LỖI: Bọc trong try...catch =================
     try {
         const sendToAIService = async () => {
+            // THAY ĐỔI: Tối ưu hóa media trước khi gửi
+            let optimizedBuffer: Buffer;
+            if (type === 'image') {
+                optimizedBuffer = await optimizeImageBuffer(file.buffer);
+            } else {
+                optimizedBuffer = await optimizeVideoBuffer(file.buffer);
+            }
             const formData = new FormData();
-            formData.append("file", file.buffer, { filename: file.originalname });
+            formData.append("file", optimizedBuffer, { filename: file.originalname });
             
             const endpoint = type === 'image' ? '/predict/image' : '/predict/video';
             const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
