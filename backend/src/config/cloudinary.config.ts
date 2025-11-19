@@ -59,29 +59,18 @@ export const predictionStorage = new CloudinaryStorage({
 
 export const avatarStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: (req: Request, file: Express.Multer.File) => {
+  params: async (req: Request, file: Express.Multer.File) => { // SỬA ĐỔI: Chuyển thành hàm async
     try {
-      console.log('[avatarStorage] Bắt đầu xử lý params.');
-      const now = new Date();
-      const year = now.getFullYear().toString();
-      const month = (now.getMonth() + 1).toString().padStart(2, '0');
-      
-      // Bắt chước 100% logic của predictionStorage
-      const week = `week-${getWeekOfMonth(now)}`;
-      const relativeFolderPath = path.join("uploads", "avatars", year, month, week); // Thêm subfolder 'avatars' để phân biệt
-      
-      const dateString = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
-      const randomChars = crypto.randomBytes(3).toString("hex").slice(0, 5);
-      const filenameWithoutExt = `${dateString}_${randomChars}`;
-
-      const publicId = `public/${relativeFolderPath.replace(/\\/g, "/")}/${filenameWithoutExt}`;
+      // SỬA ĐỔI: Chỉ định thư mục, để Cloudinary tự tạo tên file.
+      // Điều này giúp quản lý file trong Media Library dễ dàng hơn.
+      const folderPath = 'public/uploads/avatars';
       
       const result = {
-        public_id: publicId,
-        resource_type: 'auto', // GIỐNG HỆT predictionStorage
+        folder: folderPath,
+        resource_type: 'image', // Avatar luôn là ảnh        
+        asset_folder: folderPath
       };
 
-      // === LOG CUỐI CÙNG TRƯỚC KHI TRẢ VỀ ===
       console.log('[avatarStorage] Chuẩn bị trả về object cho multer:', result);
       
       return result;
