@@ -1,10 +1,13 @@
-import { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import dotenv from 'dotenv';
 
+dotenv.config();
 const allowedOrigins = [
   'http://localhost:3001', // Frontend dev
   'http://localhost:3000', // Backend dev
-  "https://dogdexai.vercel.app"
+  "https://dogdexai.vercel.app",
+  process.env.FRONTEND_URL || '',
+  process.env.BACKEND_URL || '',
   // Thêm các domain của bạn ở đây khi deploy
 ];
 
