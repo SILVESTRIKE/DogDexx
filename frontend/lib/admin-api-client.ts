@@ -165,22 +165,11 @@ export class AdminApiClient {
     );
   }
 
-  async downloadAdminDataset(): Promise<Blob> {
-    const url = `${this.client.getBaseUrl()}/bff/admin/datasets/download`;
-    const token = this.client.getAccessToken();
-
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to download dataset');
-    }
-
-    const blob = await response.blob();
-    return blob;
+  async downloadAdminDataset(): Promise<{ downloadUrl: string }> {
+    // API này giờ trả về một JSON chứa URL tải xuống
+    return this.client.request<{ downloadUrl: string }>(
+      `/bff/admin/datasets/download`, {}, true
+    );
   }
 
   // --- Report Management ---

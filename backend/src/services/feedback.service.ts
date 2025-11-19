@@ -1,17 +1,17 @@
+// src/services/feedback.service.ts
+
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
 import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
-import { Types, model } from 'mongoose';
+import { Types } from 'mongoose';
 import { UserModel, UserDoc } from '../models/user.model';
 import { emailService } from './email.service';
 import path from 'path';
-import fs from 'fs/promises'; // Assuming these constants exist
-import { MediaModel } from '../models/medias.model'; // THÊM: Import MediaModel
-import { MEDIA_UPLOAD_DIR, DATASET_DIR } from '../constants/paths.constants';
-
+import { MediaModel } from '../models/medias.model';
+import { cloudinary } from '../config/cloudinary.config'; // Import cloudinary
 import { slugify } from '../utils/slugify.util';
-// Interface cho các bộ lọc
 import { PREDICTION_SOURCES } from '../constants/prediction.constants';
+
 interface QueryFilters {
   status?: FeedbackDoc['status']
   username?: string
@@ -25,7 +25,6 @@ export const feedbackService = {
   async submitFeedback(userId: Types.ObjectId, data: { prediction_id: string; isCorrect: boolean; user_submitted_label?: string; notes?: string; file_path?: string; }) {
     const { prediction_id, isCorrect, user_submitted_label, notes } = data;
 
-    // Yêu cầu người dùng phải đăng nhập
     if (!userId) throw new NotAuthorizedError('Bạn phải đăng nhập để gửi phản hồi.');
 
     const prediction = await PredictionHistoryModel.findById(prediction_id);
@@ -33,50 +32,52 @@ export const feedbackService = {
 
     if (prediction.user?.toString() !== userId.toString()) throw new BadRequestError('Bạn không có quyền đánh giá kết quả này.');
 
-    // Kiểm tra xem feedback đã tồn tại cho prediction này chưa
     const existingFeedback = await FeedbackModel.findOne({ prediction_id });
     if (existingFeedback) {
       throw new BadRequestError('Bạn đã gửi phản hồi cho kết quả này rồi.');
     }
 
-    // SỬA LỖI: Lấy file_path từ prediction.mediaPath nếu không được cung cấp.
-    // Điều này hỗ trợ feedback cho video/stream (lưu trên Cloudinary) mà không cần client gửi đường dẫn.
     const file_path = data.file_path || prediction.mediaPath;
     if (!file_path) throw new BadRequestError('Không tìm thấy đường dẫn file cho phản hồi này.');
 
+    let final_file_path = file_path;
 
-    let destinationPath = file_path; // Giữ lại đường dẫn cũ nếu không có hành động nào với file
+    if (prediction.source === PREDICTION_SOURCES.IMAGE_UPLOAD) {
+      const from_public_id = file_path.substring(0, file_path.lastIndexOf('.')) || file_path;
+      const to_public_id = `dataset/pending/${path.basename(from_public_id)}`;
 
-    // Chỉ di chuyển hoặc sao chép file nếu file_path tồn tại
-    if (file_path) {
-      const fileName = path.basename(file_path);
-      const sourcePath = path.resolve(process.cwd(), file_path);
-      const destinationDir = path.join(DATASET_DIR, 'pending');
-      destinationPath = path.join(destinationDir, fileName);
-      
       try {
-        await fs.access(sourcePath); // Kiểm tra file có tồn tại không
-        await fs.mkdir(destinationDir, { recursive: true });
+        console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+        
+        // GIẢI PHÁP: Sử dụng uploader.rename và cập nhật asset_folder ngay sau đó.
+        // Cloudinary API không cho phép đổi asset_folder và rename trong cùng một lệnh.
+        const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
+        await cloudinary.uploader.explicit(renameResult.public_id, {
+          type: 'upload',
+          asset_folder: `dataset/pending`
+        });
 
-        // **LOGIC CẬP NHẬT: Chỉ di chuyển file ảnh, không di chuyển video hoặc stream**
-        // - Ảnh upload: Di chuyển file gốc vào thư mục 'pending' và cập nhật đường dẫn trong DB.
-        // - Video upload & Stream capture: Giữ nguyên file gốc, chỉ lưu đường dẫn vào feedback.
-        if (prediction.source === PREDICTION_SOURCES.IMAGE_UPLOAD) {
-          await fs.rename(sourcePath, destinationPath);
-          // Cập nhật lại mediaPath trong MediaModel sau khi di chuyển file
-          if (prediction.media) {
-            const relativeDestPath = path.relative(process.cwd(), destinationPath).replace(/\\/g, '/');
-            await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: relativeDestPath } });
-            console.log(`[Feedback Service] Moved file and updated Media entry ${prediction.media} to new path: ${relativeDestPath}`);
-          }
-        } else {
-          // Đối với video hoặc stream, không di chuyển file, chỉ ghi nhận đường dẫn gốc.
-          console.log(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
+        final_file_path = to_public_id; 
+        const fileExtension = path.extname(file_path);
+        const final_file_path_with_ext = `${to_public_id}${fileExtension}`;
+        console.log(`[Feedback Service] Successfully moved Cloudinary resource. New public_id: ${final_file_path}`);
+
+        if (prediction.media) {
+          await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: final_file_path_with_ext } });
+          console.log(`[Feedback Service] Updated Media entry ${prediction.media} to new path: ${final_file_path_with_ext}`);
         }
+        await PredictionHistoryModel.updateOne({ _id: prediction._id }, { $set: { mediaPath: final_file_path_with_ext } });
+        console.log(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
+
       } catch (error) {
-        console.warn(`[Feedback Service] Could not process file from ${sourcePath} to ${destinationPath}. It might not exist. Error: ${(error as Error).message}`);
+        console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
       }
+    } else {
+      console.log(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
     }
+    
+    const predictionAfterUpdate = await PredictionHistoryModel.findById(prediction._id);
+    const final_path_for_feedback = predictionAfterUpdate?.mediaPath || file_path;
 
     const feedback = await FeedbackModel.create({
       prediction_id: new Types.ObjectId(prediction_id),
@@ -84,10 +85,7 @@ export const feedbackService = {
       isCorrect: isCorrect,
       user_submitted_label: user_submitted_label,
       notes: notes,
-      // CẬP NHẬT: Nếu là ảnh, lưu đường dẫn mới. Nếu không, lưu đường dẫn cũ.
-      file_path: prediction.source === PREDICTION_SOURCES.IMAGE_UPLOAD 
-        ? destinationPath 
-        : file_path,
+      file_path: final_path_for_feedback,
       status: 'pending_review',
     });
 
@@ -95,6 +93,7 @@ export const feedbackService = {
   },
 
   // --- Dành cho ADMIN ---
+  // ... (các hàm khác không thay đổi)
   async getFeedbacks(filters: QueryFilters, pagination: { page: number; limit: number; }) {
     const { status, username, submittedLabel, startDate, endDate } = filters;
     const { page, limit } = pagination;
@@ -186,6 +185,7 @@ export const feedbackService = {
     return feedback;
   },
 
+
   async updateFeedback(
     id: string,
     data: {
@@ -194,7 +194,6 @@ export const feedbackService = {
       reason?: string;
     },
     correctedLabel?: string) {
-    // TỐI ƯU: Populate prediction_id để lấy thông tin dự đoán gốc
     const feedback = await FeedbackModel.findById(id).populate('prediction_id', 'predictions');
     if (!feedback) throw new NotFoundError('Không tìm thấy feedback để cập nhật.');
 
@@ -203,70 +202,75 @@ export const feedbackService = {
     if (data.admin_id) feedback.admin_id = data.admin_id;
     if (data.reason) feedback.reason = data.reason;
 
-    // Logic di chuyển file khi trạng thái thay đổi
     if (oldStatus === 'pending_review' && (data.status === 'approved_for_training' || data.status === 'rejected')) {
-      const fileName = path.basename(feedback.file_path);
-      let destinationDir: string;
+      const from_public_id_with_ext = feedback.file_path;
+      const from_public_id = from_public_id_with_ext.substring(0, from_public_id_with_ext.lastIndexOf('.')) || from_public_id_with_ext;
 
-      // SỬA LỖI: Chuẩn hóa sourcePath.
-      // Đường dẫn lưu trong DB có thể là tuyệt đối (sau khi submit) hoặc tương đối (dữ liệu cũ).
-      // path.isAbsolute() sẽ kiểm tra điều này.
-      const sourcePath = path.isAbsolute(feedback.file_path)
-        ? feedback.file_path
-        : path.resolve(process.cwd(), feedback.file_path); // Nếu là tương đối, giả định nó nằm ở gốc project
+      if (from_public_id && from_public_id.startsWith('dataset/pending/')) {
+        const fileExtension = path.extname(from_public_id_with_ext);
+        const fileName = path.basename(from_public_id);
+        let to_public_id: string;
 
-      if (data.status === 'approved_for_training') {
-        // CẢI TIẾN LOGIC:
-        // 1. Nếu người dùng xác nhận dự đoán là ĐÚNG (isCorrect = true), lấy tên giống chó từ dự đoán gốc.
-        // 2. Nếu người dùng nói là SAI (isCorrect = false), lấy tên giống chó mà họ đã submit.
-        // 3. Fallback về 'unknown' nếu không có thông tin.
-        // 4. ƯU TIÊN: Nếu admin cung cấp `correctedLabel`, dùng nó.
-        const prediction = feedback.prediction_id as any;
-        // SỬA LỖI & CẢI TIẾN: Sử dụng slugify để tạo tên thư mục an toàn
-        // CẬP NHẬT: Chuyển đổi username thành dạng slug để đảm bảo tính nhất quán
-        const rawBreedName = correctedLabel && correctedLabel.trim() !== ''
-          ? correctedLabel
-          : feedback.isCorrect
-            ? prediction?.predictions?.[0]?.class
-            : feedback.user_submitted_label;
-        const breedName = slugify(rawBreedName || '');
-        if (!breedName) throw new Error("Không thể xác định tên giống chó để tạo thư mục. Raw name: " + rawBreedName);
+        if (data.status === 'approved_for_training') {
+          const prediction = feedback.prediction_id as any;
+          const rawBreedName = correctedLabel && correctedLabel.trim() !== ''
+            ? correctedLabel
+            : feedback.isCorrect
+              ? prediction?.predictions?.[0]?.class
+              : feedback.user_submitted_label;
+          const breedName = slugify(rawBreedName || '');
+          if (!breedName) {
+            console.warn(`[Feedback Service] Could not determine breed name for feedback ${id}. Using 'unknown'. Raw name: ${rawBreedName}`);
+            to_public_id = `dataset/approved/unknown/${fileName}`;
+          } else {
+            to_public_id = `dataset/approved/${breedName}/${fileName}`;
+          }
+        } else { // 'rejected'
+          to_public_id = `dataset/rejected/${fileName}`;
+        }
 
-        destinationDir = path.join(DATASET_DIR, 'approved', breedName);
-      } else { // rejected
-        destinationDir = path.join(DATASET_DIR, 'rejected');
-      }
-      const destinationPath = path.join(destinationDir, fileName);
-      
-      try {
-        await fs.mkdir(destinationDir, { recursive: true });
-        // **LOGIC MỚI: Sao chép file từ stream, di chuyển file từ các nguồn khác**
-        // Khi duyệt feedback, file gốc đã nằm trong thư mục 'pending'.
-        // Chúng ta luôn di chuyển nó từ 'pending' sang 'approved' hoặc 'rejected'.
-        // Logic sao chép chỉ cần thiết ở bước submit ban đầu.
-        await fs.rename(sourcePath, destinationPath);
-        feedback.file_path = destinationPath; // Cập nhật đường dẫn mới
-      } catch (error) {
-        console.warn(`[Feedback Service] Could not move file from ${sourcePath} to ${destinationPath} during status update. Error: ${(error as Error).message}`);
-        // Không cập nhật file_path nếu di chuyển thất bại
+        try {
+          console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+          
+          // GIẢI PHÁP: Tương tự như trên, rename rồi explicit để cập nhật asset_folder.
+          const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
+          const newAssetFolder = to_public_id.split('/').slice(0, -1).join('/'); // e.g., "dataset/approved/poodle"
+
+          await cloudinary.uploader.explicit(renameResult.public_id, {
+            type: 'upload',
+            asset_folder: newAssetFolder
+          });
+          
+          feedback.file_path = `${to_public_id}${fileExtension}`;
+          console.log(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
+        } catch (error) {
+          console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
+        }
+      } else {
+        console.log(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
       }
     }
     await feedback.save();
     return feedback;
   },
   
+  // ... (các hàm còn lại không đổi)
   async deleteFeedback(id: string, force: boolean = false) {
     const feedback = await FeedbackModel.findById(id);
     if (!feedback) throw new NotFoundError('Không tìm thấy feedback.');
 
     // Logic xóa cứng
     if (force) {
-      // Xóa file vật lý nếu tồn tại
+      // Xóa file trên Cloudinary nếu tồn tại
       try {
-        await fs.unlink(feedback.file_path);
+        if (feedback.file_path && feedback.file_path.startsWith('dataset/')) {
+          const public_id = feedback.file_path.substring(0, feedback.file_path.lastIndexOf('.')) || feedback.file_path;
+          console.log(`[Feedback Service] Deleting Cloudinary resource: ${public_id}`);
+          await cloudinary.uploader.destroy(public_id);
+        }
       } catch (error: any) {
-        if (error.code !== 'ENOENT') { // Ignore if file not found
-          console.error(`Không thể xóa file ${feedback.file_path}:`, error);
+        if (error.http_code !== 404) { // Ignore if not found
+          console.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
         }
       }
       await PredictionHistoryModel.updateOne({ _id: feedback.prediction_id }, { $set: { isCorrect: null } });
@@ -305,8 +309,11 @@ export const feedbackService = {
     await updatedFeedback.populate("user_id", "username email");
 
     // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
+    // SỬA LỖI: `updatedFeedback.prediction_id` là một object đã được populate,
+    // cần phải truy cập vào trường `_id` của nó để thực hiện query.
+    const predictionId = (updatedFeedback.prediction_id as any)._id;
     await PredictionHistoryModel.updateOne(
-      { _id: updatedFeedback.prediction_id },
+      { _id: predictionId },
       { $set: { isCorrect: false } }
     );
 
@@ -341,9 +348,11 @@ export const feedbackService = {
     await updatedFeedback.populate("user_id", "username email");
 
     // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
+    // SỬA LỖI: Tương tự như approve, `updatedFeedback.prediction_id` là một object đã được populate.
+    const predictionId = (updatedFeedback.prediction_id as any)._id;
     await PredictionHistoryModel.updateOne(
-      { _id: updatedFeedback.prediction_id },
-      { $set: { isCorrect: true } } // Khi từ chối, coi như dự đoán gốc là sai
+      { _id: predictionId },
+      { $set: { isCorrect: true } } // Khi từ chối, coi như dự đoán gốc là đúng
     );
 
     return updatedFeedback;

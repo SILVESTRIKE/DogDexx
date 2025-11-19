@@ -5,6 +5,7 @@ import { exec as _exec } from 'child_process';
 import { promisify } from 'util';
 import { MediaModel } from '../models/medias.model'; 
 import { logger } from './logger.util';
+import { cloudinary } from '../config/cloudinary.config';
 const exec = promisify(_exec);
 
 const cleanupOrphanedFiles = async () => {
@@ -57,13 +58,19 @@ const cleanupOrphanedFiles = async () => {
 
         for (const media of mediasToDelete) {
             try {
-                const filePath = path.join(process.cwd(), media.mediaPath);
-                await fs.unlink(filePath);
+                // Xóa file trên Cloudinary
+                if (media.mediaPath) {
+                    const public_id = media.mediaPath.substring(0, media.mediaPath.lastIndexOf('.')) || media.mediaPath;
+                    logger.info(`[CRON JOB] Deleting Cloudinary resource: ${public_id}`);
+                    await cloudinary.uploader.destroy(public_id);
+                }
+                // Xóa bản ghi trong DB
                 await MediaModel.deleteOne({ _id: media._id });
-                logger.info(`[CRON JOB] Successfully deleted file and record for media ID: ${media._id}`);
+                logger.info(`[CRON JOB] Successfully deleted Cloudinary file and DB record for media ID: ${media._id}`);
             } catch (err: any) {
-                if (err.code === 'ENOENT') {
-                    logger.warn(`[CRON JOB] File not found, deleted DB record only: ${media.mediaPath}`);
+                // Nếu file không tìm thấy trên Cloudinary (http_code 404), vẫn xóa bản ghi DB
+                if (err.http_code === 404) {
+                    logger.warn(`[CRON JOB] Cloudinary file not found, deleting DB record only for media ID: ${media._id}`);
                     await MediaModel.deleteOne({ _id: media._id });
                 } else {
                     logger.error(`[CRON JOB] Error while processing media ID ${media._id}:`, err);

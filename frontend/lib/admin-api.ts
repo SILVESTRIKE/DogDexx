@@ -320,9 +320,8 @@ export interface BrowseDatasetResponse {
 export const browseAdminDatasets = async (path: string, options: RequestInit = {}): Promise<BrowseDatasetResponse> => {
   return adminApiClient.browseAdminDatasets(path, options);
 }
-export const downloadAdminDataset = async (): Promise<Blob> => {
-  const blob = await adminApiClient.downloadAdminDataset();
-  return blob;
+export const downloadAdminDataset = async (): Promise<{ downloadUrl: string }> => {
+  return adminApiClient.downloadAdminDataset();
 }
 
 // --- THÊM MỚI: Report Management ---

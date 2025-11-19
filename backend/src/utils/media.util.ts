@@ -1,15 +1,7 @@
 import { Request } from 'express';
-import path from 'path';
 
-// Lấy Cloudinary cloud name từ biến môi trường.
 const CLOUD_NAME = process.env.CLOUD_NAME_CLOUDINARY;
 
-/**
- * Hàm đệ quy để biến đổi các đường dẫn media lưu trong DB thành URL Cloudinary đầy đủ.
- * @param req - Đối tượng Request của Express để lấy protocol và host.
- * @param data - Dữ liệu đầu vào (object hoặc array).
- * @returns Dữ liệu đã được biến đổi với các URL đầy đủ.
- */
 const transformPaths = (req: Request, data: any): any => {
     // Điều kiện dừng đệ quy: nếu data không phải object, hoặc là null/Date, trả về chính nó.
     if (data === null || typeof data !== 'object' || data instanceof Date) return data;
@@ -19,15 +11,14 @@ const transformPaths = (req: Request, data: any): any => {
     // Sao chép object để tránh thay đổi dữ liệu gốc (đặc biệt quan trọng với Mongoose documents).
     const obj = typeof data.toObject === 'function' ? data.toObject() : { ...data };
 
-    // Hàm helper để tạo URL đầy đủ.
     const createFullUrl = (dbPath: string) => {
         if (!dbPath) return dbPath;
 
-        // If dbPath is already a full URL, return as-is
-        if (/^https?:\/\//i.test(dbPath)) return dbPath;
+        // SỬA LỖI: Nếu dbPath đã là một URL đầy đủ, trả về ngay lập tức.
+        if (dbPath.startsWith('http://') || dbPath.startsWith('https://')) return dbPath;
 
         // 1. Xử lý các đường dẫn Cloudinary (bắt đầu bằng 'public/')
-        if (dbPath.startsWith('public/') && CLOUD_NAME) {
+        if ((dbPath.startsWith('public/') || dbPath.startsWith('uploads/') || dbPath.startsWith('dataset/')) && CLOUD_NAME) {
             // Xác định loại tài nguyên (image/video) dựa trên đường dẫn.
             const resourceType = dbPath.includes('/videos/') ? 'video' : 'image';
             const publicIdWithFolder = dbPath.replace(/\\/g, "/");

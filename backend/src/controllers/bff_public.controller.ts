@@ -79,8 +79,11 @@ export const bffPublicController = {
     try {
       const { email, message, captchaToken } = req.body;
       if (!email || !message || !captchaToken) throw new BadRequestError('Email, message, and captchaToken are required.');
+      
+      // The verifyRecaptcha function already has internal error handling, but we catch here as well.
       const isCaptchaValid = await verifyRecaptcha(captchaToken);
       if (!isCaptchaValid) throw new BadRequestError('Invalid CAPTCHA. Please try again.');
+      
       await emailService.sendContactFormEmail({ fromEmail: email, message });
       res.status(200).json({ message: 'Thank you! Your feedback has been sent.' });
     } catch (error) {

@@ -108,19 +108,16 @@ export default function DatasetsPage() {
 
   const handleDownload = async () => {
     setIsDownloading(true);
-    toast.info("Đang chuẩn bị file, quá trình này có thể mất vài phút...");
+    toast.info("Đang lấy link tải xuống từ Cloudinary...");
     try {
-      const fileBlob = await downloadAdminDataset();
-      // Logic để tải file về máy người dùng
-      const url = window.URL.createObjectURL(fileBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dataset.zip`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("File dataset.zip đã bắt đầu được tải xuống.");
+      // 1. Gọi API để lấy URL tải về
+      const response = await downloadAdminDataset();
+      const downloadUrl = response.downloadUrl;
+
+      // 2. Mở URL trong một tab mới, trình duyệt sẽ tự động tải file
+      window.open(downloadUrl, '_blank');
+      
+      toast.success("Đã mở link tải về. Quá trình tải xuống sẽ sớm bắt đầu.");
     } catch (error) {
       toast.error("Tải xuống thất bại", { description: (error as Error).message });
     } finally {
@@ -158,7 +155,7 @@ export default function DatasetsPage() {
         </div>
         <Button onClick={handleDownload} disabled={isDownloading}>
           <Download className="mr-2 h-4 w-4" />
-          {isDownloading ? "Đang nén file..." : "Tải toàn bộ Dataset (.zip)"}
+          {isDownloading ? "Đang lấy link..." : "Tải toàn bộ Dataset (.zip)"}
         </Button>
       </div>
 
@@ -211,7 +208,7 @@ export default function DatasetsPage() {
                   onClick={() => item.type === "folder" ? handleFolderClick(item) : (setSelectedItem(item), setShowPreview(true))}>
                   <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                     {item.type === 'image' && item.url ? (
-                       <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" crossOrigin="anonymous" />
+                      <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" crossOrigin="anonymous" />
                     ) : (
                       renderItemIcon(item)
                     )}

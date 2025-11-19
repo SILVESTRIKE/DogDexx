@@ -148,7 +148,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                           required
                         />
                       </div>
-                      <div className="space-y-2">
+                      {/* <div className="space-y-2">
                         <Label htmlFor="register-avatar">{t("auth.avatar")}</Label>
                         <Input
                           id="register-avatar"
@@ -159,7 +159,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                           }}
                           className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                         />
-                      </div>
+                      </div> */}
                     </>
                   )}
                   <div className="space-y-2">

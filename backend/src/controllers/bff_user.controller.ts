@@ -12,6 +12,8 @@ import { redisClient } from '../utils/redis.util';
 import { tokenConfig } from '../config/token.config';
 import { NextFunction } from 'express';
 import { userController } from './user.controller';
+import { RegisterSchema, UpdateProfileSchema } from '../types/zod/user.zod'; 
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { user, accessToken, refreshToken } = await authService.login(req.body.email, req.body.password);
@@ -102,8 +104,15 @@ export const getSessionStatus = async (req: Request, res: Response, next: NextFu
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const validationResult = RegisterSchema.shape.body.safeParse(req.body);
+    if (!validationResult.success) {
+      const errorMessage = validationResult.error.errors.map(e => e.message).join(', ');
+      // Ném lỗi để middleware xử lý lỗi chung có thể bắt được
+      throw new BadRequestError(errorMessage);
+    }
+    const userData = validationResult.data;
+
     console.log('[BFF_CONTROLLER] Bắt đầu xử lý request đăng ký...');
-    const userData = req.body;
     const avatarFile = req.file;
     console.log('[BFF_CONTROLLER] Dữ liệu nhận được:', { ...userData, password: '***' });
     if (avatarFile) console.log('[BFF_CONTROLLER] Đã nhận được file avatar:', avatarFile.originalname);
@@ -122,9 +131,16 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const validationResult = UpdateProfileSchema.shape.body.safeParse(req.body);
+     if (!validationResult.success) {
+      const errorMessage = validationResult.error.errors.map(e => e.message).join(', ');
+      throw new BadRequestError(errorMessage);
+    }
+    const updateData = validationResult.data;
+      
     const userId = (req as any).user!._id.toString();
-    const updateData = req.body;
     const avatarFile = req.file;
+
     const updatedUser = await userService.updateUser(userId, updateData, avatarFile);
     res.status(200).json({
       message: "Cập nhật hồ sơ thành công.",

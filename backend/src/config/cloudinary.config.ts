@@ -57,23 +57,41 @@ export const predictionStorage = new CloudinaryStorage({
   },
 });
 
-// --- Storage Engine cho Avatar ---
 export const avatarStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: async (req: Request, file: Express.Multer.File) => {
-    const userId = req.user?._id || "temp";
-    const timestamp = Date.now();
-    const filenameWithoutExt = `${userId}_${timestamp}`;
-    const publicId = `public/useravatar/${filenameWithoutExt}`;
+  params: (req: Request, file: Express.Multer.File) => {
+    try {
+      console.log('[avatarStorage] Bắt đầu xử lý params.');
+      const now = new Date();
+      const year = now.getFullYear().toString();
+      const month = (now.getMonth() + 1).toString().padStart(2, '0');
+      
+      // Bắt chước 100% logic của predictionStorage
+      const week = `week-${getWeekOfMonth(now)}`;
+      const relativeFolderPath = path.join("uploads", "avatars", year, month, week); // Thêm subfolder 'avatars' để phân biệt
+      
+      const dateString = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
+      const randomChars = crypto.randomBytes(3).toString("hex").slice(0, 5);
+      const filenameWithoutExt = `${dateString}_${randomChars}`;
 
-    return {
-      public_id: publicId,
-      resource_type: 'image',
-      transformation: [{ width: 250, height: 250, crop: 'thumb', gravity: 'face' }],
-    };
+      const publicId = `public/${relativeFolderPath.replace(/\\/g, "/")}/${filenameWithoutExt}`;
+      
+      const result = {
+        public_id: publicId,
+        resource_type: 'auto', // GIỐNG HỆT predictionStorage
+      };
+
+      // === LOG CUỐI CÙNG TRƯỚC KHI TRẢ VỀ ===
+      console.log('[avatarStorage] Chuẩn bị trả về object cho multer:', result);
+      
+      return result;
+
+    } catch (error) {
+      console.error('[avatarStorage] Lỗi bên trong hàm params:', error);
+      throw new Error('Lỗi khi xử lý thông số upload avatar.');
+    }
   },
 });
 
-// THAY ĐỔI Ở ĐÂY: Thêm 'cloudinary' vào danh sách export
-// Ban đầu có thể bạn chỉ export các storage engine
+
 export { cloudinary };

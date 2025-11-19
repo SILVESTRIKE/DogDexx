@@ -1,12 +1,29 @@
+// src/routes/bff/user.routes.ts
+
 import { Router } from 'express';
-import { register, login, getProfile, updateProfile, logout, verifyOtp, refreshToken, updateAvatar, createCheckoutSession, getSessionStatus, handleMomoIpn} from '../controllers/bff_user.controller';
+import { 
+    register, 
+    login, 
+    getProfile, 
+    updateProfile, 
+    logout, 
+    verifyOtp, 
+    refreshToken, 
+    updateAvatar, 
+    createCheckoutSession, 
+    getSessionStatus, 
+    handleMomoIpn,
+    forgotPassword, 
+    resetPassword, 
+    deleteCurrentUser 
+} from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { validateData } from '../middlewares/validateBody.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
 import { uploadAvatar } from '../middlewares/upload.middleware';
-import { RegisterSchema, ForgotPasswordSchema, ResetPasswordSchema } from '../types/zod/user.zod';
+import { ForgotPasswordSchema, ResetPasswordSchema } from '../types/zod/user.zod';
 import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
-import { forgotPassword, resetPassword, deleteCurrentUser } from '../controllers/bff_user.controller';
+
 const router = Router();
 
 /**
@@ -43,7 +60,8 @@ const router = Router();
  *       201:
  *         description: Đăng ký thành công, chờ xác thực OTP.
  */
-router.post('/register', uploadAvatar, validateData(RegisterSchema.shape.body, 'body'), register);
+// THAY ĐỔI: Đã xóa `validateData(...)` ra khỏi dòng này
+router.post('/register', uploadAvatar, register);
 
 /**
  * @swagger
@@ -239,6 +257,7 @@ router.delete('/profile', authMiddleware, deleteCurrentUser);
  *         description: Cập nhật ảnh đại diện thành công.
  */
 router.post('/avatar', authMiddleware, uploadAvatar, updateAvatar);
+
 /**
  * @swagger
  * /bff/user/logout:
@@ -309,6 +328,5 @@ router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
 router.get('/session-status', optionalAuthMiddleware, getSessionStatus);
 
 router.post('/momo-ipn', handleMomoIpn);
-
 
 export default router;

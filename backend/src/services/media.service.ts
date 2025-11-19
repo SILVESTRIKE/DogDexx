@@ -5,9 +5,10 @@ import {
 } from "../types/zod/medias.zod";
 import { FilterQuery } from "mongoose";
 import { z } from "zod";
-import path from "path";
-import fs from "fs/promises";
-import { v4 as uuidv4 } from 'uuid';
+import path from 'path';
+import { cloudinary } from '../config/cloudinary.config';
+import { DirectoryModel } from '../models/directory.model';
+import fs from 'fs/promises';
 
 export interface FindMediasOptions {
   page?: number;
@@ -55,45 +56,65 @@ export class MediaService {
   }
 
   /**
-   * Di chuyển một media sang một thư mục logic khác, đồng thời di chuyển file vật lý.
+   * Di chuyển một media sang một thư mục logic khác, đồng thời di chuyển file trên Cloudinary.
    * @param mediaId ID của media cần di chuyển.
    * @param newDirectoryId ID của thư mục đích (có thể là null để chuyển ra thư mục gốc).
    * @returns Media đã được cập nhật hoặc null nếu không tìm thấy.
    */
   static async moveMedia(
     mediaId: string,
-    newDirectoryId: string | null
+    newDirectoryId: string | null,
   ): Promise<MediaDoc | null> {
     const media = await MediaModel.findById(mediaId);
     if (!media) {
       return null;
     }
 
-    const oldPath = path.resolve(media.mediaPath);
+    const oldPublicIdWithExt = media.mediaPath;
+    const oldPublicId = oldPublicIdWithExt.substring(0, oldPublicIdWithExt.lastIndexOf('.')) || oldPublicIdWithExt;
+    const fileExtension = path.extname(oldPublicIdWithExt);
+    const fileName = path.basename(oldPublicId);
 
-    // Tạo đường dẫn vật lý mới dựa trên ngày hiện tại
-    const now = new Date();
-    const year = now.getFullYear().toString();
-    const month = (now.getMonth() + 1).toString().padStart(2, '0');
-    const fileExtension = path.extname(media.mediaPath);
-    const newFilename = `${uuidv4()}${fileExtension}`;
-    
-    // Giả định thư mục upload có cấu trúc uploads/<type>/<year>/<month>
-    // media.type có thể là 'image/jpeg', ta chỉ cần 'image'
-    const mediaTypeFolder = media.type ? media.type.split('/')[0] : 'unknown';
-    const newDir = path.join(process.cwd(), 'uploads', mediaTypeFolder, year, month);
-    const newPath = path.join(newDir, newFilename);
-    const newRelativePath = path.join('uploads', mediaTypeFolder, year, month, newFilename).replace(/\\/g, '/');
+    // Hàm đệ quy để xây dựng đường dẫn đầy đủ từ directoryId
+    const buildFullPath = async (dirId: string | null): Promise<string> => {
+      if (!dirId) return 'public/uploads'; // Thư mục gốc cho media của người dùng
+      let current = await DirectoryModel.findById(dirId);
+      if (!current) return 'public/uploads';
+      let parts = [current.name];
+      while (current && current.parent_id) {
+        current = await DirectoryModel.findById(current.parent_id);
+        if (current) parts.unshift(current.name);
+      }
+      return `public/uploads/${parts.join('/')}`;
+    };
 
-    // Đảm bảo thư mục đích tồn tại
-    await fs.mkdir(newDir, { recursive: true });
+    const newFolderPath = await buildFullPath(newDirectoryId);
+    const newPublicId = `${newFolderPath}/${fileName}`;
 
-    // Di chuyển file vật lý
-    await fs.rename(oldPath, newPath);
+    // Chỉ di chuyển nếu đường dẫn thay đổi
+    if (oldPublicId !== newPublicId) {
+      try {
+        console.log(`[Media Service] Moving Cloudinary resource from '${oldPublicId}' to '${newPublicId}' and updating asset_folder.`);
+        // GIẢI PHÁP: Rename trước, sau đó dùng explicit để cập nhật asset_folder.
+        const renameResult = await cloudinary.uploader.rename(oldPublicId, newPublicId, { overwrite: true });
+        
+        await cloudinary.uploader.explicit(renameResult.public_id, {
+          type: 'upload',
+          asset_folder: newFolderPath // newFolderPath đã được build ở trên
+        });
+      } catch (error: any) {
+        // Nếu file đã tồn tại ở đích, ta vẫn tiếp tục và cập nhật DB
+        if (error.http_code !== 422) { // 422: "Resource with public_id ... already exists"
+          console.error(`[Media Service] Failed to move Cloudinary file:`, error.message);
+          throw error; // Ném lỗi nếu không phải lỗi "đã tồn tại"
+        }
+        console.warn(`[Media Service] Destination '${newPublicId}' already exists. Proceeding to update DB record.`);
+      }
+    }
 
     // Cập nhật lại media trong DB
     media.directory_id = newDirectoryId as any;
-    media.mediaPath = newRelativePath;
+    media.mediaPath = `${newPublicId}${fileExtension}`;
     return media.save();
   }
   

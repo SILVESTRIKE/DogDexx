@@ -24,100 +24,110 @@ export type DogDexBreed = {
 };
 
 export const getDogDex = async (req: Request, res: Response) => {
-  const userId = req.user?._id;
-  const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
+  try {
+    const userId = req.user?._id;
+    const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
 
-  // 1. Lấy và chuẩn bị các tham số query
-  const {
-    page = 1,
-    limit = 20,
-    search,
-    group,
-    energy_level,
-    trainability,
-    shedding_level,
-    suitable_for,
-    sort,
-    isCollected
-  } = req.query;
+    // 1. Lấy và chuẩn bị các tham số query
+    const {
+      page = 1,
+      limit = 20,
+      search,
+      group,
+      energy_level,
+      trainability,
+      shedding_level,
+      suitable_for,
+      sort,
+      isCollected
+    } = req.query;
 
-  const options: any = {
-    page: Number(page),
-    limit: Number(limit),
-    search,
-    group,
-    energy_level: energy_level ? Number(energy_level) : undefined,
-    trainability: trainability ? Number(trainability) : undefined,
-    shedding_level: shedding_level ? Number(shedding_level) : undefined,
-    suitable_for,
-    sort,
-    lang,
-  };
-
-  let collectedBreedsCount = 0;
-  const userCollectionMap = new Map<string, { collectedAt: Date; source: string }>();
-
-  // 2. Nếu user đã đăng nhập, LUÔN LUÔN lấy dữ liệu bộ sưu tập của họ
-  if (userId) {
-    const userCollection = await collectionService.getUserCollection(userId, lang); // Đã sửa ở các lượt trước, đảm bảo đúng
-    collectedBreedsCount = userCollection.length;
-
-    userCollection.forEach((item: any) => {
-      // Dữ liệu đã được populate và lean()
-      if (item.breed_id?.slug && item.first_prediction_id) {
-        userCollectionMap.set(item.breed_id.slug, {
-          collectedAt: item.first_prediction_id?.createdAt,
-          source: item.first_prediction_id?.source
-        });
-      }
-    });
-    
-    // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
-    const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
-    if (userId && isCollected === 'true') {
-      // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
-      options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
-    } else if (isCollected === 'false') {
-      options.excludeIds = collectedBreedIds;
-    }
-  }
-
-  // 4. Gọi Wiki Service MỘT LẦN DUY NHẤT với tất cả các options
-  const [breedsResult, totalBreedsInSystem] = await Promise.all([
-    wikiService.getAllBreeds(options),
-    wikiService.getTotalBreedsCount(lang) // Lấy tổng số theo ngôn ngữ, đã sửa ở service
-  ]);
-
-  // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
-  let breedsResponse: DogDexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
-    const collectionInfo = userCollectionMap.get(breed.slug);
-    return {
-      slug: breed.slug,
-      breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
-      group: breed.group,
-      dogdexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
-      origin: breed.origin,
-      mediaUrl: breed.mediaUrl,
-      rarity_level: breed.rarity_level,
-      isCollected: !!collectionInfo,
-      collectedAt: collectionInfo?.collectedAt || null,
-      source: collectionInfo?.source || null,
+    const options: any = {
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      group,
+      energy_level: energy_level ? Number(energy_level) : undefined,
+      trainability: trainability ? Number(trainability) : undefined,
+      shedding_level: shedding_level ? Number(shedding_level) : undefined,
+      suitable_for,
+      sort,
+      lang,
     };
-  });
 
-  // 5.5. Sắp xếp ở tầng ứng dụng bằng cách gọi service
-  breedsResponse = collectionService.sortDogDex(breedsResponse, sort as string);
+    let collectedBreedsCount = 0;
+    const userCollectionMap = new Map<string, { collectedAt: Date; source: string }>();
 
-  // 6. Trả về kết quả cuối cùng
-  res.status(200).json({
-    stats: {
-      totalBreeds: totalBreedsInSystem,
-      collectedBreeds: collectedBreedsCount,
-      progress: totalBreedsInSystem > 0 ? (collectedBreedsCount / totalBreedsInSystem) * 100 : 0,
-    },
-    breeds: breedsResponse,
-    pagination: breedsResult.pagination,
-  });
+    // 2. Nếu user đã đăng nhập, LUÔN LUÔN lấy dữ liệu bộ sưu tập của họ
+    if (userId) {
+      const userCollection = await collectionService.getUserCollection(userId, lang); // Đã sửa ở các lượt trước, đảm bảo đúng
+      collectedBreedsCount = userCollection.length;
+
+      userCollection.forEach((item: any) => {
+        // Dữ liệu đã được populate và lean()
+        if (item.breed_id?.slug && item.first_prediction_id) {
+          userCollectionMap.set(item.breed_id.slug, {
+            collectedAt: item.first_prediction_id?.createdAt,
+            source: item.first_prediction_id?.source
+          });
+        }
+      });
+      
+      // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
+      const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
+      if (userId && isCollected === 'true') {
+        // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
+        options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
+      } else if (isCollected === 'false') {
+        options.excludeIds = collectedBreedIds;
+      }
+    }
+
+    // 4. Gọi Wiki Service MỘT LẦN DUY NHẤT với tất cả các options
+    const [breedsResult, totalBreedsInSystem] = await Promise.all([
+      wikiService.getAllBreeds(options),
+      wikiService.getTotalBreedsCount(lang) // Lấy tổng số theo ngôn ngữ, đã sửa ở service
+    ]);
+
+    // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
+    let breedsResponse: DogDexBreed[] = transformMediaURLs(req, breedsResult.data).map((breed: any) => {
+      const collectionInfo = userCollectionMap.get(breed.slug);
+      return {
+        slug: breed.slug,
+        breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
+        group: breed.group,
+        dogdexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
+        origin: breed.origin,
+        mediaUrl: breed.mediaUrl,
+        rarity_level: breed.rarity_level,
+        isCollected: !!collectionInfo,
+        collectedAt: collectionInfo?.collectedAt || null,
+        source: collectionInfo?.source || null,
+      };
+    });
+
+    // 5.5. Sắp xếp ở tầng ứng dụng bằng cách gọi service
+    breedsResponse = collectionService.sortDogDex(breedsResponse, sort as string);
+
+    // 6. Trả về kết quả cuối cùng
+    res.status(200).json({
+      stats: {
+        totalBreeds: totalBreedsInSystem,
+        collectedBreeds: collectedBreedsCount,
+        progress: totalBreedsInSystem > 0 ? (collectedBreedsCount / totalBreedsInSystem) * 100 : 0,
+      },
+      breeds: breedsResponse,
+      pagination: breedsResult.pagination,
+    });
+  } catch (error) {
+    // `res` is available here, but we should use `next` for error handling in Express
+    // For now, let's assume there's a `next` function available or this is a simplified example.
+    // A proper Express controller would have `(req, res, next)`.
+    // Since this is a `res.status(500)` call, it implies error handling.
+    // Let's log the error and send a generic response.
+    logger.error('Error in getDogDex:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 };
 
 export const addBreed = async (req: Request, res: Response) => {
@@ -163,64 +173,74 @@ export const addBreed = async (req: Request, res: Response) => {
 };
 
 export const getAchievements = async (req: Request, res: Response) => {
-  const userId = req.user!._id;
-  const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
-    ? req.query.lang as 'vi' | 'en'
-    : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+  try {
+    const userId = req.user!._id;
+    const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
+      ? req.query.lang as 'vi' | 'en'
+      : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
-  if (!userId) throw new NotFoundError('User not found to get achievements.');
-  const [user, userCollections, totalBreedsInSystem] = await Promise.all([
-    userService.getById(userId.toString()),
-    collectionService.getUserCollection(userId, lang),
-    wikiService.getTotalBreedsCount(lang), // Sửa ở đây: truyền lang vào
-  ]);
+    if (!userId) throw new NotFoundError('User not found to get achievements.');
+    const [user, userCollections, totalBreedsInSystem] = await Promise.all([
+      userService.getById(userId.toString()),
+      collectionService.getUserCollection(userId, lang),
+      wikiService.getTotalBreedsCount(lang), // Sửa ở đây: truyền lang vào
+    ]);
 
-  // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
-  if (!user) {
-    throw new NotFoundError('User not found');
+    // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const achievementsResult = await achievementService.processUserAchievements(user, userCollections, lang);
+    const unlockedMap = new Map(user.achievements.map(ua => [ua.key, ua.unlockedAt]));
+    const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
+    const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
+
+    res.json({
+      stats: {
+        totalAchievements: achievementsResult.length,
+        totalBreeds: totalBreedsInSystem,
+        unlockedAchievements: unlockedCount,
+        totalCollected: userCollections.length,
+      },
+      // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
+      nextAchievement: nextAchievement
+        ? {
+            name: nextAchievement.name,
+            requirement: nextAchievement.condition.value,
+            progress: userCollections.length,
+          }
+        : null,
+      achievements: achievementsResult.map(ach => ({
+        id: ach.key,
+        title: ach.name,
+        description: ach.description,
+        icon: ach.icon || '🏆',
+        requiredCount: ach.condition?.value || 0, // <-- Sửa ở đây
+        unlocked: ach.unlocked,
+        unlockedAt: unlockedMap.get(ach.key) || null,
+      }))
+    });
+  } catch (error) {
+    logger.error('Error in getAchievements:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
   }
-
-  const achievementsResult = await achievementService.processUserAchievements(user, userCollections, lang);
-  const unlockedMap = new Map(user.achievements.map(ua => [ua.key, ua.unlockedAt]));
-  const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
-  const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
-
-  res.json({
-    stats: {
-      totalAchievements: achievementsResult.length,
-      totalBreeds: totalBreedsInSystem,
-      unlockedAchievements: unlockedCount,
-      totalCollected: userCollections.length,
-    },
-    // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
-    nextAchievement: nextAchievement
-      ? {
-          name: nextAchievement.name,
-          requirement: nextAchievement.condition.value,
-          progress: userCollections.length,
-        }
-      : null,
-    achievements: achievementsResult.map(ach => ({
-      id: ach.key,
-      title: ach.name,
-      description: ach.description,
-      icon: ach.icon || '🏆',
-      requiredCount: ach.condition?.value || 0, // <-- Sửa ở đây
-      unlocked: ach.unlocked,
-      unlockedAt: unlockedMap.get(ach.key) || null,
-    }))
-  });
 };
 
 export const getStats = async (req: Request, res: Response) => {
-  const userId = req.user!._id;
-  const stats = await collectionService.getCollectionStats(userId);
+  try {
+    const userId = req.user!._id;
+    const stats = await collectionService.getCollectionStats(userId);
 
-  res.status(200).json({
-    data: {
-      unique_breeds_collected: stats.totalCollected,
-      total_predictions_in_collection: stats.totalPredictionsInCollection,
-      top_5_collected_breeds: stats.topBreeds,
-    }
-  });
+    res.status(200).json({
+      data: {
+        unique_breeds_collected: stats.totalCollected,
+        total_predictions_in_collection: stats.totalPredictionsInCollection,
+        top_5_collected_breeds: stats.topBreeds,
+      }
+    });
+  } catch (error) {
+    logger.error('Error in getStats:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
 };

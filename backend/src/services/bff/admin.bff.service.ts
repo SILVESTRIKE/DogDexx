@@ -174,7 +174,7 @@ export class AdminBffService {
 
   public async downloadDataset() {
     console.log('[BFF Service] Yêu cầu tải về dataset archive.');
-    return this.adminService.downloadDatasetArchive();
+    return this.adminService.generateDatasetArchiveUrl();
   }
 
   public async getAdminHistories(options: { page?: number; limit?: number; search?: string; }) {

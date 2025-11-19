@@ -90,130 +90,194 @@ function transformMediaForAdmin(req: Request, mediaDoc: any) {
 const adminBffService = new AdminBffService();
 
 export const getDashboard = async (req: Request, res: Response, next: NextFunction) => {
-  const dashboardData = await adminBffService.getDashboardData();
-  res.status(200).json(dashboardData);
+  try {
+    const dashboardData = await adminBffService.getDashboardData();
+    res.status(200).json(dashboardData);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getFeedback = async (req: Request, res: Response, next: NextFunction) => {
-  const { page = 1, limit = 10, status, search, startDate, endDate } = req.query as any;
-  const pagination = { page: Number(page), limit: Number(limit) };
-  const filters = { status, username: search, startDate, endDate };
-  const feedbackData = await adminBffService.getAdminFeedback(filters, pagination);
-  const transformedFeedbacks = feedbackData.feedbacks.data.map(fb => transformFeedbackForAdmin(req, fb));
-  res.status(200).json({
-    ...feedbackData,
-    feedbacks: { ...feedbackData.feedbacks, data: transformedFeedbacks },
-  });
+  try {
+    const { page = 1, limit = 10, status, search, startDate, endDate } = req.query as any;
+    const pagination = { page: Number(page), limit: Number(limit) };
+    const filters = { status, username: search, startDate, endDate };
+    const feedbackData = await adminBffService.getAdminFeedback(filters, pagination);
+    const transformedFeedbacks = feedbackData.feedbacks.data.map(fb => transformFeedbackForAdmin(req, fb));
+    res.status(200).json({
+      ...feedbackData,
+      feedbacks: { ...feedbackData.feedbacks, data: transformedFeedbacks },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const approveFeedback = async (req: Request, res: Response, next: NextFunction) => {
-  const { id } = req.params;
-  const adminId = (req as any).user._id;
-  const { correctedLabel } = req.body; // Lấy correctedLabel từ body
-  const result = await adminBffService.approveFeedback(id, adminId, { correctedLabel });
-  res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user._id;
+    const { correctedLabel } = req.body; // Lấy correctedLabel từ body
+    const result = await adminBffService.approveFeedback(id, adminId, { correctedLabel });
+    res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const rejectFeedback = async (req: Request, res: Response, next: NextFunction) => {
-  const { id } = req.params;
-  const adminId = (req as any).user._id;
-  const { reason } = req.body; // Lấy reason từ body
-  const result = await adminBffService.rejectFeedback(id, adminId, { reason });
-  res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
+  try {
+    const { id } = req.params;
+    const adminId = (req as any).user._id;
+    const { reason } = req.body; // Lấy reason từ body
+    const result = await adminBffService.rejectFeedback(id, adminId, { reason });
+    res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
-  const usersData = await adminBffService.getEnrichedUsers({
-    page: parseInt(req.query.page as string, 10) || 1,
-    limit: parseInt(req.query.limit as string, 10) || 10,
-    search: req.query.search as string | undefined,
-  });
-  res.status(200).json(usersData);
+  try {
+    const usersData = await adminBffService.getEnrichedUsers({
+      page: parseInt(req.query.page as string, 10) || 1,
+      limit: parseInt(req.query.limit as string, 10) || 10,
+      search: req.query.search as string | undefined,
+    });
+    res.status(200).json(usersData);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const browseMedia = async (req: Request, res: Response, next: NextFunction) => {
-  const path = req.query.path as string || "";
-  const result = await adminBffService.browseMedia(path);
-  res.status(200).json({
-    directories: result.directories,
-    media: result.media.map(m => transformMediaForAdmin(req, m)),
-  });
+  try {
+    const path = req.query.path as string || "";
+    const result = await adminBffService.browseMedia(path);
+    res.status(200).json({
+      directories: result.directories,
+      media: result.media.map(m => transformMediaForAdmin(req, m)),
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const deleteMedia = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.deleteMedia(req.params.id);
-  res.status(200).json(result);
+  try {
+    const result = await adminBffService.deleteMedia(req.params.id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const createUser = async (req: Request, res: Response, next: NextFunction) => {
-  const { username, email, password, role, verify } = req.body;
-  const result = await adminBffService.createUser({ username, email, password, role, verify });
-  res.status(201).json(result);
+  try {
+    const { username, email, password, role, verify } = req.body;
+    const result = await adminBffService.createUser({ username, email, password, role, verify });
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const updateUser = async (req: Request, res: Response, next: NextFunction) => {
-  const { id } = req.params;
-  const { username, email, role, status } = req.body;
-  const result = await adminBffService.updateUser(id, { username, email, role, status });
-  res.status(200).json(result);
+  try {
+    const { id } = req.params;
+    const { username, email, role, status } = req.body;
+    const result = await adminBffService.updateUser(id, { username, email, role, status });
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getUsageStats = async (req: Request, res: Response, next: NextFunction) => {
-  const usageData = await adminBffService.getUsageStats();
-  res.status(200).json(usageData);
+  try {
+    const usageData = await adminBffService.getUsageStats();
+    res.status(200).json(usageData);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getModelConfig = async (req: Request, res: Response, next: NextFunction) => {
-  const fullConfig = await adminBffService.getModelConfig();
-  res.status(200).json({
-    message: 'Lấy cấu hình model thành công.',
-    data: fullConfig,
-  });
+  try {
+    const fullConfig = await adminBffService.getModelConfig();
+    res.status(200).json({
+      message: 'Lấy cấu hình model thành công.',
+      data: fullConfig,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getHistories = async (req: Request, res: Response, next: NextFunction) => {
-  const { page = 1, limit = 10, search } = req.query as any;
-  const result = await adminBffService.getAdminHistories({
-    page: Number(page),
-    limit: Number(limit),
-    search,
-  });
-  const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
-  res.status(200).json({
-    data: transformedHistories,
-    pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages },
-  });
+  try {
+    const { page = 1, limit = 10, search } = req.query as any;
+    const result = await adminBffService.getAdminHistories({
+      page: Number(page),
+      limit: Number(limit),
+      search,
+    });
+    const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
+    res.status(200).json({
+      data: transformedHistories,
+      pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages },
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const browseHistories = async (req: Request, res: Response, next: NextFunction) => {
-  const path = req.query.path as string;
-  const result = await adminBffService.browseHistories(path || "", req.query);
-  const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
-  res.status(200).json({
-    directories: result.directories,
-    histories: transformedHistories,
-  });
+  try {
+    const path = req.query.path as string;
+    const result = await adminBffService.browseHistories(path || "", req.query);
+    const transformedHistories = result.histories.map((h: any) => transformHistoryForAdmin(req, h));
+    res.status(200).json({
+      directories: result.directories,
+      histories: transformedHistories,
+    });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const updateModelConfig = async (req: Request, res: Response, next: NextFunction) => {
-  // modelId không còn được quản lý ở đây, nó được xử lý bởi activateAIModel.
-  // Hàm này chỉ cập nhật các cấu hình khác như device, thresholds.
-  const result = await adminBffService.updateModelConfig(undefined, req.body);
-  res.status(200).json(result);
+  try {
+    // modelId không còn được quản lý ở đây, nó được xử lý bởi activateAIModel.
+    // Hàm này chỉ cập nhật các cấu hình khác như device, thresholds.
+    const result = await adminBffService.updateModelConfig(undefined, req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const getAlerts = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.getAlerts();
-  res.status(200).json(result);
+  try {
+    const result = await adminBffService.getAlerts();
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const uploadModel = async (req: Request, res: Response, next: NextFunction) => {
-  const file = req.file; // SỬA: Lấy file từ req.file (do dùng multer.single)
-  if (!file) {
-    throw new AppError("Model file is required.");
+  try {
+    const file = req.file; // SỬA: Lấy file từ req.file (do dùng multer.single)
+    if (!file) {
+      throw new AppError("Model file is required.");
+    }
+    const result = await adminBffService.uploadModel(file, req.body, (req as any).user.id);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
   }
-  const result = await adminBffService.uploadModel(file, req.body, (req as any).user.id);
-  res.status(201).json(result);
 };
 
 function transformDatasetFileForAdmin(req: Request, file: any) {
@@ -240,104 +304,111 @@ export const browseDatasets = async (req: Request, res: Response, next: NextFunc
 
 export const downloadDataset = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // VÔ HIỆU HÓA TIMEOUT: Cho phép server xử lý tác vụ nén file trong thời gian dài.
-    req.setTimeout(0);
-
-    const archive = await adminBffService.downloadDataset();
-    let connectionClosed = false; // Thêm biến cờ để theo dõi trạng thái kết nối
-
-    res.setHeader('Content-Type', 'application/zip');
-    res.setHeader('Content-Disposition', 'attachment; filename=dataset.zip');
-
-    // Khi client đóng kết nối đột ngột (ví dụ: đóng tab), hủy quá trình nén.
-    res.on('close', () => {
-      logger.warn('[Admin Controller] Client đã đóng kết nối, hủy quá trình tạo archive.');
-      connectionClosed = true;
-      archive.abort();
-    });
-
-    // SỬA LỖI: Xử lý lỗi từ stream một cách an toàn.
-    // Thay vì `throw`, hãy chuyển lỗi cho Express xử lý.
-    archive.on('error', (err) => {
-      logger.error('[Admin Controller] Lỗi trong quá trình tạo archive zip:', err);
-      next(err); // Chuyển lỗi đến middleware xử lý lỗi của Express.
-    });
-    archive.pipe(res);
-
-    // Bắt đầu quá trình nén và gửi đi.
-    await archive.finalize();
-    // Chỉ ghi log thành công nếu kết nối không bị đóng
-    if (!connectionClosed) {
-      logger.info('[Admin Controller] Đã gửi file dataset.zip thành công.');
-    }
+    // Lấy URL tải về có chữ ký từ service
+    const downloadUrl = await adminBffService.downloadDataset();
+    
+    res.status(200).json({ downloadUrl });
+    logger.info('[Admin Controller] Sent dataset download URL to client.');
   } catch (error) {
     next(error);
   }
 };
 
 export const getPlans = async (req: Request, res: Response, next: NextFunction) => {
-  const plansData = await adminBffService.getPlans({
+  try {
+    const plansData = await adminBffService.getPlans({
       page: parseInt(req.query.page as string, 10) || 1,
       limit: parseInt(req.query.limit as string, 10) || 10,
       search: req.query.search as string | undefined,
-  });
-  res.status(200).json(plansData);
+    });
+    res.status(200).json(plansData);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // THÊM: Hàm controller để tạo Plan mới
 export const createPlan = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.createPlan(req.body);
-  res.status(201).json(result);
+  try {
+    const result = await adminBffService.createPlan(req.body);
+    res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // THÊM: Hàm controller để cập nhật Plan
 export const updatePlan = async (req: Request, res: Response, next: NextFunction) => {
-  const { id } = req.params;
-  const result = await adminBffService.updatePlan(id, req.body);
-  res.status(200).json(result);
+  try {
+    const { id } = req.params;
+    const result = await adminBffService.updatePlan(id, req.body);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // THÊM: Hàm controller để xóa Plan
 export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
-  const { id } = req.params;
-  const result = await adminBffService.deletePlan(id);
-  res.status(200).json(result);
+  try {
+    const { id } = req.params;
+    const result = await adminBffService.deletePlan(id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // --- THÊM MỚI: CÁC CONTROLLER CHO WIKI ---
 
 export const getWikiBreeds = async (req: Request, res: Response, next: NextFunction) => {
+  try {
     const { page = 1, limit = 10, search, lang = 'vi' } = req.query as any;
     const breedsResult = await adminBffService.getWikiBreeds({
-        page: Number(page),
-        limit: Number(limit),
-        search,
-        lang
+      page: Number(page),
+      limit: Number(limit),
+      search,
+      lang
     });
     // SỬA: Transform media URLs để đảm bảo frontend nhận được URL đầy đủ
     const transformedData = transformMediaURLs(req, breedsResult.data);
 
     res.status(200).json({ ...breedsResult, data: transformedData });
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const createWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+  try {
     const { lang = 'vi' } = req.query as any;
     const result = await adminBffService.createWikiBreed(req.body, lang);
     res.status(201).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const updateWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+  try {
     const { slug } = req.params;
     const { lang = 'vi' } = req.query as any;
     const result = await adminBffService.updateWikiBreed(slug, req.body, lang);
     res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const deleteWikiBreed = async (req: Request, res: Response, next: NextFunction) => {
+  try {
     const { slug } = req.params;
     const { lang = 'vi' } = req.query as any;
     const result = await adminBffService.deleteWikiBreed(slug, lang);
     res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 // --- BFF wrapper for admin deleting a user (for frontend admin UI)
@@ -396,14 +467,22 @@ export const getSubscriptions = async (req: Request, res: Response, next: NextFu
 // --- THÊM MỚI: CÁC CONTROLLER CHO AI MODEL MANAGEMENT ---
 
 export const getAIModels = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.getAIModels();
-  // Trả về mảng data trực tiếp để tương thích với frontend
-  res.status(200).json(result.data);
+  try {
+    const result = await adminBffService.getAIModels();
+    // Trả về mảng data trực tiếp để tương thích với frontend
+    res.status(200).json(result.data);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const activateAIModel = async (req: Request, res: Response, next: NextFunction) => {
-  const result = await adminBffService.activateAIModel(req.params.id);
-  res.status(200).json(result);
+  try {
+    const result = await adminBffService.activateAIModel(req.params.id);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
 };
 
 export const exportReport = async (req: Request, res: Response, next: NextFunction) => {
