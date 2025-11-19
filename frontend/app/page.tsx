@@ -27,7 +27,8 @@ export default function Home() {
   const [isDragging, setIsDragging] = useState(false)
   const [isDetecting, setIsDetecting] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isProcessing, setIsProcessing] = useState(false)
+  // THAY ĐỔI: Hợp nhất isProcessing và thêm trạng thái cho thông báo giả lập
+  const [detectionStatusMessage, setDetectionStatusMessage] = useState("")
 
   useEffect(() => {
     trackVisit("home")
@@ -91,22 +92,46 @@ export default function Home() {
     }
   }
 
+  // THÊM MỚI: Hàm giả lập tiến trình để cải thiện trải nghiệm người dùng
+  const runDetectionSimulation = () => {
+    setUploadProgress(0)
+    
+    // Giai đoạn 1: Tải lên (0% -> 40% trong ~1.5s)
+    setTimeout(() => {
+      setDetectionStatusMessage(t("home.simulation.uploading"))
+      setUploadProgress(40)
+    }, 100)
+
+    // Giai đoạn 2: Chuẩn bị mô hình (40% -> 65% trong ~2s)
+    setTimeout(() => {
+      setDetectionStatusMessage(t("home.simulation.preparing"))
+      setUploadProgress(65)
+    }, 1500)
+
+    // Giai đoạn 3: Phân tích (65% -> 90% trong ~3s)
+    setTimeout(() => {
+      setDetectionStatusMessage(t("home.simulation.analyzing"))
+      setUploadProgress(90)
+    }, 3500)
+
+    // Giai đoạn 4: Hoàn tất (90% -> 100% khi có kết quả)
+    // Giai đoạn này sẽ được kích hoạt khi API trả về kết quả thành công
+    setTimeout(() => {
+        setDetectionStatusMessage(t("home.simulation.finishing"))
+    }, 6500) // Sau khoảng 6.5s, chuyển sang thông báo "sắp xong"
+  }
+
   const handleDetect = async () => {
     if (selectedFile && previewUrl) {
       setIsDetecting(true)
-      setIsProcessing(false)
-      setUploadProgress(0)
+      runDetectionSimulation() // Bắt đầu giả lập
       const detectionToast = toast.loading(t("home.uploadingFile"))
 
       try {
-        const onProgress = (progress: number) => {
-          setUploadProgress(progress)
-          if (progress === 100) {
-            // Khi tải lên xong, chuyển sang trạng thái xử lý
-            setIsProcessing(true)
-            toast.loading(t("home.processingFile"), { id: detectionToast })
-          }
-        };
+        // Hàm onProgress giờ chỉ để log, không cập nhật UI nữa
+        const onProgress = (progress: number) => { 
+          console.log(`Upload progress: ${progress.toFixed(2)}%`);
+        }; 
 
         let response
         if (fileType === "image") {
@@ -114,6 +139,10 @@ export default function Home() {
         } else if (fileType === "video") {
           response = await apiClient.predictVideo(selectedFile, onProgress)
         }
+
+        // Khi có kết quả, cho thanh tiến trình chạy đến 100%
+        setUploadProgress(100)
+        setDetectionStatusMessage(t("home.simulation.success"))
 
         // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
         if (isAuthenticated) {
@@ -137,7 +166,7 @@ export default function Home() {
         if (!sessionStorage.getItem("detection-result")) {
             setIsDetecting(false)
             setUploadProgress(0)
-            setIsProcessing(false)
+            setDetectionStatusMessage("")
         }
       }
     }
@@ -148,7 +177,7 @@ export default function Home() {
     setPreviewUrl(null)
     setFileType(null)
     setUploadProgress(0)
-    setIsProcessing(false)
+    setDetectionStatusMessage("")
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl)
     }
@@ -258,13 +287,10 @@ export default function Home() {
                 {isDetecting && (
                   <div className="space-y-2 pt-4">
                     <Progress 
-                      value={isProcessing ? undefined : uploadProgress} 
+                      value={uploadProgress} 
                       className="w-full" 
                     />
-                    <p className="text-sm text-center text-muted-foreground">
-                      {isProcessing ? t("home.processingFile") 
-                        : `${t("home.uploading")} ${uploadProgress}%`}
-                    </p>
+                    <p className="text-sm text-center text-muted-foreground">{detectionStatusMessage}</p>
                   </div>
                 )}
 

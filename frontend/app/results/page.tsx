@@ -60,11 +60,11 @@ function ResultsContent() {
         return;
       }
       
-      if (!result.detections || result.detections.length === 0) {
-        setSpecialMessage(null); // Reset message
+      if ((!result.detections || result.detections.length === 0) && !result.message) {
         setNoDetectionsFound(true);
         return;
       }
+      setSpecialMessage(null); // Reset message nếu có detections
 
       const primary = result.detections.reduce((prev, current) => 
         prev.confidence > current.confidence ? prev : current

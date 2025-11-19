@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from "express";
 import WebSocket from "ws";
-import crypto from 'crypto';
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
 import { wikiService } from "../services/dogs_wiki.service";

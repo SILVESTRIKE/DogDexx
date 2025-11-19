@@ -129,6 +129,13 @@ export default {
     contactTitle: "Get in Touch",
     contactDescription:
       "Have questions, feedback, or suggestions? We'd love to hear from you!",
+    simulation: {
+      uploading: "Uploading file to server...",
+      preparing: "Initializing AI model...",
+      analyzing: "Analyzing image...",
+      finishing: "Almost there, compiling results...",
+      success: "Done! Redirecting...",
+    },
   },
   results: {
     title: "Detection Results",

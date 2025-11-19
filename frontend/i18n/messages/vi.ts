@@ -68,14 +68,14 @@ export default {
     errorInvalidCredentials: "Email hoặc mật khẩu không đúng",
     errorEmailExists: "Email đã được sử dụng",
     errorGeneral: "Đã có lỗi xảy ra",
-    errorUsernameInvalid: "Username phải viết thường, không dấu, không cách và chỉ chứa chữ, số, gạch dưới (_).",
+    errorUsernameInvalid:
+      "Username phải viết thường, không dấu, không cách và chỉ chứa chữ, số, gạch dưới (_).",
     errorNameRequired: "Vui lòng nhập tên",
     enterOtp: "Nhập mã OTP",
     logoutSuccess: "Đăng xuất thành công",
     verify: "Xác thực",
     otpSuccess: "Xác thực thành công! Vui lòng đăng nhập.",
     optional: "tùy chọn",
-    // Quên / Đặt lại mật khẩu
     forgotPassword: "Quên mật khẩu?",
     forgotSent: "Mã đặt lại đã được gửi đến email của bạn.",
     sendResetCode: "Gửi mã đặt lại",
@@ -96,11 +96,14 @@ export default {
       "Được xây dựng bởi một đội ngũ tâm huyết gồm các nhà nghiên cứu AI, những người yêu chó và các kỹ sư phần mềm tận tâm tạo ra trải nghiệm nhận dạng giống chó tốt nhất.",
     ready: "Sẵn sàng để bắt đầu?",
     fastTitle: "Nhanh như chớp",
-    fastDesc: "Nhận dạng giống chó theo thời gian thực được hỗ trợ bởi AI tiên tiến",
+    fastDesc:
+      "Nhận dạng giống chó theo thời gian thực được hỗ trợ bởi AI tiên tiến",
     secureTitle: "An toàn & Riêng tư",
-    secureDesc: "Dữ liệu của bạn được mã hóa và không bao giờ chia sẻ với bên thứ ba",
+    secureDesc:
+      "Dữ liệu của bạn được mã hóa và không bao giờ chia sẻ với bên thứ ba",
     communityTitle: "Phát triển bởi cộng đồng",
-    communityDesc: "Tham gia cùng hàng ngàn người yêu chó để cùng nhau cải thiện AI",
+    communityDesc:
+      "Tham gia cùng hàng ngàn người yêu chó để cùng nhau cải thiện AI",
     globalTitle: "Quy mô toàn cầu",
     globalDesc: "Hỗ trợ hơn 200 giống chó từ khắp nơi trên thế giới",
   },
@@ -130,6 +133,13 @@ export default {
     contactTitle: "Liên hệ",
     contactDescription:
       "Có câu hỏi, phản hồi hoặc góp ý? Chúng tôi rất muốn nghe từ bạn!",
+    simulation: {
+      uploading: "Đang tải tệp lên máy chủ...",
+      preparing: "Đang khởi tạo mô hình AI...",
+      analyzing: "Đang phân tích hình ảnh...",
+      finishing: "Sắp xong rồi, đang tổng hợp kết quả...",
+      success: "Hoàn tất! Đang chuyển hướng...",
+    },
   },
   results: {
     title: "Kết quả nhận diện",
@@ -243,7 +253,8 @@ export default {
     sourceStream: "Sưu tầm qua Camera",
     sourceManual: "Thêm thủ công",
     unlockDetails: "Sưu tầm để mở khóa chi tiết",
-    notCollectedTooltip: "Chưa sưu tầm. Hãy nhận diện giống chó này để mở khóa!",
+    notCollectedTooltip:
+      "Chưa sưu tầm. Hãy nhận diện giống chó này để mở khóa!",
     sort: {
       nameAsc: "Tên (A-Z)",
       nameDesc: "Tên (Z-A)",
@@ -269,7 +280,8 @@ export default {
     locked: "Đã khóa",
     progress: "Tiến trình",
     backToHome: "Quay về trang chủ",
-    pageDescription: "Theo dõi tiến trình và mở khóa phần thưởng khi bạn sưu tầm các giống chó",
+    pageDescription:
+      "Theo dõi tiến trình và mở khóa phần thưởng khi bạn sưu tầm các giống chó",
     dogsCollected: "Chó đã sưu tầm",
     achievementsUnlocked: "Thành tích đã mở khóa",
     nextAchievement: "Thành tích tiếp theo",
@@ -328,10 +340,12 @@ export default {
     submit: "Gửi phản hồi",
     submitting: "Đang gửi...",
     thankYou: "Cảm ơn bạn đã đóng góp ý kiến!",
-    thankYouDescription: "Phản hồi của bạn giúp chúng tôi cải thiện độ chính xác của mô hình AI.",
+    thankYouDescription:
+      "Phản hồi của bạn giúp chúng tôi cải thiện độ chính xác của mô hình AI.",
     error: "Gửi phản hồi thất bại",
     loginRequiredTitle: "Đăng nhập để Gửi Phản hồi",
-    loginRequiredDescription: "Thông tin của bạn rất quý giá! Vui lòng đăng nhập để giúp chúng tôi cải thiện AI.",
+    loginRequiredDescription:
+      "Thông tin của bạn rất quý giá! Vui lòng đăng nhập để giúp chúng tôi cải thiện AI.",
     loginToFeedback: "Đăng nhập để Gửi Phản hồi",
   },
   admin: {
@@ -384,13 +398,15 @@ export default {
         mustBe: "phải là",
         notes: "Ghi chú",
         approveTitle: "Duyệt phản hồi này?",
-        approveDescription: "Hành động này sẽ đánh dấu phản hồi là 'đã duyệt' và di chuyển ảnh vào bộ dữ liệu huấn luyện. Bạn có thể sửa lại nhãn nếu cần.",
+        approveDescription:
+          "Hành động này sẽ đánh dấu phản hồi là __STRING_0_1__ và di chuyển ảnh vào bộ dữ liệu huấn luyện. Bạn có thể sửa lại nhãn nếu cần.",
         correctedLabel: "Nhãn giống chó đã sửa",
         correctedLabelPlaceholder: "Nhập giống chó đúng nếu khác...",
         selectOrEnterBreed: "Chọn hoặc nhập giống chó...",
         noBreedFound: "Không tìm thấy giống chó.",
         rejectTitle: "Từ chối phản hồi này?",
-        rejectDescription: "Hành động này sẽ đánh dấu phản hồi là 'đã từ chối' và di chuyển ảnh vào thư mục tương ứng. Bạn có thể nhập lý do từ chối (tùy chọn).",
+        rejectDescription:
+          "Hành động này sẽ đánh dấu phản hồi là __STRING_0_2__ và di chuyển ảnh vào thư mục tương ứng. Bạn có thể nhập lý do từ chối (tùy chọn).",
         rejectionReason: "Lý do từ chối (tùy chọn)",
         rejectionReasonPlaceholder: "Ví dụ: ảnh mờ, không phải chó...",
       },
@@ -423,7 +439,8 @@ export default {
     },
     subscriptions: {
       title: "Quản lý Đăng ký",
-      description: "Xem và quản lý các yêu cầu đăng ký gói cước của người dùng.",
+      description:
+        "Xem và quản lý các yêu cầu đăng ký gói cước của người dùng.",
       noSubscriptions: "Không tìm thấy đăng ký nào.",
       approveSuccess: "Duyệt đăng ký thành công.",
       approveFailed: "Duyệt đăng ký thất bại.",
@@ -458,7 +475,8 @@ export default {
     },
     histories: {
       title: "Lịch sử dự đoán",
-      description: "Duyệt lịch sử dự đoán của người dùng theo cấu trúc thư mục.",
+      description:
+        "Duyệt lịch sử dự đoán của người dùng theo cấu trúc thư mục.",
       viewMedia: "Xem media",
       viewFeedback: "Xem Feedback",
       noPrediction: "Không có dự đoán",
@@ -491,15 +509,19 @@ export default {
       },
     },
     imageManagement: "Quản lý File",
-    imageManagementDescription: "Quản lý các tệp media và thư mục của người dùng",
+    imageManagementDescription:
+      "Quản lý các tệp media và thư mục của người dùng",
     folderContents: "Nội dung thư mục",
     noMedia: "Không tìm thấy mục nào",
     imageManagementRoot: "Thư mục gốc",
-    showingDescription: 'Đang hiển thị {count} mục trong thư mục "{folderName}".',
+    showingDescription:
+      'Đang hiển thị {count} mục trong thư mục "{folderName}".',
     dashboardTitle: "Tổng quan Dashboard",
-    dashboardDescription: "Theo dõi hiệu suất và thống kê sử dụng ứng dụng của bạn",
+    dashboardDescription:
+      "Theo dõi hiệu suất và thống kê sử dụng ứng dụng của bạn",
     newBreedAlertTitle: "Cảnh báo giống chó mới",
-    newBreedAlertDescription: "Phát hiện {count} giống chó có nhiều báo cáo sai - có thể cần thêm vào model",
+    newBreedAlertDescription:
+      "Phát hiện {count} giống chó có nhiều báo cáo sai - có thể cần thêm vào model",
     viewAllFeedback: "Xem tất cả phản hồi",
     trialRunsToday: "Lượt dùng thử (hôm nay)",
     trialRunsDescription: "Số lượt dự đoán từ khách",
@@ -511,10 +533,12 @@ export default {
     weeklyActivity: "Hoạt động trong tuần",
     weeklyActivityDescription: "Số lượt dự đoán trong 7 ngày qua",
     topPredictedBreeds: "Các giống chó được dự đoán nhiều nhất",
-    topPredictedBreedsDescription: "Top 5 giống chó xuất hiện nhiều nhất trong các dự đoán",
+    topPredictedBreedsDescription:
+      "Top 5 giống chó xuất hiện nhiều nhất trong các dự đoán",
     predictionsCount: "{count} lần",
     usageTracking: "Theo dõi sử dụng",
-    usageTrackingDescription: "Giám sát hoạt động của người dùng và tiêu thụ tài nguyên",
+    usageTrackingDescription:
+      "Giám sát hoạt động của người dùng và tiêu thụ tài nguyên",
     exportReport: "Xuất báo cáo",
     totalDetections: "Tổng lượt dự đoán",
     allTime: "Toàn thời gian",
@@ -525,7 +549,8 @@ export default {
     detectionsOverTime: "Lượt dự đoán theo thời gian",
     storageUsage: "Dung lượng sử dụng",
     userUsageDetails: "Chi tiết sử dụng của người dùng",
-    detailedBreakdown: "Phân tích chi tiết về việc tiêu thụ tài nguyên của mỗi người dùng",
+    detailedBreakdown:
+      "Phân tích chi tiết về việc tiêu thụ tài nguyên của mỗi người dùng",
     filterByPlan: "Lọc theo gói",
     detections: "Lượt dự đoán",
     storage: "Dung lượng",
@@ -576,7 +601,8 @@ export default {
     },
     reports: {
       title: "Báo cáo & Thống kê",
-      description: "Tạo và xuất các báo cáo chi tiết về hoạt động của hệ thống.",
+      description:
+        "Tạo và xuất các báo cáo chi tiết về hoạt động của hệ thống.",
       reportControls: "Tùy chọn báo cáo",
       selectDateRange: "Chọn khoảng thời gian",
       generateReport: "Tạo báo cáo",
@@ -584,7 +610,8 @@ export default {
       exportExcel: "Xuất Excel (.xlsx)",
       exportWord: "Xuất Word (.docx)",
       previewTitle: "Xem trước báo cáo",
-      previewDescription: "Dữ liệu sẽ được tổng hợp trong khoảng thời gian đã chọn.",
+      previewDescription:
+        "Dữ liệu sẽ được tổng hợp trong khoảng thời gian đã chọn.",
       generating: "Đang tạo báo cáo...",
       exporting: "Đang xuất file...",
       errorGenerate: "Tạo báo cáo thất bại.",
@@ -643,7 +670,8 @@ export default {
     copyright: "© 2025 Dog DogDex. Đã đăng ký bản quyền.",
     learnMore: "Tìm hiểu thêm",
     adSection1Title: "Tính năng Premium",
-    adSection1Description: "Mở khóa nhận diện không giới hạn và phân tích nâng cao",
+    adSection1Description:
+      "Mở khóa nhận diện không giới hạn và phân tích nâng cao",
     adSection2Title: "Truy cập API",
     adSection2Description: "Tích hợp nhận diện chó vào ứng dụng của bạn",
     adSection3Title: "Doanh nghiệp",
@@ -660,11 +688,14 @@ export default {
     customModels: "Mô hình tùy chỉnh",
     faq: "Câu hỏi thường gặp",
     faqQ1: "Tôi có thể thay đổi gói của mình bất cứ lúc nào không?",
-    faqA1: "Có, bạn có thể nâng cấp hoặc hạ cấp gói của mình bất cứ lúc nào. Các thay đổi sẽ có hiệu lực ngay lập tức.",
+    faqA1:
+      "Có, bạn có thể nâng cấp hoặc hạ cấp gói của mình bất cứ lúc nào. Các thay đổi sẽ có hiệu lực ngay lập tức.",
     faqQ2: "Bạn chấp nhận những phương thức thanh toán nào?",
-    faqA2: "Chúng tôi chấp nhận tất cả các loại thẻ tín dụng chính, PayPal và chuyển khoản ngân hàng cho gói doanh nghiệp.",
+    faqA2:
+      "Chúng tôi chấp nhận tất cả các loại thẻ tín dụng chính, PayPal và chuyển khoản ngân hàng cho gói doanh nghiệp.",
     faqQ3: "Có bản dùng thử miễn phí không?",
-    faqA3: "Có, gói Miễn phí bao gồm 10 lượt nhận diện mỗi tháng mà không cần thẻ tín dụng.",
+    faqA3:
+      "Có, gói Miễn phí bao gồm 10 lượt nhận diện mỗi tháng mà không cần thẻ tín dụng.",
     title: "Bảng giá đơn giản, minh bạch",
     description: "Chọn gói hoàn hảo cho nhu cầu của bạn",
     monthly: "Hàng tháng",
@@ -695,9 +726,11 @@ export default {
   },
   faq: "Câu hỏi thường gặp",
   faqQ4: "Bạn có hoàn tiền không?",
-  faqA4: "Chúng tôi cung cấp bảo đảm hoàn tiền trong 30 ngày cho tất cả các gói trả phí.",
+  faqA4:
+    "Chúng tôi cung cấp bảo đảm hoàn tiền trong 30 ngày cho tất cả các gói trả phí.",
   ready: "Sẵn sàng để bắt đầu?",
-  readyDescription: "Tham gia cùng hàng ngàn người dùng nhận diện giống chó bằng AI",
+  readyDescription:
+    "Tham gia cùng hàng ngàn người dùng nhận diện giống chó bằng AI",
   startFree: "Bắt đầu miễn phí",
   featured: "Nổi bật nhất",
   getStarted: "Bắt đầu",
@@ -708,13 +741,15 @@ export default {
     billingInfo: "Thông tin thanh toán",
     email: "Email",
     cardInfo: "Phương thức thanh toán",
-    cardPlaceholder: "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
+    cardPlaceholder:
+      "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
     pay: "Thanh toán",
     failed: "Thanh toán thất bại",
   },
   contact: {
     title: "Liên hệ với chúng tôi",
-    description: "Điền vào biểu mẫu dưới đây và chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.",
+    description:
+      "Điền vào biểu mẫu dưới đây và chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.",
     emailLabel: "Email của bạn",
     emailPlaceholder: "ban@example.com",
     messageLabel: "Nội dung tin nhắn",
@@ -726,12 +761,12 @@ export default {
   language: {
     toggle: "Chuyển đổi ngôn ngữ",
   },
-  // THÊM MỚI: Các chuỗi cho trang hồ sơ và nâng cấp
   profilePage: {
     upgradeSuccessTitle: "Nâng cấp thành công!",
-    upgradeSuccessDescription: "Gói cước của bạn đã được nâng cấp lên {planName}. Tận hưởng các tính năng mới!"
+    upgradeSuccessDescription:
+      "Gói cước của bạn đã được nâng cấp lên {planName}. Tận hưởng các tính năng mới!",
   },
   plans: {
-    title: "Gói cước"
-  }
+    title: "Gói cước",
+  },
 };
