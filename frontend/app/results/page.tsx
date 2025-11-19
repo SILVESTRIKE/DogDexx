@@ -38,6 +38,7 @@ function ResultsContent() {
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
+  const [specialMessage, setSpecialMessage] = useState<string | null>(null); // State mới cho thông báo đặc biệt
   const [hasFeedback, setHasFeedback] = useState(false); // State mới để lưu trạng thái feedback
 
 
@@ -48,8 +49,19 @@ function ResultsContent() {
     const processResultData = (result: BffPredictionResponse) => {
       setHasFeedback(result.hasFeedback ?? false); // Cập nhật state từ response
       setProcessedMediaUrl(result.processedMediaUrl);
+      setPredictionId(result.predictionId); // Luôn set predictionId
+
+      // Ưu tiên kiểm tra message đặc biệt từ backend
+      if (result.message) {
+        setSpecialMessage(result.message);
+        setAllDetections([]);
+        setSelectedDetection(null);
+        setNoDetectionsFound(false); // Đảm bảo không hiển thị trang "no detections"
+        return;
+      }
       
       if (!result.detections || result.detections.length === 0) {
+        setSpecialMessage(null); // Reset message
         setNoDetectionsFound(true);
         return;
       }
@@ -59,7 +71,6 @@ function ResultsContent() {
       );
       
       setAllDetections(result.detections);
-      setPredictionId(result.predictionId);
       setSelectedDetection(primary);
     };
     
@@ -124,6 +135,44 @@ function ResultsContent() {
     )
   }
   
+  // ----- GIAO DIỆN MỚI: HIỂN THỊ KHI CÓ THÔNG BÁO ĐẶC BIỆT (VD: KHÔNG PHẢI CHÓ) -----
+  if (specialMessage) {
+    return (
+      <main className="min-h-screen bg-background flex items-center justify-center">
+        <div className="container mx-auto px-4 py-8 max-w-2xl text-center">
+          <Card className="mb-8">
+            <CardContent className="p-4">
+              <div className="relative rounded-lg overflow-hidden bg-muted aspect-square flex items-center justify-center max-w-xl mx-auto">
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
+                  (
+                    <video src={processedMediaUrl} className="w-full h-full object-contain" controls autoPlay loop muted />
+                  ) : (
+                    <img src={processedMediaUrl} alt="Processed media" className="w-full h-full object-contain" />
+                  )
+                )}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="p-6">
+              <div className="flex justify-center mb-4">
+                  <div className="p-3 bg-yellow-500/10 rounded-full">
+                      <AlertTriangle className="h-10 w-10 text-yellow-500" />
+                  </div>
+              </div>
+              <h2 className="text-2xl font-bold mb-3">{t("results.specialMessageTitle")}</h2>
+              <p className="text-muted-foreground mb-6 text-lg">{specialMessage}</p>
+              <Link href="/">
+                  <Button className="gap-2">
+                      <ArrowLeft className="h-5 w-5" />
+                      {t("results.tryAgain")}
+                  </Button>
+              </Link>
+          </Card>
+        </div>
+      </main>
+    )
+  }
+
   // ----- GIAO DIỆN GỐC CỦA BẠN -----
   if (noDetectionsFound) {
     return (
@@ -183,7 +232,7 @@ function ResultsContent() {
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-8 items-center">
-              <div className="relative rounded-lg overflow-hidden bg-gradient-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
+              <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
                 {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
                   (
                     <video

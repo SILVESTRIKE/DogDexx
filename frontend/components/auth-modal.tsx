@@ -231,7 +231,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                     <Label htmlFor="forgot-email">{t('auth.email')}</Label>
                     <Input id="forgot-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? t('auth.processing') : t('auth.sendResetCode')}</Button>
                   <div className="text-center text-sm">
                     <button type="button" onClick={() => setView('form')} className="text-primary hover:underline">{t('auth.backToLogin')}</button>
                   </div>
@@ -267,7 +266,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                     <Label htmlFor="reset-password">{t('auth.newPassword')}</Label>
                     <Input id="reset-password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
                   </div>
-                  <Button type="submit" className="w-full" disabled={isLoading}>{isLoading ? t('auth.processing') : t('auth.resetPasswordButton')}</Button>
                   <div className="text-center text-sm">
                     <button type="button" onClick={() => setView('form')} className="text-primary hover:underline">{t('auth.backToLogin')}</button>
                   </div>

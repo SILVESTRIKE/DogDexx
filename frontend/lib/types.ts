@@ -192,6 +192,7 @@ export interface BffPredictionResponse {
     achievementsUnlocked: string[];
   } | null;
   hasFeedback?: boolean;
+  message?: string;
 }
 
 // Cấu trúc cho một sản phẩm được gợi ý

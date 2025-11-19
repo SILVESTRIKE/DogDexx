@@ -158,6 +158,25 @@ async function handlePredictionAndEnrichment(
     : predictionResult;
   const transformedPrediction = transformMediaURLs(req, predictionObject);
 
+  // KIỂM TRA MESSAGE ĐẶC BIỆT TỪ AI SERVICE (Vẫn giữ lại để tương thích)
+  if (transformedPrediction.message) {
+    return {
+      predictionId: transformedPrediction.id,
+      processedMediaUrl: transformedPrediction.processedMediaUrl,
+      detections: [],
+      message: transformedPrediction.message,
+    };
+  }
+
+  // Nếu AI không trả về gì, cũng không cần xử lý thêm
+  if (!transformedPrediction.predictions || transformedPrediction.predictions.length === 0) {
+    return {
+      predictionId: transformedPrediction.id,
+      processedMediaUrl: transformedPrediction.processedMediaUrl,
+      detections: [],
+    };
+  }
+
   const detections = transformedPrediction.predictions.map((p: any) => {
     const slug = p.class.toLowerCase().replace(/\s+/g, "-");
     const breedInfoDoc = wikiInfoMap.get(slug);
@@ -174,10 +193,28 @@ async function handlePredictionAndEnrichment(
     };
   });
 
+  // --- LOGIC MỚI: XỬ LÝ KHI KHÔNG PHẢI CHÓ ---
+  // Kiểm tra xem có bất kỳ phát hiện nào là chó không (có breedInfo)
+  const hasAnyDog = detections.some((d: any) => d.breedInfo !== null);
+
+  if (!hasAnyDog && detections.length > 0) {
+    // Nếu không có con chó nào, nhưng có các vật thể khác
+    const otherObjects = detections.map((d: any) => d.detectedBreed.replace(/-/g, ' '));
+    const uniqueObjects = [...new Set(otherObjects)];
+    const message = `Đây không phải là chó, đây là: ${uniqueObjects.join(', ')}.`;
+
+    return {
+      predictionId: transformedPrediction.id,
+      processedMediaUrl: transformedPrediction.processedMediaUrl,
+      detections: [], // Trả về mảng rỗng để frontend không hiển thị thẻ thông tin
+      message: message, // Gửi thông báo đặc biệt
+    };
+  }
+
   return {
     predictionId: transformedPrediction.id,
     processedMediaUrl: transformedPrediction.processedMediaUrl,
-    detections: detections,
+    detections: detections.filter((d: any) => d.breedInfo !== null), // Chỉ trả về các phát hiện là chó
     collectionStatus: collectionStatus,
   };
 }
