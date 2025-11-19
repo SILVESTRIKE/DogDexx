@@ -20,6 +20,7 @@ export default {
     sort: "Sắp xếp",
     viewAll: "Xem tất cả",
     guest: "Khách",
+    getStarted: "Bắt đầu ngay",
   },
   nav: {
     detect: "Nhận diện",

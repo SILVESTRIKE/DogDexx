@@ -20,6 +20,7 @@ export default {
     sort: "Sort",
     viewAll: "View All",
     guest: "Guest",
+    getStarted: "Get Started",
   },
   nav: {
     detect: "Detect",
