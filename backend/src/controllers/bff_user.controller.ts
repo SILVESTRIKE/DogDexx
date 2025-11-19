@@ -102,14 +102,20 @@ export const getSessionStatus = async (req: Request, res: Response, next: NextFu
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    console.log('[BFF_CONTROLLER] Bắt đầu xử lý request đăng ký...');
     const userData = req.body;
     const avatarFile = req.file;
+    console.log('[BFF_CONTROLLER] Dữ liệu nhận được:', { ...userData, password: '***' });
+    if (avatarFile) console.log('[BFF_CONTROLLER] Đã nhận được file avatar:', avatarFile.originalname);
+
     const newUser = await userService.createUser(userData, avatarFile);
+    console.log('[BFF_CONTROLLER] Tạo người dùng thành công. Chuẩn bị gửi response.');
     res.status(201).json({
       message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để lấy mã OTP xác thực.",
       user: newUser,
     });
   } catch (error) {
+    console.error('[BFF_CONTROLLER] Lỗi trong quá trình đăng ký:', error);
     next(error);
   }
 };

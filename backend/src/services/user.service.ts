@@ -71,6 +71,7 @@ export const userService = {
   },
 
   async createUser(data: RegisterType, avatarFile?: Express.Multer.File): Promise<EnrichedUser> {
+    console.log('[USER_SERVICE] Bắt đầu createUser cho email:', data.email);
     const [existedEmail, existedUsername, freePlan] = await Promise.all([
       UserModel.findOne({ email: data.email }),
       UserModel.findOne({ username: data.username }),
@@ -81,6 +82,7 @@ export const userService = {
     if (existedUsername) throw new BadRequestError("Tên người dùng đã tồn tại.");
     if (!freePlan) throw new Error("Không tìm thấy gói 'free' mặc định trong hệ thống.");
 
+    console.log('[USER_SERVICE] Kiểm tra email và username hợp lệ. Bắt đầu hash mật khẩu.');
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
     const user = new UserModel({
@@ -91,6 +93,7 @@ export const userService = {
     });
 
     if (avatarFile) {
+        console.log('[USER_SERVICE] Đang xử lý file avatar...');
         const avatarMedia = new MediaModel({
           name: `avatar-${user.username}`,
           mediaPath: avatarFile.path.replace(/\\/g, '/'),
@@ -99,15 +102,20 @@ export const userService = {
         });
         await avatarMedia.save();
         user.avatarPath = avatarMedia.mediaPath;
+        console.log('[USER_SERVICE] Đã lưu avatar vào media. Path:', user.avatarPath);
     }
     
+    console.log('[USER_SERVICE] Chuẩn bị lưu document người dùng...');
     await user.save(); // Lưu user để có _id
+    console.log('[USER_SERVICE] Đã lưu người dùng với ID:', user._id);
     
     const directory = new DirectoryModel({ name: user.username, creator_id: user._id });
     await directory.save();
+    console.log('[USER_SERVICE] Đã tạo thư mục cho người dùng.');
 
-    await this.sendOtp(user.email);
+    await this.sendOtp(user.email); // Thêm await để đảm bảo gửi OTP xong mới trả về response
     
+    console.log('[USER_SERVICE] createUser hoàn tất. Chuẩn bị làm giàu và trả về dữ liệu.');
     const enrichedUser = await _enrich(user);
     delete (enrichedUser as any).password;
     return enrichedUser!;
@@ -162,25 +170,36 @@ export const userService = {
     return (await _enrich(updatedUser))!;
   },
 
-  async sendOtp(email: string): Promise<{ message: string }> {
-    const user = await UserModel.findOne({ email });
-    if (!user) throw new ConflictError("Không tìm thấy người dùng");
-    if (user.verify) throw new BadRequestError("Tài khoản này đã được xác thực rồi.");
+  async sendOtp(email: string): Promise<{ message: string; }> {
+    return new Promise(async (resolve, reject) => {
+      console.log(`[USER_SERVICE] Bắt đầu sendOtp cho email: ${email}`);
+      try {
+        const user = await UserModel.findOne({ email });
+        if (!user) {
+          console.error(`[USER_SERVICE] sendOtp thất bại: Không tìm thấy người dùng với email ${email}`);
+          return reject(new ConflictError("Không tìm thấy người dùng"));
+        }
+        if (user.verify) {
+          console.warn(`[USER_SERVICE] sendOtp: Tài khoản ${email} đã được xác thực.`);
+          return reject(new BadRequestError("Tài khoản này đã được xác thực rồi."));
+        }
+        console.log(`[USER_SERVICE] sendOtp: Tìm thấy người dùng, chưa xác thực. Bắt đầu tạo OTP.`);
+        const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
+        await OtpModel.deleteMany({ email: email, type: OtpType.EMAIL_VERIFICATION });
 
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    await OtpModel.deleteMany({
-      email: email,
-      type: OtpType.EMAIL_VERIFICATION,
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+        const otpPayload = { email, otp: otpCode, type: OtpType.EMAIL_VERIFICATION, expiresAt };
+        await new OtpModel(otpPayload).save();
+        console.log(`[USER_SERVICE] sendOtp: Đã lưu OTP vào DB. Chuẩn bị gửi email.`);
+        
+        await emailService.sendEmail(user.email, "OTP Verification", `Your OTP code is: ${otpCode}`);
+        console.log(`[USER_SERVICE] sendOtp: Gửi email thành công đến ${email}.`);
+        resolve({ message: "OTP đã được gửi đến email của bạn" });
+      } catch (error) {
+        console.error(`[USER_SERVICE] Lỗi nghiêm trọng trong quá trình sendOtp cho ${email}:`, error);
+        reject(error);
+      }
     });
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await new OtpModel({
-      email: email,
-      otp: otpCode,
-      type: OtpType.EMAIL_VERIFICATION,
-      expiresAt: expiresAt,
-    }).save();
-    await emailService.sendEmail(user.email, "OTP Verification", `Your OTP code is: ${otpCode}`);
-    return { message: "OTP đã được gửi đến email của bạn" };
   },
 
   async deleteUser(id: string): Promise<boolean> {

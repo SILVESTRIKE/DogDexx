@@ -139,10 +139,13 @@ export class ApiClient {
     requiresAuth = false
   ): Promise<T> {
     const url = new URL(endpoint, this.baseUrl).toString();
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(options.headers as Record<string, string>),
-    };
+    const headers: Record<string, string> = { ...options.headers };
+
+    // KHÔNG set Content-Type nếu body là FormData, trình duyệt sẽ tự làm.
+    // Nếu không, nó sẽ bị thiếu 'boundary' và request sẽ bị treo.
+    if (!(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
 
     let token = TokenManager.getAccessToken();
     if (token) {
@@ -210,53 +213,10 @@ export class ApiClient {
     formData: FormData,
     requiresAuth = false
   ): Promise<T> {
-     const makeRequest = async (isRetry = false): Promise<Response> => {
-      const url = new URL(endpoint, this.baseUrl).toString();
-      const headers: Record<string, string> = {};
-
-      const token = TokenManager.getAccessToken();
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-
-      const options: RequestInit = {
-        method: "POST", // Mặc định cho FormData
-        body: formData,
-        headers: headers,
-      };
-      
-      return fetch(url, options);
-    };
-
-    try {
-      let response = await makeRequest();
-
-      if (response.status === 401 && TokenManager.getRefreshToken()) {
-        const refreshed = await this.handleUnauthorized();
-        if (refreshed) {
-          response = await makeRequest(true);
-        } else {
-           TokenManager.clearTokens();
-           throw new Error("Authentication failed: Unable to refresh token.");
-        }
-      }
-
-      this.handleTokenHeaders(response);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${response.status} ${response.statusText}`;
-        throw new Error(errorMessage);
-      }
-      return response.json();
-
-    } catch (error) {
-      console.error("[ApiClient] FormData request failed:", error);
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Something went wrong during the file upload.');
-    }
+    return this.request<T>(endpoint, {
+      method: "POST",
+      body: formData,
+    }, requiresAuth);
   }
 
   private async requestWithUploadProgress<T>(
