@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery } from "@tanstack/react-query"; 
 import { apiClient } from "@/lib/api-client";
@@ -17,19 +17,37 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
-import { Subscription } from "@/lib/types"; // Ensure this type is defined in @/lib/types
 import { format } from "date-fns";
+
+// Định nghĩa lại Interface cho khớp với dữ liệu Backend trả về
+interface Subscription {
+  _id: string;
+  userId: {
+    _id: string;
+    username?: string;
+    email: string;
+  } | null; // userId có thể null nếu user bị xóa
+  planId: {
+    name: string;
+  } | null;
+  status: string;
+  // SỬA LỖI DATE: Dùng đúng tên trường trong DB
+  currentPeriodStart: string; 
+  currentPeriodEnd: string;
+}
 
 const SubscriptionStatusBadge = ({ status }: { status: string }) => {
   const variant = useMemo(() => {
     switch (status) {
       case "active":
-        return "default"; // FIX: Changed from "success"
+        return "default"; // Xanh lá/Đen tùy theme
       case "pending":
-        return "secondary";
+      case "trialing":
+        return "secondary"; // Xám
       case "cancelled":
       case "expired":
-        return "destructive"; // FIX: Changed from "warning" for 'cancelled'
+      case "past_due":
+        return "destructive"; // Đỏ
       default:
         return "outline";
     }
@@ -37,7 +55,7 @@ const SubscriptionStatusBadge = ({ status }: { status: string }) => {
 
   return (
     <Badge variant={variant} className="capitalize">
-      {status}
+      {status.replace('_', ' ')}
     </Badge>
   );
 };
@@ -80,7 +98,7 @@ export default function AdminSubscriptionsPage() {
     const pageNumbers = [];
     const currentPage = pagination.page;
     const totalPages = pagination.totalPages;
-    const pageRange = 2; // Number of pages to show around the current page
+    const pageRange = 2;
 
     for (let i = 1; i <= totalPages; i++) {
       if (
@@ -105,21 +123,23 @@ export default function AdminSubscriptionsPage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Manage Subscriptions</h1>
+    <div className="container mx-auto p-4 space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Manage Subscriptions</h1>
+      </div>
 
-      <div className="flex items-center mb-4">
+      <div className="flex items-center gap-2">
         <Input
-          placeholder="Search by user email or name..."
+          placeholder="Search by email or name..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm mr-2"
+          className="max-w-sm"
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
         />
         <Button onClick={handleSearch}>Search</Button>
       </div>
 
-      <div className="rounded-md border">
+      <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -131,23 +151,42 @@ export default function AdminSubscriptionsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {isLoading && <TableRow key="loading"><TableCell colSpan={5} className="text-center">Loading...</TableCell></TableRow>}
-            {isError && <TableRow key="error"><TableCell colSpan={5} className="text-center text-red-500">Failed to load data.</TableCell></TableRow>}
+            {isLoading && <TableRow key="loading"><TableCell colSpan={5} className="text-center py-8">Loading data...</TableCell></TableRow>}
+            {isError && <TableRow key="error"><TableCell colSpan={5} className="text-center text-red-500 py-8">Failed to load data.</TableCell></TableRow>}
+            
             {!isLoading && !isError && (
               subscriptions.length > 0 ? (
                 subscriptions.map((sub: Subscription) => (
                   <TableRow key={sub._id}>
-                    <TableCell>{sub.userId?.name || 'N/A'} ({sub.userId?.email || 'N/A'})</TableCell>
-                    <TableCell>{sub.planId?.name || 'N/A'}</TableCell>
+                    <TableCell>
+                      {/* SỬA LỖI NAME: Ưu tiên Name -> Username -> Email prefix */}
+                      <div className="font-medium">
+                        {sub.userId?.username || sub.userId?.username || 'Unknown User'}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {sub.userId?.email || 'No Email'}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                        <Badge variant="outline">
+                            {sub.planId?.name || 'Unknown Plan'}
+                        </Badge>
+                    </TableCell>
                     <TableCell>
                       <SubscriptionStatusBadge status={sub.status} />
                     </TableCell>
-                    <TableCell>{sub.startDate ? format(new Date(sub.startDate), "PPP") : "N/A"}</TableCell>
-                    <TableCell>{sub.endDate ? format(new Date(sub.endDate), "PPP") : "N/A"}</TableCell>
+                    <TableCell>
+                        {/* SỬA LỖI DATE: Dùng currentPeriodStart */}
+                        {sub.currentPeriodStart ? format(new Date(sub.currentPeriodStart), "dd/MM/yyyy") : "N/A"}
+                    </TableCell>
+                    <TableCell>
+                        {/* SỬA LỖI DATE: Dùng currentPeriodEnd */}
+                        {sub.currentPeriodEnd ? format(new Date(sub.currentPeriodEnd), "dd/MM/yyyy") : "N/A"}
+                    </TableCell>
                   </TableRow>
                 ))
               ) : (
-                <TableRow key="no-data"><TableCell colSpan={5} className="text-center">No subscriptions found.</TableCell></TableRow>
+                <TableRow key="no-data"><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No subscriptions found.</TableCell></TableRow>
               )
             )}
           </TableBody>

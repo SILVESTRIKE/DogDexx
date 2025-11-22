@@ -6,7 +6,6 @@ import Footer from "@/components/footer";
 import AdBanner from "@/components/ad-banner";
 import { Toaster } from "@/components/ui/sonner";
 import { useAuth } from "@/lib/auth-context";
-
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { user, isAuthenticated } = useAuth();
@@ -27,5 +26,6 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       {!isAdminPage && <Footer />}
       <Toaster position="top-right" richColors />
     </div>
+    
   );
 }

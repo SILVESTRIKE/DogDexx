@@ -5,12 +5,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppProviders } from "@/lib/app-providers";
 import { AppLayout } from "@/components/app-layout";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
+import {DogClickEffect} from "@/components/paw-click"
 import {
   Geist,
   Geist_Mono,
@@ -18,11 +13,12 @@ import {
   IBM_Plex_Mono as V0_Font_IBM_Plex_Mono,
   Lora as V0_Font_Lora,
 } from "next/font/google";
-
+import WalkingDog from "@/components/walking-dog";
 // Initialize fonts
-const _plusJakartaSans = V0_Font_Plus_Jakarta_Sans({
+const plusJakartaSans = V0_Font_Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["200", "300", "400", "500", "600", "700", "800"],
+  variable: "--font-geist-sans", // Sử dụng lại biến CSS cũ để không cần sửa file CSS
 });
 const _ibmPlexMono = V0_Font_IBM_Plex_Mono({
   subsets: ["latin"],
@@ -61,7 +57,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${plusJakartaSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body
@@ -77,8 +73,10 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <AppProviders>
+            <DogClickEffect />
             <AppLayout>{children}</AppLayout>
           </AppProviders>
+          <WalkingDog />
         </ThemeProvider>
       </body>
     </html>

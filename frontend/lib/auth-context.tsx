@@ -1,10 +1,16 @@
-"use client"
+"use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react"
-import { apiClient, TokenManager } from "./api-client"
-import { User, LoginResponse, RegisterResponse } from "./types"
-import { useToast } from "@/hooks/use-toast"
-import { useI18n } from "./i18n-context"
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
+import { apiClient, TokenManager } from "./api-client";
+import { User, LoginResponse, RegisterResponse } from "./types";
+import { useToast } from "@/hooks/use-toast";
+import { useI18n } from "./i18n-context";
 
 interface AuthContextType {
   user: User | null;
@@ -16,12 +22,12 @@ interface AuthContextType {
   verifyOtp: (email: string, otp: string) => Promise<any>;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
   refetchUser: () => Promise<void>;
-  
+
   // Các thuộc tính để điều khiển modal
   isAuthModalOpen: boolean;
-  authModalMode: 'login' | 'register';
+  authModalMode: "login" | "register";
   setAuthModalOpen: (isOpen: boolean) => void;
-  setAuthModalMode: (mode: 'login' | 'register') => void;
+  setAuthModalMode: (mode: "login" | "register") => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,23 +36,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true); // BẮT ĐẦU VỚI TRUE
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
-  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+  const [authModalMode, setAuthModalMode] = useState<"login" | "register">(
+    "login"
+  );
   const { toast } = useToast();
   const { t } = useI18n();
-  
-  const handleTokenUpdate = useCallback((tokens: { remaining: number; limit: number }) => {
-    setUser(currentUser => {
-      // Chỉ cập nhật nếu user tồn tại và giá trị token thực sự thay đổi
-      if (currentUser && (currentUser.remainingTokens !== tokens.remaining || currentUser.tokenAllotment !== tokens.limit)) {
-        return { 
-          ...currentUser, 
-          remainingTokens: tokens.remaining, 
-          tokenAllotment: tokens.limit 
-        };
-      }
-      return currentUser;
-    });
-  }, []);
+
+  const handleTokenUpdate = useCallback(
+    (tokens: { remaining: number; limit: number }) => {
+      setUser((currentUser) => {
+        // Chỉ cập nhật nếu user tồn tại và giá trị token thực sự thay đổi
+        if (
+          currentUser &&
+          (currentUser.remainingTokens !== tokens.remaining ||
+            currentUser.tokenAllotment !== tokens.limit)
+        ) {
+          return {
+            ...currentUser,
+            remainingTokens: tokens.remaining,
+            tokenAllotment: tokens.limit,
+          };
+        }
+        return currentUser;
+      });
+    },
+    []
+  );
 
   // SỬA ĐỔI QUAN TRỌNG: Tách logic kiểm tra session ra khỏi `refetchUser`
   // Hàm này chỉ nên chạy MỘT LẦN khi ứng dụng khởi động.
@@ -58,9 +73,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const response = await apiClient.getSessionStatus();
         if (response.isGuest) {
           setUser({
-            id: 'guest-session',
-            username: 'Guest',
-            plan: 'guest',
+            id: "guest-session",
+            username: "Guest",
+            plan: "guest",
             remainingTokens: response.remainingTokens,
             tokenAllotment: response.tokenAllotment,
           });
@@ -89,6 +104,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // BẮT LỖI Ở ĐÂY: Nếu apiClient thất bại (sau khi đã cố gắng refresh)
       // thì đó là lúc chúng ta thực sự nên đăng xuất người dùng.
       console.error("Session check failed, logging out:", error);
+      toast({
+        title: t("auth.sessionExpiredTitle") || "Phiên đăng nhập đã hết hạn",
+        description: t("auth.sessionExpiredMessage") || "Vui lòng đăng nhập lại để tiếp tục.",
+      });
       TokenManager.clearTokens();
       setUser(null);
     } finally {
@@ -96,7 +115,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   }, []);
-
+  
   useEffect(() => {
     apiClient.setTokenUpdateCallback(handleTokenUpdate);
     checkAuthStatus();
@@ -105,41 +124,49 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const response = await apiClient.login(email, password);
-    TokenManager.setTokens(response.tokens.accessToken, response.tokens.refreshToken);
-    setUser(response.user); 
+    TokenManager.setTokens(
+      response.tokens.accessToken,
+      response.tokens.refreshToken
+    );
+    setUser(response.user);
     return response;
   };
 
-
   const register = async (data: any) => {
-    // THÊM MỚI: Kiểm tra định dạng username trước khi gửi
     const usernameRegex = /^[a-z0-9_]+$/;
-    if (!usernameRegex.test(data.username)) {
-      throw new Error(t("auth.errorUsernameInvalid") || "Username must be lowercase, no spaces, no accents, and can only contain letters, numbers, and underscores (_).");
+    const slugify = (str: string) =>
+      str
+        .toLowerCase()
+        .replace(/\s+/g, "-")
+        .replace(/[^\w-]+/g, "");
+    const sanitizedUsername = slugify(data.username);
+    if (!usernameRegex.test(sanitizedUsername)) {
+      throw new Error(
+        t("auth.errorUsernameInvalid") ||
+          "Username must be lowercase, no spaces, no accents, and can only contain letters, numbers, and underscores (_)."
+      );
     }
-    // Tự động chuyển đổi username thành dạng slug để đảm bảo
-    const slugify = (str: string) => str.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
-    data.username = slugify(data.username);
+    data.username = sanitizedUsername;
     return apiClient.register(data);
   };
 
   // Hàm này giờ đây chỉ dùng để làm mới dữ liệu user khi cần, không dùng để check auth nữa
   const refetchUser = useCallback(async () => {
     try {
-     const response = await apiClient.getSessionStatus();
-     if (response.isGuest) {
-       setUser({
-         id: 'guest-session',
-         username: 'Guest',
-         plan: 'guest',
-         remainingTokens: response.remainingTokens,
-         tokenAllotment: response.tokenAllotment,
-       });
-     } else if (response.data?.user) {
-       setUser(response.data.user);
-     }
-    } catch(error) {
-      console.error("Failed to refetch user data, clearing session:", error)
+      const response = await apiClient.getSessionStatus();
+      if (response.isGuest) {
+        setUser({
+          id: "guest-session",
+          username: "Guest",
+          plan: "guest",
+          remainingTokens: response.remainingTokens,
+          tokenAllotment: response.tokenAllotment,
+        });
+      } else if (response.data?.user) {
+        setUser(response.data.user);
+      }
+    } catch (error) {
+      console.error("Failed to refetch user data, clearing session:", error);
       // Nếu refetch thất bại, có thể token đã hỏng -> dọn dẹp session cục bộ
       TokenManager.clearTokens();
       setUser(null);
@@ -155,7 +182,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       TokenManager.clearTokens();
       setUser(null);
-      toast({ title: t("nav.logout"), description: t("auth.logoutSuccess") || "Bạn đã đăng xuất thành công." });
+      toast({
+        title: t("nav.logout"),
+        description: t("auth.logoutSuccess") || "Bạn đã đăng xuất thành công.",
+      });
       // Gọi refetchUser để lấy lại session của khách một cách nhất quán
       await refetchUser();
     }
@@ -172,17 +202,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await apiClient.deleteCurrentUser();
       TokenManager.clearTokens();
       setUser(null);
-      toast({ title: t('account.deletedTitle') || 'Account deleted', description: t('account.deletedMessage') || 'Your account has been deleted.' });
+      toast({
+        title: t("account.deletedTitle") || "Account deleted",
+        description:
+          t("account.deletedMessage") || "Your account has been deleted.",
+      });
       await refetchUser();
     } catch (err) {
-      console.error('Failed to delete account:', err);
+      console.error("Failed to delete account:", err);
       throw err;
     }
   }, [refetchUser, t, toast]);
 
   const value = {
     user,
-    isAuthenticated: !!user?.email, 
+    isAuthenticated: !!user?.email,
     isLoading,
     login,
     logout,
@@ -197,7 +231,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthModalMode,
   };
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

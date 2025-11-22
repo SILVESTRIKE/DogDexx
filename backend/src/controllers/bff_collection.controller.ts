@@ -8,6 +8,8 @@ import { userService } from '../services/user.service';
 import { logger } from '../utils/logger.util';
 import { BadRequestError, NotFoundError } from '../errors';
 import { Types } from 'mongoose';
+import { redisClient } from '../utils/redis.util';
+import { REDIS_KEYS } from '../constants/redis.constants';
 
 // Define a type for the enriched breed object sent to the frontend
 export type DogDexBreed = {
@@ -179,6 +181,17 @@ export const getAchievements = async (req: Request, res: Response) => {
       ? req.query.lang as 'vi' | 'en'
       : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
+    // THÊM: Logic Caching với Redis
+    const cacheKey = `${REDIS_KEYS.USER_ACHIEVEMENTS_PREFIX}${userId}:${lang}`;
+    if (redisClient) {
+      const cachedData = await redisClient.get(cacheKey);
+      if (cachedData) {
+        logger.info(`[Achievements] Cache HIT for user ${userId}, lang ${lang}.`);
+        return res.status(200).json(JSON.parse(cachedData));
+      }
+      logger.info(`[Achievements] Cache MISS for user ${userId}, lang ${lang}.`);
+    }
+
     if (!userId) throw new NotFoundError('User not found to get achievements.');
     const [user, userCollections, totalBreedsInSystem] = await Promise.all([
       userService.getById(userId.toString()),
@@ -195,8 +208,8 @@ export const getAchievements = async (req: Request, res: Response) => {
     const unlockedMap = new Map(user.achievements.map(ua => [ua.key, ua.unlockedAt]));
     const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
     const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
-
-    res.json({
+    
+    const responseData = {
       stats: {
         totalAchievements: achievementsResult.length,
         totalBreeds: totalBreedsInSystem,
@@ -220,7 +233,14 @@ export const getAchievements = async (req: Request, res: Response) => {
         unlocked: ach.unlocked,
         unlockedAt: unlockedMap.get(ach.key) || null,
       }))
-    });
+    };
+
+    // THÊM: Lưu kết quả vào cache trước khi gửi response
+    if (redisClient) {
+      await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 }); // Cache trong 5 phút
+    }
+
+    res.status(200).json(responseData);
   } catch (error) {
     logger.error('Error in getAchievements:', error);
     res.status(500).json({ message: 'Internal Server Error' });

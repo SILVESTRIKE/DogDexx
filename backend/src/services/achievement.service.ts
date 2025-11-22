@@ -1,7 +1,7 @@
 import Achievement, { IAchievement } from '../models/achievement.model';
 import { getDogBreedWikiModel } from '../models/dogs_wiki.model';
 import { UserModel, UserDoc } from '../models/user.model';
-
+import { logger } from '../utils/logger.util';
 let cachedAchievements: IAchievement[] | null = null;
 // Sửa lỗi: Cache totalBreeds theo ngôn ngữ
 const totalBreedsCache = new Map<'vi' | 'en', number>();
@@ -65,7 +65,7 @@ export const achievementService = {
         { _id: user._id },
         { $push: { achievements: { $each: newAchievementsToEmbed } } }
       );
-      console.log(`User ${user.username} unlocked ${newlyUnlocked.length} new achievements.`);
+      logger.info(`User ${user.username} unlocked ${newlyUnlocked.length} new achievements.`);
     }
 
     return achievementsWithStatus;

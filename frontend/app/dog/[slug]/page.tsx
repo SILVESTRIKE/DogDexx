@@ -114,7 +114,7 @@ export default function DogDetailPage() {
         {/* Hero Section */}
         <div className="grid md:grid-cols-2 gap-8 mb-8">
           <div className="relative">
-            <div className="aspect-square rounded-2xl overflow-hidden border-4 border-primary shadow-xl bg-gradient-to-br from-muted to-muted/50">
+            <div className="aspect-square rounded-2xl overflow-hidden border-4 border-primary shadow-xl bg-linear-to-br from-muted to-muted/50">
               <img
                 src={dog.mediaUrl || `https://via.placeholder.com/600?text=${encodeURIComponent(dog.breed)}`}
                 alt={dog.breed}
@@ -122,7 +122,7 @@ export default function DogDetailPage() {
               />
             </div>
             <div className="absolute top-4 left-4 bg-primary text-primary-foreground font-bold px-4 py-2 rounded-full text-lg shadow-lg">
-              #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '000'}
+              #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '000'}
             </div>
             
           </div>
@@ -312,7 +312,7 @@ export default function DogDetailPage() {
               <ul className="space-y-2">
                 {(dog.suitable_for ?? []).map((item) => (
                   <li key={item} className="flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 flex-shrink-0 text-chart-1" />
+                    <CheckCircle className="h-4 w-4 shrink-0 text-chart-1" />
                     <span className="capitalize">{item}</span>
                   </li>
                 ))}
@@ -332,7 +332,7 @@ export default function DogDetailPage() {
               <ul className="space-y-2">
                 {(dog.unsuitable_for ?? []).map((item) => (
                   <li key={item} className="flex items-center gap-2">
-                    <XCircle className="h-4 w-4 text-destructive flex-shrink-0" />
+                    <XCircle className="h-4 w-4 text-destructive shrink-0" />
                     <span className="capitalize">{item}</span>
                   </li>
                 ))}
@@ -374,7 +374,7 @@ export default function DogDetailPage() {
               <ul className="space-y-2">
                 {(dog.common_health_issues ?? []).map((issue) => (
                   <li key={issue} className="flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4 text-chart-4 flex-shrink-0" />
+                    <AlertCircle className="h-4 w-4 text-chart-4 shrink-0" />
                     <span className="capitalize">{issue}</span>
                   </li>
                 ))}

@@ -29,7 +29,6 @@ import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import { getAdminFeedback, approveAdminFeedback, rejectAdminFeedback, AdminFeedbackResponse, Feedback } from "@/lib/admin-api"
-import { toast } from "sonner"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useI18n } from "@/lib/i18n-context"
 import {
@@ -125,7 +124,7 @@ export default function FeedbackManagement() {
       })
       setData(result)
     } catch (error) {
-      toast.error(t('admin.feedback.errors.fetchFailed'), { description: (error as Error).message })
+      console.log(t('admin.feedback.errors.fetchFailed'), { description: (error as Error).message })
     } finally {
       setLoading(false)
     }
@@ -174,11 +173,11 @@ export default function FeedbackManagement() {
     const feedbackId = selectedFeedbackForApproval.id;
 
     setIsApproveAlertOpen(false);
-    const toastId = toast.loading(t('admin.feedback.actions.approving'));
+    console.log(t('admin.feedback.actions.approving'));
 
     try {
       const result = await approveAdminFeedback(feedbackId, { correctedLabel });
-      toast.success(result.message, { id: toastId });
+      console.log(result.message);
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
         const newStats = { ...prevData.stats };
@@ -197,7 +196,7 @@ export default function FeedbackManagement() {
         };
       });
     } catch (error) {
-      toast.error(t('admin.feedback.errors.approveFailed'), { id: toastId, description: (error as Error).message });
+      console.log(t('admin.feedback.errors.approveFailed'), { description: (error as Error).message });
     } finally {
       setSelectedFeedbackForApproval(null);
       setCorrectedLabel("");
@@ -209,10 +208,10 @@ export default function FeedbackManagement() {
     const feedbackId = selectedFeedbackForRejection.id;
     const reason = rejectionReasonRef.current?.value;
     setIsRejectAlertOpen(false);
-    const toastId = toast.loading(t('admin.feedback.actions.rejecting'));
+    console.log(t('admin.feedback.actions.rejecting'));
     try {
       const result = await rejectAdminFeedback(feedbackId, { reason });
-      toast.success(result.message, { id: toastId });
+      console.log(result.message);
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData(prevData => {
         const newStats = { ...prevData.stats };
@@ -231,7 +230,7 @@ export default function FeedbackManagement() {
         };
       });
     } catch (error) {
-      toast.error(t('admin.feedback.errors.rejectFailed'), { id: toastId, description: (error as Error).message });
+      console.log(t('admin.feedback.errors.rejectFailed'), { description: (error as Error).message });
     } finally {
       setSelectedFeedbackForRejection(null);
     }

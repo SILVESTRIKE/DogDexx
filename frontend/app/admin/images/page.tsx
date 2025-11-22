@@ -232,11 +232,11 @@ export default function ImagesPage() {
                   className="border rounded-lg hover:shadow-md hover:border-primary cursor-pointer transition-all group relative flex flex-col"
                   // THAY ĐỔI 4: Gọi đúng hàm điều hướng khi click vào thư mục
                   onClick={() => item.type === "folder" ? handleFolderClick(item) : (setSelectedItem(item), setShowPreview(true))}>
-                  <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden shrink-0">
                     {renderItemIcon(item)}
                   </div>
                   
-                  <CardFooter className="p-3 flex-grow flex flex-col items-start w-full">
+                  <CardFooter className="p-3 grow flex flex-col items-start w-full">
                     <p className="text-sm font-medium truncate w-full" title={item.name}>{item.name}</p>
                     {item.createdAt && <p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</p>}
                     {item.size && <p className="text-xs text-muted-foreground">{(item.size / 1024 / 1024).toFixed(2)} MB</p>}
@@ -275,7 +275,7 @@ export default function ImagesPage() {
             <DialogTitle className="truncate pr-8" title={selectedItem?.name}>{selectedItem?.name}</DialogTitle>
             <DialogDescription>{selectedItem?.createdAt ? new Date(selectedItem.createdAt).toLocaleString() : ''}</DialogDescription>
           </DialogHeader>
-          <div className="bg-black/90 rounded-lg flex-grow flex items-center justify-center overflow-hidden">
+          <div className="bg-black/90 rounded-lg grow flex items-center justify-center overflow-hidden">
             {selectedItem?.type === "image" ? (
               <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain"/>
             ) : (

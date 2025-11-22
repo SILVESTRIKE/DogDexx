@@ -7,6 +7,7 @@ import mongoose, { Types, mongo } from "mongoose";
 import { ConflictError } from "../errors";
 import { uploadFile } from '@huggingface/hub';
 import { AppError } from '../errors';
+import { logger } from "../utils/logger.util";
 export class AIModelService {
   /**
    * (Admin) Tạo một bản ghi model mới trong CSDL.
@@ -120,7 +121,7 @@ export class AIModelService {
     }
 
     try {
-      console.log(`Uploading model file '${modelFile.originalname}' to Hugging Face repo '${repoId}'...`);
+      logger.info(`Uploading model file '${modelFile.originalname}' to Hugging Face repo '${repoId}'...`);
       // 1. Upload file model
       await uploadFile({
         credentials: { accessToken: hfToken },
@@ -130,12 +131,12 @@ export class AIModelService {
           content: new Blob([new Uint8Array(modelFile.buffer)]), // Convert Buffer to Uint8Array before creating Blob
         },
       });
-      console.log("Model file uploaded successfully.");
+      logger.info("Model file uploaded successfully.");
 
       // 3. Tạo bản ghi trong CSDL sau khi upload thành công
       const newModel = new AIModel({ ...data, creator_id, huggingFaceRepo: repoId, status: 'INACTIVE' }); // Mặc định là INACTIVE
       await newModel.save();
-      console.log(`New AI model record created in DB with ID: ${newModel._id}`);
+      logger.info(`New AI model record created in DB with ID: ${newModel._id}`);
 
       return newModel;
     } catch (error: any) {

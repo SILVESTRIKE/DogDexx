@@ -47,7 +47,6 @@ export const TokenManager = {
   },
 };
 
-
 export class ApiClient {
   private baseUrl: string;
   private onTokenUpdate:
@@ -74,7 +73,7 @@ export class ApiClient {
   ) {
     this.onTokenUpdate = callback;
   }
-  
+
   // --- HÀM NÀY ĐƯỢC ĐỊNH NGHĨA Ở ĐÂY ĐỂ FIX LỖI 'this' ---
   private handleTokenHeaders(response: Response | XMLHttpRequest) {
     if (!this.onTokenUpdate) return;
@@ -111,21 +110,26 @@ export class ApiClient {
       const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
+        body: JSON.stringify({ refreshToken }), // Đảm bảo gửi đúng key 'refreshToken'
       });
 
       if (response.ok) {
         const data = await response.json();
+        // Backend trả về { accessToken, refreshToken }
         if (data.accessToken && data.refreshToken) {
           TokenManager.setTokens(data.accessToken, data.refreshToken);
           return true;
         }
       }
+
+      // Nếu server trả về 401/403 tại endpoint refresh -> Token hết hạn thật sự
+      // Lúc này mới xóa token ở Client
       TokenManager.clearTokens();
       return false;
     } catch (error) {
-      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.", error);
-      TokenManager.clearTokens();
+      // Nếu lỗi mạng (mất mạng), ĐỪNG xóa token ngay.
+      // Hãy để user thử lại lần sau.
+      console.error("[ApiClient] refreshAccessToken error:", error);
       return false;
     } finally {
       this.refreshTokenPromise = null;
@@ -168,7 +172,9 @@ export class ApiClient {
           }
           response = await fetch(url, { ...options, headers }); // Thử lại
         } else {
-          throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+          throw new Error(
+            "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          );
         }
       }
 
@@ -194,7 +200,8 @@ export class ApiClient {
       // BỎ QUA LỖI ABORT: Lỗi này xảy ra khi một request bị hủy bỏ,
       // thường là do component unmount (ví dụ trong React Strict Mode).
       // Đây là hành vi mong muốn, không cần log ra console.
-      if (error instanceof Error && error.name === 'AbortError') return Promise.reject(error);
+      if (error instanceof Error && error.name === "AbortError")
+        return Promise.reject(error);
 
       console.error("[ApiClient] Request failed:", error, `(URL: ${url})`);
       if (error instanceof TypeError && error.message === "Failed to fetch") {
@@ -213,91 +220,86 @@ export class ApiClient {
     formData: FormData,
     requiresAuth = false
   ): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: "POST",
-      body: formData,
-    }, requiresAuth);
+    return this.request<T>(
+      endpoint,
+      {
+        method: "POST",
+        body: formData,
+      },
+      requiresAuth
+    );
   }
 
   private async requestWithUploadProgress<T>(
     endpoint: string,
     formData: FormData,
     onProgress: (progress: number) => void,
-    requiresAuth = false
+    requiresAuth = false,
+    _isRetry = false
   ): Promise<T> {
     return new Promise(async (resolve, reject) => {
-        const url = new URL(endpoint, this.baseUrl).toString();
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url, true);
+      const url = new URL(endpoint, this.baseUrl).toString();
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
 
-        const token = TokenManager.getAccessToken();
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      const token = TokenManager.getAccessToken();
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            onProgress(percentComplete);
-          }
-        };
-
-        xhr.onload = () => {
-          this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
-          
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              resolve(JSON.parse(xhr.responseText));
-            } catch (e) {
-              reject(new Error("Failed to parse server response."));
-            }
-          } else {
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
-              reject(new Error(errorMessage));
-            } catch (e) {
-              reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error("Network error occurred during the upload."));
-        };
-
-        xhr.send(formData);
-    });
-  }
-
-  private async refreshAccessToken(): Promise<boolean> {
-    const refreshToken = TokenManager.getRefreshToken();
-    if (!refreshToken) return false;
-
-    console.log("[ApiClient] refreshAccessToken: Attempting to refresh access token.");
-    try {
-      const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.accessToken && data.refreshToken) {
-          console.log("[ApiClient] refreshAccessToken: Successfully received new tokens.");
-          TokenManager.setTokens(data.accessToken, data.refreshToken);
-          return true;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          onProgress(percentComplete);
         }
-      }
-      console.error("[ApiClient] refreshAccessToken: Failed to refresh token, server response not OK or data invalid.");
-      TokenManager.clearTokens();
-      return false;
-    } catch {
-      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.");
-      TokenManager.clearTokens();
-      return false;
-    } finally {
-      this.refreshTokenPromise = null;
-    }
+      };
+
+      xhr.onload = async () => {
+        this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
+
+        if (xhr.status === 401 && TokenManager.getRefreshToken() && !_isRetry) {
+          try {
+            const refreshed = await this.handleUnauthorized();
+            if (refreshed) {
+              // Gọi lại chính hàm này với cờ _isRetry = true
+              const result = await this.requestWithUploadProgress<T>(
+                endpoint,
+                formData,
+                onProgress,
+                requiresAuth,
+                true
+              );
+              resolve(result);
+              return;
+            }
+          } catch (e) {
+            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (e) {
+            reject(new Error("Failed to parse server response."));
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            const errorMessage =
+              errorData.errors?.[0]?.message ||
+              errorData.message ||
+              `API Error: ${xhr.status}`;
+            reject(new Error(errorMessage));
+          } catch (e) {
+            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Network error occurred during the upload."));
+      };
+
+      xhr.send(formData);
+    });
   }
 
   // BFF-User endpoints
@@ -381,9 +383,13 @@ export class ApiClient {
 
   // Delete current user (requires auth)
   async deleteCurrentUser() {
-    return this.request<any>("/bff/user/profile", {
-      method: "DELETE",
-    }, true);
+    return this.request<any>(
+      "/bff/user/profile",
+      {
+        method: "DELETE",
+      },
+      true
+    );
   }
 
   async getProfile() {
@@ -553,10 +559,12 @@ export class ApiClient {
     );
   }
 
-  async getChatHistory(
-    breedSlug: string
-  ): Promise<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }> {
-    return this.request<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }>(
+  async getChatHistory(breedSlug: string): Promise<{
+    history: { role: "user" | "model"; parts: { text: string }[] }[];
+  }> {
+    return this.request<{
+      history: { role: "user" | "model"; parts: { text: string }[] }[];
+    }>(
       `/bff/predict/chat/${breedSlug}/history`,
       {
         method: "GET",
@@ -565,7 +573,6 @@ export class ApiClient {
       false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
     );
   }
-
 
   async getHealthRecommendations(
     breedSlug: string,
@@ -669,27 +676,33 @@ export class ApiClient {
     );
   }
 
-  // WebSocket connection methods for real-time detection
-  createWebSocketConnection(endpoint: string): WebSocket {
+  private _createWebSocketConnection(
+    token: string | null,
+    endpoint: string
+  ): WebSocket {
     const wsUrl = API_BASE_URL.replace(/^http/, "ws");
-    const token = TokenManager.getAccessToken();
-
-    // Add token as query parameter for WebSocket authentication
     const url = token
       ? `${wsUrl}${endpoint}?token=${token}`
       : `${wsUrl}${endpoint}`;
-
     return new WebSocket(url);
   }
 
-  // Convenience method for live detection WebSocket
-  connectLiveDetection(): WebSocket {
-    return this.createWebSocketConnection("/bff/live");
+  async connectLiveDetection(): Promise<WebSocket> {
+    if (TokenManager.getRefreshToken()) {
+      await this.refreshAccessToken();
+    }
+
+    const token = TokenManager.getAccessToken();
+    return this._createWebSocketConnection(token, "/bff/live");
   }
 
   // Convenience method for stream prediction WebSocket
-  connectStreamPrediction(): WebSocket {
-    return this.createWebSocketConnection("/bff/predict/stream");
+  async connectStreamPrediction(): Promise<WebSocket> {
+    if (TokenManager.getRefreshToken()) {
+      await this.refreshAccessToken();
+    }
+    const token = TokenManager.getAccessToken();
+    return this._createWebSocketConnection(token, "/bff/predict/stream");
   }
 
   // Subscription endpoints
@@ -807,7 +820,11 @@ export class ApiClient {
     }
     const query = queryParams.toString();
     // Giả sử route là /bff/admin/transactions
-    return this.request<any>(`/bff/admin/transactions${query ? `?${query}` : ""}`, {}, true);
+    return this.request<any>(
+      `/bff/admin/transactions${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
   }
 
   async approveUserSubscription(subscriptionId: string) {
@@ -860,6 +877,30 @@ export class ApiClient {
     return this.request<{ message: string }>(
       "/bff/public/contact",
       { method: "POST", body: JSON.stringify(payload) },
+      false
+    );
+  }
+  async getLeaderboard(params?: {
+    type?: string;
+    value?: string;
+    limit?: number;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.type) q.append("type", params.type);
+    if (params?.value) q.append("value", params.value);
+    if (params?.limit) q.append("limit", String(params.limit));
+
+    return this.request<import("./types").LeaderboardResponse>(
+      `/bff/public/leaderboard?${q.toString()}`,
+      { cache: "no-cache" },
+      false
+    );
+  }
+
+  async getLeaderboardLocations(type: "country" | "city") {
+    return this.request<{ data: string[] }>(
+      `/bff/public/leaderboard/locations?type=${type}`,
+      {},
       false
     );
   }

@@ -45,8 +45,10 @@ export const RegisterSchema = z.object({
       password,
       firstName: z.string().optional(),
       lastName: z.string().optional(),
+      country: z.string().optional(),
+      city: z.string().optional(),
     })
-    .strict(),
+    .strict(), 
 });
 export type RegisterType = z.infer<typeof RegisterSchema.shape.body>;
 
@@ -85,6 +87,8 @@ export const UpdateProfileSchema = z.object({
     .object({
       firstName: z.string().optional(),
       lastName: z.string().optional(),
+      country: z.string().optional(), // THÊM MỚI
+      city: z.string().optional(), // THÊM MỚI
     })
     .strict(),
 });

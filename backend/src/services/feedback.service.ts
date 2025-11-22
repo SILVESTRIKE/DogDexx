@@ -1,5 +1,3 @@
-// src/services/feedback.service.ts
-
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
 import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
@@ -11,7 +9,7 @@ import { MediaModel } from '../models/medias.model';
 import { cloudinary } from '../config/cloudinary.config'; // Import cloudinary
 import { slugify } from '../utils/slugify.util';
 import { PREDICTION_SOURCES } from '../constants/prediction.constants';
-
+import { logger } from '../utils/logger.util';
 interface QueryFilters {
   status?: FeedbackDoc['status']
   username?: string
@@ -47,7 +45,7 @@ export const feedbackService = {
       const to_public_id = `dataset/pending/${path.basename(from_public_id)}`;
 
       try {
-        console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+        logger.info(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
         
         // GIẢI PHÁP: Sử dụng uploader.rename và cập nhật asset_folder ngay sau đó.
         // Cloudinary API không cho phép đổi asset_folder và rename trong cùng một lệnh.
@@ -60,20 +58,20 @@ export const feedbackService = {
         final_file_path = to_public_id; 
         const fileExtension = path.extname(file_path);
         const final_file_path_with_ext = `${to_public_id}${fileExtension}`;
-        console.log(`[Feedback Service] Successfully moved Cloudinary resource. New public_id: ${final_file_path}`);
+        logger.info(`[Feedback Service] Successfully moved Cloudinary resource. New public_id: ${final_file_path}`);
 
         if (prediction.media) {
           await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: final_file_path_with_ext } });
-          console.log(`[Feedback Service] Updated Media entry ${prediction.media} to new path: ${final_file_path_with_ext}`);
+          logger.info(`[Feedback Service] Updated Media entry ${prediction.media} to new path: ${final_file_path_with_ext}`);
         }
         await PredictionHistoryModel.updateOne({ _id: prediction._id }, { $set: { mediaPath: final_file_path_with_ext } });
-        console.log(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
+        logger.info(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
 
       } catch (error) {
         console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
       }
     } else {
-      console.log(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
+      logger.info(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
     }
     
     const predictionAfterUpdate = await PredictionHistoryModel.findById(prediction._id);
@@ -230,7 +228,7 @@ export const feedbackService = {
         }
 
         try {
-          console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+          logger.info(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
           
           // GIẢI PHÁP: Tương tự như trên, rename rồi explicit để cập nhật asset_folder.
           const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
@@ -242,12 +240,12 @@ export const feedbackService = {
           });
           
           feedback.file_path = `${to_public_id}${fileExtension}`;
-          console.log(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
+          logger.info(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
         } catch (error) {
           console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
         }
       } else {
-        console.log(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
+        logger.info(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
       }
     }
     await feedback.save();
@@ -265,7 +263,7 @@ export const feedbackService = {
       try {
         if (feedback.file_path && feedback.file_path.startsWith('dataset/')) {
           const public_id = feedback.file_path.substring(0, feedback.file_path.lastIndexOf('.')) || feedback.file_path;
-          console.log(`[Feedback Service] Deleting Cloudinary resource: ${public_id}`);
+          logger.info(`[Feedback Service] Deleting Cloudinary resource: ${public_id}`);
           await cloudinary.uploader.destroy(public_id);
         }
       } catch (error: any) {

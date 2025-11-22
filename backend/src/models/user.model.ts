@@ -18,6 +18,8 @@ export type UserDoc = Document & {
   // Thông tin cá nhân
   firstName?: string;
   lastName?: string;
+  country?: string; // THÊM MỚI
+  city?: string; // THÊM MỚI
   avatarPath?: string;
 
   // bao Mat
@@ -70,6 +72,8 @@ const userSchema = new Schema<UserDoc>(
     },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
+    country: { type: String, trim: true }, // THÊM MỚI
+    city: { type: String, trim: true }, // THÊM MỚI
     avatarPath: { type: String, trim: true },
     verify: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, select: false },

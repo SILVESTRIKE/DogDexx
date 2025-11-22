@@ -1,38 +1,65 @@
 "use client"
 
+import { useEffect, useState, useMemo } from "react"
+import { 
+  Search, 
+  Download, 
+  TrendingUp, 
+  HardDrive, 
+  CreditCard, 
+  Layers,
+  Database, 
+  Activity 
+} from "lucide-react"
+import { 
+  LineChart, 
+  Line, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  ResponsiveContainer, 
+  BarChart, 
+  Bar 
+} from "recharts"
+
+// Import UI Components (đảm bảo đường dẫn đúng với dự án của bạn)
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Search, Download, TrendingUp, HardDrive } from "lucide-react"
-import { useEffect, useState, useMemo } from "react"
+
+// Import Utils & API
 import { useI18n } from "@/lib/i18n-context"
-import { getAdminUsageStats, UserUsageData } from "@/lib/admin-api"
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-} from "recharts"
+import { getAdminUsageStats, UserUsageData, CloudinaryStats } from "@/lib/admin-api"
+
+// --- Helper Function: Format Bytes ---
+const formatBytes = (bytes: number, decimals = 2) => {
+  if (!bytes || bytes === 0) return "0 Bytes"
+  const k = 1024
+  const dm = decimals < 0 ? 0 : decimals
+  const sizes = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + " " + sizes[i]
+}
 
 export default function UsagePage() {
   const { t } = useI18n()
+  
+  // --- State Management ---
   const [usageData, setUsageData] = useState<UserUsageData[]>([])
+  const [tokensChartData, setTokensChartData] = useState<any[]>([])
+  const [plansChartData, setPlansChartData] = useState<any[]>([])
+  const [storageStats, setStorageStats] = useState<CloudinaryStats | null>(null)
+  
   const [searchQuery, setSearchQuery] = useState("")
   const [planFilter, setPlanFilter] = useState<string>("all")
   const [sortBy, setSortBy] = useState<string>("tokensUsed")
   const [isLoading, setIsLoading] = useState(true)
-  const [tokensChartData, setTokensChartData] = useState<any[]>([])
-  const [plansChartData, setPlansChartData] = useState<any[]>([])
 
+  // --- Fetch Data ---
   useEffect(() => {
     fetchUsageData()
   }, [])
@@ -40,18 +67,23 @@ export default function UsagePage() {
   const fetchUsageData = async () => {
     try {
       setIsLoading(true)
-      const response = await getAdminUsageStats();
+      const response = await getAdminUsageStats()
+      
       setUsageData(response.usageData || [])
-      // Cập nhật state cho từng biểu đồ
       setTokensChartData(response.tokensChartData || [])
       setPlansChartData(response.plansChartData || [])
+      
+      if (response.storageStats) {
+        setStorageStats(response.storageStats)
+      }
     } catch (error) {
-      console.error("[v0] Error fetching usage data:", error)
+      console.error("[UsagePage] Error fetching data:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // --- Filter & Sort Logic ---
   const filteredAndSortedData = useMemo(() => {
     return usageData
       .filter((user) => {
@@ -74,35 +106,41 @@ export default function UsagePage() {
       })
   }, [usageData, searchQuery, planFilter, sortBy])
 
+  // --- Aggregate Stats ---
   const totalTokensUsed = usageData.reduce((sum, user) => sum + user.tokensUsed, 0)
   const totalUsers = usageData.length
   const avgTokensPerUser = totalUsers > 0 ? Math.round(totalTokensUsed / totalUsers) : 0
 
+  // --- Export Report Logic ---
   const handleExportReport = () => {
-    const csv = [
-      ["User Name", "Email", "Plan", "Tokens Used", "Tokens Limit", "Last Active"],
-      ...filteredAndSortedData.map((user) => [
-        user.userName,
-        user.email,
-        user.plan,
-        user.tokensUsed,
-        user.tokensLimit,
-        user.lastActive,
-      ]),
-    ]
-      .map((row) => row.join(","))
-      .join("\n")
+    const csvHeader = [t("admin.usage.csv.userName"), t("admin.usage.csv.email"), t("admin.usage.csv.plan"), t("admin.usage.csv.tokensUsed"), t("admin.usage.csv.tokensLimit"), t("admin.usage.csv.lastActive")]
+    const csvRows = filteredAndSortedData.map((user) => [
+      `"${user.userName}"`,
+      `"${user.email}"`,
+      user.plan,
+      user.tokensUsed,
+      user.tokensLimit,
+      user.lastActive,
+    ])
 
-    const blob = new Blob([csv], { type: "text/csv" })
+    const csvContent = [
+      csvHeader.join(","),
+      ...csvRows.map((row) => row.join(","))
+    ].join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
     a.href = url
     a.download = `usage-report-${new Date().toISOString().split("T")[0]}.csv`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
   }
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">{t("admin.usageTracking")}</h2>
@@ -110,13 +148,116 @@ export default function UsagePage() {
             {t("admin.usageTrackingDescription")}
           </p>
         </div>
-        <Button onClick={handleExportReport} variant="outline" className="gap-2 bg-transparent">
+        <Button onClick={handleExportReport} variant="outline" className="gap-2 bg-background">
           <Download className="h-4 w-4" />
           {t("admin.exportReport")}
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* --- SECTION 1: CLOUDINARY STATS (NEW) --- */}
+      {storageStats && (
+        <>
+          {/* Hàng 1: Thẻ Credits (Quan trọng nhất) */}
+          <div className="grid md:grid-cols-4 gap-4 mb-4">
+             <Card className="md:col-span-4 border-orange-200 dark:border-orange-900 bg-orange-50/30 dark:bg-orange-950/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base font-medium flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                    <CreditCard className="h-5 w-5" />
+                    {t("admin.usage.cloudinaryCredits", { plan: storageStats.plan })}
+                    {/* Tooltip giải thích */}
+                    <span className="ml-auto text-xs font-normal text-muted-foreground hidden md:inline-block">
+                      {t("admin.usage.creditInfo")}
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between items-end mb-2">
+                     <div className="text-3xl font-bold">
+                        {storageStats.credits.usage.toFixed(2)} 
+                        <span className="text-lg text-muted-foreground font-medium"> / {storageStats.credits.limit || "∞"}</span>
+                     </div>
+                     <div className="text-sm font-medium text-orange-600">
+                        {storageStats.credits.usage_percent.toFixed(2)}% {t("admin.usage.used")}
+                     </div>
+                  </div>
+                  <div className="w-full bg-orange-100 dark:bg-orange-900 rounded-full h-4 border border-orange-200 dark:border-orange-800">
+                    <div 
+                        className={`h-full rounded-full transition-all duration-500 flex items-center justify-end pr-2 ${
+                            storageStats.credits.usage_percent > 90 ? 'bg-red-500' : 'bg-orange-500'
+                        }`}
+                        style={{ width: `${Math.min(storageStats.credits.usage_percent, 100)}%` }}
+                    >
+                    </div>
+                  </div>
+                </CardContent>
+             </Card>
+          </div>
+
+          {/* Hàng 2: Chi tiết Storage, Bandwidth, Transformations */}
+          <div className="grid md:grid-cols-3 gap-4">
+            
+            {/* Transformations Card (MỚI) */}
+            <Card className="border-pink-200 dark:border-pink-900 bg-pink-50/30 dark:bg-pink-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-pink-700 dark:text-pink-400">
+                  <Layers className="h-4 w-4" />
+                  {t("admin.usage.transformations")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{storageStats.transformations.usage.toLocaleString()}</div>
+                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                   {t("admin.usage.transformationsDesc")}
+                </p>
+                {/* Chỉ hiện thanh progress nếu có limit riêng (thường là 0 ở gói Free vì nó tính vào Credit) */}
+                {storageStats.transformations.limit > 0 && (
+                    <div className="w-full bg-pink-100 dark:bg-pink-900 rounded-full h-1.5">
+                        <div className="bg-pink-500 h-1.5 rounded-full" style={{ width: `${storageStats.transformations.usage_percent}%` }}></div>
+                    </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Storage Card (Sửa lại hiển thị Limit) */}
+            <Card className="border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-400">
+                  <Database className="h-4 w-4" />
+                  {t("admin.usage.netStorage")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatBytes(storageStats.storage.used_bytes)}</div>
+                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                  {storageStats.storage.limit_bytes > 0 
+                    ? `${t("admin.usage.limit")}: ${formatBytes(storageStats.storage.limit_bytes)}` 
+                    : t("admin.usage.sharedCreditLimit")}
+                </p>
+              </CardContent>
+            </Card>
+
+            {/* Bandwidth Card (Sửa lại hiển thị Limit) */}
+            <Card className="border-green-200 dark:border-green-900 bg-green-50/30 dark:bg-green-950/20">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-400">
+                  <Activity className="h-4 w-4" />
+                  {t("admin.usage.bandwidth")}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatBytes(storageStats.bandwidth.used_bytes)}</div>
+                <p className="text-xs text-muted-foreground mt-1 mb-2">
+                  {storageStats.bandwidth.limit_bytes > 0 
+                    ? `${t("admin.usage.limit")}: ${formatBytes(storageStats.bandwidth.limit_bytes)}` 
+                    : t("admin.usage.sharedCreditLimit")}
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {/* --- SECTION 2: TOKEN STATS --- */}
       <div className="grid md:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-3">
@@ -155,7 +296,7 @@ export default function UsagePage() {
         </Card>
       </div>
 
-      {/* Charts */}
+      {/* --- SECTION 3: CHARTS --- */}
       <div className="grid md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
@@ -168,8 +309,7 @@ export default function UsagePage() {
                 <XAxis dataKey="date" />
                 <YAxis />
                 <Tooltip />
-                {/* <Legend /> */}
-                <Line type="monotone" dataKey="tokens" stroke="#3b82f6" />
+                <Line type="monotone" dataKey="tokens" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </CardContent>
@@ -186,15 +326,14 @@ export default function UsagePage() {
                 <XAxis dataKey="name" />
                 <YAxis allowDecimals={false} />
                 <Tooltip />
-                {/* <Legend /> */}
-                <Bar dataKey="count" fill="#10b981" />
+                <Bar dataKey="count" fill="#10b981" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
-      {/* Usage Table */}
+      {/* --- SECTION 4: USAGE TABLE --- */}
       <Card>
         <CardHeader>
           <CardTitle>{t("admin.userUsageDetails")}</CardTitle>
@@ -222,7 +361,7 @@ export default function UsagePage() {
               <SelectContent>
                 <SelectItem value="all">{t("common.all")}</SelectItem>
                 <SelectItem value="free">Free</SelectItem>
-                <SelectItem value="starter">Starter</SelectItem>
+                <SelectItem value="starter">{t("pricing.starter")}</SelectItem>
                 <SelectItem value="pro">Professional</SelectItem>
               </SelectContent>
             </Select>
@@ -239,7 +378,7 @@ export default function UsagePage() {
           </div>
 
           {/* Table */}
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-md border">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -253,13 +392,13 @@ export default function UsagePage() {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       {t("common.loading")}
                     </TableCell>
                   </TableRow>
                 ) : filteredAndSortedData.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       {t("admin.noData")}
                     </TableCell>
                   </TableRow>
@@ -279,7 +418,9 @@ export default function UsagePage() {
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{user.lastActive}</TableCell>
+                      <TableCell className="text-right text-sm text-muted-foreground">
+                        {new Date(user.lastActive).toLocaleDateString()}
+                      </TableCell>
                     </TableRow>
                   ))
                 )}

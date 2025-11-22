@@ -1,4 +1,4 @@
-import { apiClient, adminApiClient } from "./api-client"
+import { adminApiClient } from "./api-client"
 
 export interface DashboardStats {
   totalUsers: number
@@ -280,8 +280,6 @@ export const browseAdminMedia = async (path: string, options: RequestInit = {}):
 export const deleteAdminMedia = async (mediaId: string): Promise<{ message: string }> => {
   return adminApiClient.adminDeleteMedia(mediaId);
 }
-
-// --- Usage Tracking ---
 export interface UserUsageData {
   userId: string;
   userName: string;
@@ -292,10 +290,40 @@ export interface UserUsageData {
   lastActive: string;
 }
 
+// [THÊM MỚI] Interface cho Cloudinary Stats
+export interface CloudinaryResourceUsage {
+  used_bytes: number;
+  limit_bytes: number;
+  usage_percent: number;
+}
+
+export interface CloudinaryObjectUsage {
+  total_files: number;
+  limit: number;
+}
+
+export interface CloudinaryUsageItem {
+    usage: number;
+    limit: number;
+    usage_percent: number;
+}
+
+export interface CloudinaryStats {
+  credits: CloudinaryUsageItem;         // MỚI
+  transformations: CloudinaryUsageItem; // MỚI
+  storage: CloudinaryResourceUsage;
+  bandwidth: CloudinaryResourceUsage;
+  objects: CloudinaryObjectUsage;
+  plan: string;
+  last_updated: string;
+}
+
+// [CẬP NHẬT] Interface response tổng
 export interface AdminUsageResponse {
   usageData: UserUsageData[];
   tokensChartData: any[];
   plansChartData: any[];
+  storageStats?: CloudinaryStats; // Thêm field này (optional vì có thể null)
 }
 
 export const getAdminUsageStats = async (): Promise<AdminUsageResponse> => {
@@ -324,6 +352,36 @@ export const downloadAdminDataset = async (): Promise<{ downloadUrl: string }> =
   return adminApiClient.downloadAdminDataset();
 }
 
+export interface ReportPreviewData {
+  overview: {
+    totalRevenue: number;
+    arpu: number;
+    newUsers: number;
+    totalUsers: number;
+    totalPredictions: number;
+    activeUsers: number;
+    accuracy: number;
+  };
+  charts: {
+    dailyActivity: { _id: string; count: number }[];
+    topBreeds: { breed: string; count: number }[];
+    usersByPlan: { planName: string; count: number }[];
+  };
+  infra: {
+    plan: string;
+    credits: { used: number; limit: number; percent: number };
+    storage: { used: string; raw: number };
+    bandwidth: { used: string; raw: number };
+    objects: number;
+  } | null;
+}
+
+export const getAdminReportPreview = async (payload: {
+  startDate: string;
+  endDate: string;
+}): Promise<ReportPreviewData> => {
+  return adminApiClient.getAdminReportPreview(payload);
+};
 // --- THÊM MỚI: Report Management ---
 export const exportAdminReport = async (params: {
   startDate: string;

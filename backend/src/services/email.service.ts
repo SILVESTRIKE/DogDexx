@@ -26,9 +26,10 @@ async function sendGenericEmail(
   };
 
   try {
-    console.log("Gửi email từ:", process.env.EMAIL_USER);
+    logger.info("Gửi email từ:", process.env.EMAIL_USER);
     await transporter.sendMail(mailOptions);
-    console.log("Đã gửi mail đến:", to);
+    logger.info(mailOptions.text);
+    logger.info("Đã gửi mail đến:", to);
   } catch (error) {
     logger.error(`[EmailService] Lỗi gửi mail đến ${to}:`, error);
     throw new Error("Không thể gửi email");

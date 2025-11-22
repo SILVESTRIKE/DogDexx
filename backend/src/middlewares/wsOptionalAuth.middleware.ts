@@ -2,53 +2,59 @@ import { Request } from 'express';
 import { NextFunction } from 'express-serve-static-core';
 import WebSocket from 'ws';
 import jwt from 'jsonwebtoken';
-import { UserDoc, UserModel } from '../models/user.model';
+import { userService } from '../services/user.service'; // Dùng service để tận dụng cache/enrich nếu có
 import { logger } from '../utils/logger.util';
+import { tokenConfig } from '../config/token.config'; // IMPORT CONFIG TOKEN
 
-/**
- * Middleware xác thực tùy chọn dành riêng cho WebSocket.
- * Nó kiểm tra token từ query parameter `?token=...` hoặc từ cookie.
- * Nếu hợp lệ, nó sẽ gắn `req.user`. Nếu không, nó sẽ bỏ qua.
- * @param ws - Đối tượng WebSocket.
- * @param req - Đối tượng Request ban đầu của kết nối WebSocket.
- * @param next - Hàm next.
- */
+interface JwtPayload {
+  id: string; // SỬA: Phải là 'id' để khớp với auth.service
+  role?: string;
+}
+
 export const wsOptionalAuthMiddleware = async (ws: WebSocket, req: Request, next: NextFunction) => {
-  // Ưu tiên token từ query param cho WebSocket
   let token = req.query.token as string;
   const visitorId = req.query.visitorId as string;
 
-  // Nếu không có, thử lấy từ cookie
   if (!token && (req as any).cookies) {
     token = (req as any).cookies.accessToken;
   }
 
   if (token) {
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET!) as { userId: string };
-      const user = await UserModel.findById(decoded.userId).select('-password');
-      if (user) {
-        (req as any).user = user;
-        logger.info(`[WS-Auth] Authenticated user ${user.username} (ID: ${user._id}) for WebSocket connection.`);
+      // SỬA 1: Dùng secret từ tokenConfig để đồng bộ với lúc tạo token
+      const secret = tokenConfig.access.secret;
+      
+      // SỬA 2: Verify và ép kiểu đúng
+      const decoded = jwt.verify(token, secret) as JwtPayload;
+
+      // SỬA 3: Kiểm tra 'id' thay vì 'userId'
+      if (decoded.id) {
+        // Dùng userService.getById để đồng bộ logic lấy user (bao gồm check isDeleted,...)
+        const user = await userService.getById(decoded.id);
+        
+        if (user) {
+          (req as any).user = user;
+          logger.info(`[WS-Auth] Authenticated user ${user.username} (ID: ${user._id})`);
+        }
+      } else {
+          logger.warn(`[WS-Auth] Token missing 'id' payload.`);
       }
     } catch (error) {
-      // Bỏ qua lỗi (token hết hạn, không hợp lệ, v.v.) và coi như là guest
-      logger.warn(`[WS-Auth] Invalid token provided for WebSocket. Treating as guest. Error: ${(error as Error).message}`);
+      // Nếu token lỗi, log ra để debug nhưng vẫn cho qua (để fallback về guest)
+      // Quan trọng: Client đã fix logic refresh trước khi connect, nên lỗi ở đây 
+      // thường là do Token cũ quá hoặc Hack, fallback về Guest là an toàn.
+      logger.warn(`[WS-Auth] Token verification failed: ${(error as Error).message}`);
     }
   }
 
-  // --- LOGIC ĐỒNG BỘ FINGERPRINT CHO WEBSOCKET ---
-  // Nếu có visitorId từ query, sử dụng nó làm định danh cho guest.
+  // --- LOGIC GUEST / FINGERPRINT ---
   if (visitorId && !(req as any).user) {
-    // Ghi đè hoặc tạo đối tượng fingerprint với hash từ client.
-    // Điều này đảm bảo tất cả các controller/service sau đó sẽ sử dụng cùng một định danh.
     (req as any).fingerprint = {
       ...(req as any).fingerprint,
       hash: visitorId,
     };
-    logger.info(`[WS-Auth] Identified guest using client-provided visitorId: ${visitorId}.`);
+    logger.info(`[WS-Auth] Identified guest: ${visitorId}`);
   }
-
 
   next();
 };

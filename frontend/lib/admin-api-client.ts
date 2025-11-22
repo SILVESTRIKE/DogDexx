@@ -172,6 +172,21 @@ export class AdminApiClient {
     );
   }
 
+  async getAdminReportPreview(payload: {
+    startDate: string;
+    endDate: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams({
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+    });
+    return this.client.request<any>(
+      `/bff/admin/reports/preview?${queryParams.toString()}`,
+      {},
+      true
+    );
+  }
+  
   // --- Report Management ---
   async exportAdminReport(params: {
     startDate: string;

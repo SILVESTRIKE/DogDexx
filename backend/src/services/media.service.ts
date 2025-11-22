@@ -9,7 +9,7 @@ import path from 'path';
 import { cloudinary } from '../config/cloudinary.config';
 import { DirectoryModel } from '../models/directory.model';
 import fs from 'fs/promises';
-
+import { logger } from "../utils/logger.util";
 export interface FindMediasOptions {
   page?: number;
   limit?: number;
@@ -94,7 +94,7 @@ export class MediaService {
     // Chỉ di chuyển nếu đường dẫn thay đổi
     if (oldPublicId !== newPublicId) {
       try {
-        console.log(`[Media Service] Moving Cloudinary resource from '${oldPublicId}' to '${newPublicId}' and updating asset_folder.`);
+        logger.info(`[Media Service] Moving Cloudinary resource from '${oldPublicId}' to '${newPublicId}' and updating asset_folder.`);
         // GIẢI PHÁP: Rename trước, sau đó dùng explicit để cập nhật asset_folder.
         const renameResult = await cloudinary.uploader.rename(oldPublicId, newPublicId, { overwrite: true });
         

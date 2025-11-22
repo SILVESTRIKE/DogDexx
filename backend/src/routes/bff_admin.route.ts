@@ -21,24 +21,20 @@ import {
   getPlans,
   getSubscriptions,
   browseHistories,
-  // THAY ĐỔI: Import các controller mới để quản lý Plans
   createPlan,
   updatePlan,
   deletePlan,
   getTransactions,
-  // THÊM: Import các controller cho Wiki
   getWikiBreeds,
   createWikiBreed,
   updateWikiBreed,
   deleteWikiBreed,
-  // THÊM: Import các controller cho AI Model
   getAIModels,
   activateAIModel,
-  // THÊM: Import controller cho dataset
   browseDatasets,
   downloadDataset,
-  // THÊM: Import controller cho report
   exportReport,
+  getReportPreview,
 } from '../controllers/bff_admin.controller';
 import { uploadSingle, uploadModelFiles } from '../middlewares/upload.middleware';
 
@@ -391,6 +387,30 @@ router.get('/datasets/download', downloadDataset);
  *         description: Bắt đầu tải file báo cáo.
  */
 router.get('/reports/export', exportReport);
+// --- THÊM MỚI: ENDPOINT ĐỂ XEM TRƯỚC BÁO CÁO ---
+/**
+ * @swagger
+ * /bff/admin/reports/preview:
+ *   get:
+ *     summary: (BFF-Admin) Xem trước số liệu báo cáo
+ *     tags: [BFF-Admin-Reports]
+ *     description: Trả về dữ liệu JSON thống kê để hiển thị biểu đồ trước khi xuất file.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: startDate
+ *         required: true
+ *         schema: { type: string, format: date-time }
+ *       - in: query
+ *         name: endDate
+ *         required: true
+ *         schema: { type: string, format: date-time }
+ *     responses:
+ *       200:
+ *         description: Trả về JSON dữ liệu báo cáo.
+ */
+router.get('/reports/preview', getReportPreview); // <--- Đăng ký route ở đây
 
 // --- CÁC ROUTE CÒN LẠI GIỮ NGUYÊN ---
 router.get('/subscriptions', getSubscriptions);

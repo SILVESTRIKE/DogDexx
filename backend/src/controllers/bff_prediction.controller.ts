@@ -610,7 +610,12 @@ export const bffPredictionController = {
         // Kiểm tra xem họ có đủ token để bắt đầu stream không
         if (remainingTokens < streamCost) {
           logger.warn(`[BFF-WS] Guest ${guestIdentifier} has insufficient tokens for stream. Required: ${streamCost}, Remaining: ${remainingTokens}. Closing connection.`);
-          ws.send(JSON.stringify({ type: 'error', message: 'Not enough tokens for streaming session.' }));
+          // SỬA ĐỔI: Thêm 'code' để frontend dễ dàng xác định lỗi
+          ws.send(JSON.stringify({ 
+            type: 'error', 
+            code: 'INSUFFICIENT_TOKENS',
+            message: 'Not enough tokens for streaming session.' 
+          }));
           ws.close(1008, "Insufficient tokens");
           return; // Dừng thực thi
         }
@@ -801,6 +806,7 @@ export const bffPredictionController = {
         logger.warn(
           "[BFF-WS] Client sent a message, but AI service is not connected. Dropping frame."
         );
+        // Client sent a message, but AI service is not connected. Dropping frame.
       }
     });
 
@@ -867,34 +873,26 @@ export const bffPredictionController = {
       if (redisClient) {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-          logger.info(`[BFF Controller] 🩺 Cache HIT for health recommendations: '${breedSlug}', lang: '${lang}'`);
           return res.status(200).json({ recommendations: cachedData });
         }
-        logger.info(`[BFF Controller] 🩺 Cache MISS for health recommendations: '${breedSlug}', lang: '${lang}'`);
       }
-
-      logger.info(`[BFF Controller] 🩺 Requesting health recommendations for slug: '${breedSlug}', lang: '${lang}'`);
 
       const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
       if (!breedInfo || !breedInfo.common_health_issues || breedInfo.common_health_issues.length === 0) {
-        logger.warn(`[BFF Controller] 🩺 No health issues found for slug '${breedSlug}'. Returning empty recommendations.`);
         return res.status(200).json({ recommendations: "" }); // Trả về chuỗi rỗng nếu không có thông tin
       }
 
-      logger.info(`[BFF Controller] 🩺 Found health issues: ${breedInfo.common_health_issues.join(', ')}. Calling Gemini...`);
       const recommendations = await getHealthRecommendations(
         breedInfo.breed,
         breedInfo.common_health_issues,
         lang
       );
-      logger.info(`[BFF Controller] 🩺 Gemini returned recommendations. Length: ${recommendations.length}`);
 
       // 2. Lưu kết quả vào cache
       if (redisClient && recommendations) {
         await redisClient.set(cacheKey, recommendations, { EX: REDIS_KEYS.CACHE_24H_SECONDS }); // Cache trong 24 giờ
       }
 
-      logger.info(`[BFF Controller] 🩺 Sending response for '${breedSlug}'.`);
       res.status(200).json({ recommendations });
     } catch (error) {
       next(error);
@@ -911,26 +909,20 @@ export const bffPredictionController = {
       if (redisClient) {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-          logger.info(`[BFF Controller] 🛍️ Cache HIT for recommended products: '${breedSlug}', lang: '${lang}'`);
           return res.status(200).json({ products: JSON.parse(cachedData) });
         }
-        logger.info(`[BFF Controller] 🛍️ Cache MISS for recommended products: '${breedSlug}', lang: '${lang}'`);
       }
 
-      logger.info(`[BFF Controller] 🛍️ Requesting recommended products for slug: '${breedSlug}', lang: '${lang}'`);
 
       const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
       if (!breedInfo) {
-        logger.error(`[BFF Controller] 🛍️ Breed not found for slug '${breedSlug}'.`);
         throw new NotFoundError("Breed not found");
       }
 
-      logger.info(`[BFF Controller] 🛍️ Breed found: '${breedInfo.breed}'. Calling Gemini...`);
       const productsJsonString = await getRecommendedProducts(
         breedInfo.breed,
         lang
       );
-      logger.info(`[BFF Controller] 🛍️ Gemini returned products JSON string. Length: ${productsJsonString.length}`);
       
       // 2. Lưu kết quả vào cache trước khi parse và gửi đi
       if (redisClient && productsJsonString && productsJsonString.length > 2) { // Chỉ cache nếu có nội dung
@@ -939,12 +931,10 @@ export const bffPredictionController = {
 
       try {
         const products = JSON.parse(productsJsonString);
-        logger.info(`[BFF Controller] 🛍️ Successfully parsed JSON. Found ${products.length} products. Sending response for '${breedSlug}'.`);
         res.status(200).json({ products });
       } catch (e) {
         logger.error(`[BFF Controller] Failed to parse recommended products JSON for breed '${breedSlug}':`, e);
         logger.error(`[BFF Controller] Invalid JSON string was: ${productsJsonString}`);
-        logger.info(`[BFF Controller] 🛍️ Sending empty products array due to parse error for '${breedSlug}'.`);
         res.status(200).json({ products: [] }); // Trả về mảng rỗng nếu parse lỗi
       }
 

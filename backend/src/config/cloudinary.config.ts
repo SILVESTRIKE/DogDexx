@@ -5,7 +5,7 @@ import dotenv from 'dotenv';
 import { Request } from 'express';
 import path from 'path';
 import crypto from 'crypto';
-
+import { logger } from '../utils/logger.util';
 dotenv.config();
 
 cloudinary.config({
@@ -71,7 +71,7 @@ export const avatarStorage = new CloudinaryStorage({
         asset_folder: folderPath
       };
 
-      console.log('[avatarStorage] Chuẩn bị trả về object cho multer:', result);
+      logger.info('[avatarStorage] Chuẩn bị trả về object cho multer:', result);
       
       return result;
 

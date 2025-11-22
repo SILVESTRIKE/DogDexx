@@ -87,7 +87,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
               collected ? `${rarityClassSet.bg} text-primary-foreground` : "bg-muted text-muted-foreground"
             }`}
           >
-            #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '???'}
+            #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
           </div>
           {collected && (
             <div className={`absolute top-3 right-3 ${rarityClassSet.bg} text-primary-foreground rounded-full p-2 shadow-lg animate-in zoom-in duration-300`}>

@@ -484,7 +484,23 @@ export const activateAIModel = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+export const getReportPreview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { startDate, endDate } = req.query as { startDate: string, endDate: string };
 
+    if (!startDate || !endDate) {
+      throw new AppError("Missing required query parameters: startDate, endDate");
+    }
+
+    const range = { startDate: new Date(startDate), endDate: new Date(endDate) };
+    
+    const data = await adminBffService.getReportPreview(range);
+
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
 export const exportReport = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate, format } = req.query as { startDate: string, endDate: string, format: 'excel' | 'word' };

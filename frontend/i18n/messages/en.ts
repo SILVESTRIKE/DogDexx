@@ -43,6 +43,8 @@ export default {
     myLibrary: "My Library",
     pricing: "Upgrade",
     tokens: "Tokens",
+    rank: "Rank",
+
   },
   auth: {
     loginTitle: "Login",
@@ -105,7 +107,7 @@ export default {
     globalDesc: "Supports 200+ dog breeds from around the world",
   },
   home: {
-    heroTitle: "AI-Powered Dog Breed Recognition",
+    heroTitle: "Dog Breed Recognition with",
     heroDescription:
       "Upload an image or video to identify dog breeds and discover detailed information about them",
     dragDropTitle: "Drag & Drop, Paste an Image, or Click to Upload",
@@ -229,8 +231,14 @@ export default {
     instruction2: "Keep camera steady",
     instruction3: "Center the dog in frame",
     instruction4: "System will auto-detect",
+    detectionsTitle: "Real-time Detections",
     connected: "Connected to AI Service",
     insufficientTokens: "Not enough tokens for streaming session.",
+  },
+  errors: {
+    insufficientTokensTitle: "Not Enough Tokens",
+    insufficientTokensForStream: "You don't have enough tokens to start a live stream.",
+    // ... các lỗi khác
   },
   dogdex: {
     title: "My DogDex",
@@ -557,6 +565,22 @@ export default {
         trend: "Trend",
         lastActive: "Last Active",
       },
+      cloudinaryCredits: "Cloudinary Plan Credits ({plan})",
+      creditInfo: "1 Credit = 1000 Transformations or 1GB Storage/Bandwidth",
+      used: "Used",
+      transformations: "Transformations",
+      transformationsDesc: "Resizing, AI Generation, Optimizing",
+      netStorage: "Net Storage",
+      limit: "Limit",
+      sharedCreditLimit: "Shared Credit Limit",
+      bandwidth: "Bandwidth (30d)",
+      csv: {
+        userName: "User Name",
+        email: "Email",
+        plan: "Plan",
+        tokensUsed: "Tokens Used",
+        tokensLimit: "Tokens Limit",
+      },
     },
     userManagement: {
       title: "User Management",
@@ -721,4 +745,32 @@ export default {
   plans: {
     title: "Plans"
   },
+  rankPage: {
+    title: "Leaderboard | DogDex",
+    description: "View the leaderboards for top dog breed collectors worldwide, by country, and by city.",
+    headerTitle: "Leaderboard",
+    headerDescription: "Honoring the most outstanding collectors",
+    scope: {
+      global: "Global",
+      country: "Country",
+      city: "City",
+    },
+    search: {
+      country: "Enter country name...",
+      city: "Enter city name...",
+    },
+    loading: "Updating data...",
+    error: "Could not load the leaderboard.",
+    empty: {
+      title: "No ranking data yet.",
+      description: "Enter a region to start searching.",
+    },
+    table: {
+      rank: "Rank",
+      collector: "Collector",
+      region: "Region",
+      achievement: "Achievement",
+    },
+    unupdated: "Not updated",
+  }
 };

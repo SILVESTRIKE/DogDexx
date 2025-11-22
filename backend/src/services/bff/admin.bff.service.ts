@@ -16,7 +16,7 @@ import { DirectoryItem } from '../../types/zod/admin.zod';
 import { ReportDateRange, ReportService } from '../report.service';
 import * as ExcelJS from 'exceljs';
 import { MediaDoc } from '../../models/medias.model';
-
+import { logger } from '../..//utils/logger.util';
 /**
  * Lớp này chứa toàn bộ logic nghiệp vụ cho trang Admin.
  * Nó tổng hợp logic từ các service lõi (AdminService, FeedbackService, UserService, v.v.)
@@ -84,13 +84,13 @@ export class AdminBffService {
   // --- Media & History Browsing ---
   public async browseMedia(path: string): Promise<{ directories: DirectoryItem[], media: MediaDoc[] }> {
     // --- LOGGING: Bắt đầu xử lý ---
-    console.log(`\n[BFF_SERVICE] Bắt đầu browseMedia với path: "${path}"`);
+    logger.info(`\n[BFF_SERVICE] Bắt đầu browseMedia với path: "${path}"`);
 
     const parts = path.split('/').filter(Boolean);
     const lastPart = parts.length > 0 ? parts[parts.length - 1] : null;
 
     // --- LOGGING: Phân tích path ---
-    console.log(`[BFF_SERVICE] Phân tích path: parts=${JSON.stringify(parts)}, lastPart="${lastPart}"`);
+    logger.info(`[BFF_SERVICE] Phân tích path: parts=${JSON.stringify(parts)}, lastPart="${lastPart}"`);
 
     // TRƯỜNG HỢP 1: Đang yêu cầu nội dung của một thư mục ảo ('images' hoặc 'videos')
     if (lastPart === 'images' || lastPart === 'videos') {
@@ -98,27 +98,27 @@ export class AdminBffService {
       const realDirectoryId = parts.slice(0, -1).join('/');
 
       // --- LOGGING: Vào nhánh "Thư mục ảo" ---
-      console.log(`[BFF_SERVICE] -> Nhánh THƯ MỤC ẢO. Lọc theo type: "${mediaTypeToFilter}", ID thư mục thật: "${realDirectoryId}"`);
+      logger.info(`[BFF_SERVICE] -> Nhánh THƯ MỤC ẢO. Lọc theo type: "${mediaTypeToFilter}", ID thư mục thật: "${realDirectoryId}"`);
 
       const coreResult = await this.adminService.browseMediaByLogic(realDirectoryId);
 
       // --- LOGGING: Kết quả nhận được từ Core Service (TRƯỚC KHI LỌC) ---
-      console.log(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
+      logger.info(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
       // In ra vài media item để kiểm tra type
       if (coreResult.media.length > 0) {
-        console.log(`[BFF_SERVICE] Ví dụ media type: "${coreResult.media[0].type}"`);
+        logger.info(`[BFF_SERVICE] Ví dụ media type: "${coreResult.media[0].type}"`);
       }
 
       const filteredMedia = coreResult.media.filter((m: MediaDoc) => m.type?.startsWith(mediaTypeToFilter));
 
       // --- LOGGING: Kết quả SAU KHI LỌC ---
-      console.log(`[BFF_SERVICE] Sau khi lọc, còn lại: ${filteredMedia.length} media files.`);
+      logger.info(`[BFF_SERVICE] Sau khi lọc, còn lại: ${filteredMedia.length} media files.`);
 
       const finalResult = {
         directories: [],
         media: filteredMedia,
       };
-      console.log(`[BFF_SERVICE] Hoàn tất. Trả về ${finalResult.media.length} media.`);
+      logger.info(`[BFF_SERVICE] Hoàn tất. Trả về ${finalResult.media.length} media.`);
       return finalResult;
     }
 
@@ -126,19 +126,19 @@ export class AdminBffService {
     const realDirectoryId = path;
     
     // --- LOGGING: Vào nhánh "Thư mục thật" ---
-    console.log(`[BFF_SERVICE] -> Nhánh THƯ MỤC THẬT. ID: "${realDirectoryId}"`);
+    logger.info(`[BFF_SERVICE] -> Nhánh THƯ MỤC THẬT. ID: "${realDirectoryId}"`);
 
     const coreResult = await this.adminService.browseMediaByLogic(realDirectoryId);
 
     // --- LOGGING: Kết quả nhận được từ Core Service ---
-    console.log(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
+    logger.info(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
     
     const virtualDirectories: DirectoryItem[] = [];
     const hasImages = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('image'));
     const hasVideos = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('video'));
 
     // --- LOGGING: Kiểm tra sự tồn tại của media để tạo thư mục ảo ---
-    console.log(`[BFF_SERVICE] Kiểm tra media: có ảnh? ${hasImages}, có video? ${hasVideos}`);
+    logger.info(`[BFF_SERVICE] Kiểm tra media: có ảnh? ${hasImages}, có video? ${hasVideos}`);
 
     if (hasImages) {
       virtualDirectories.push({
@@ -161,7 +161,7 @@ export class AdminBffService {
       media: [],
     };
 
-    console.log(`[BFF_SERVICE] Hoàn tất. Trả về ${finalResult.directories.length} thư mục (bao gồm cả thật và ảo).`);
+    logger.info(`[BFF_SERVICE] Hoàn tất. Trả về ${finalResult.directories.length} thư mục (bao gồm cả thật và ảo).`);
     return finalResult;
   }
   public async deleteMedia(mediaId: string) {
@@ -173,7 +173,7 @@ export class AdminBffService {
   }
 
   public async downloadDataset() {
-    console.log('[BFF Service] Yêu cầu tải về dataset archive.');
+    logger.info('[BFF Service] Yêu cầu tải về dataset archive.');
     return this.adminService.generateDatasetArchiveUrl();
   }
 
@@ -298,7 +298,10 @@ export class AdminBffService {
     await this.configService.reloadAiService();
     return { message: "Model đã được kích hoạt và AI service đã được yêu cầu tải lại.", data: activatedModel };
   }
-
+  public async getReportPreview(range: ReportDateRange) {
+    // Gọi hàm getReportData (giờ đã là public) để lấy JSON
+    return this.reportService.getReportData(range);
+  }
   // --- THÊM MỚI: Report Management ---
   public async generateExcelReport(range: ReportDateRange): Promise<ExcelJS.Buffer> {
     return this.reportService.generateExcelReport(range);

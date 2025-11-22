@@ -62,7 +62,7 @@ export interface RegisterResponse {
 export interface DogBreed {
   slug: string;
   breed: string;
-  dogdexNumber?: number;
+  pokedexNumber?: number;
   group?: string;
   origin?: string;
   mediaUrl?: string;
@@ -173,6 +173,13 @@ export interface ApiError {
   error?: any
 }
 
+// THÊM MỚI: Cấu trúc cho tin nhắn lỗi qua WebSocket
+export interface WebSocketError {
+  type: 'error';
+  code?: 'INSUFFICIENT_TOKENS' | string; // Mã lỗi để xác định nguyên nhân
+  message: string;
+}
+
 // Cấu trúc cho một con chó được phát hiện trong mảng 'detections'
 export interface Detection {
   detectedBreed: string; // slug
@@ -259,4 +266,21 @@ export interface Subscription {
   startDate: string;
   endDate: string | null;
   createdAt: string;
+}
+export interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  country?: string;
+  city?: string;
+  totalCollected: number;
+  rank: number;
+}
+
+export interface LeaderboardResponse {
+  success: boolean;
+  scope: 'global' | 'country' | 'city';
+  filterValue: string;
+  data: LeaderboardEntry[];
 }

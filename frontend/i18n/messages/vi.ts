@@ -43,6 +43,7 @@ export default {
     myLibrary: "Thư viện",
     pricing: "Nâng cấp",
     tokens: "Tokens",
+    rank: "Xếp hạng",
   },
   auth: {
     loginTitle: "Đăng nhập",
@@ -109,7 +110,7 @@ export default {
     globalDesc: "Hỗ trợ hơn 200 giống chó từ khắp nơi trên thế giới",
   },
   home: {
-    heroTitle: "Nhận diện giống chó bằng AI",
+    heroTitle: "Nhận diện giống chó với",
     heroDescription:
       "Upload ảnh hoặc video để nhận diện giống chó và khám phá thông tin chi tiết về chúng",
     dragDropTitle: "Kéo thả, dán ảnh, hoặc nhấn để tải lên",
@@ -233,8 +234,18 @@ export default {
     instruction2: "Giữ camera ổn định",
     instruction3: "Đưa chó vào giữa khung hình",
     instruction4: "Hệ thống sẽ tự động nhận diện",
+    detectionsTitle: "Kết quả thời gian thực",
     connected: "Đã kết nối đến dịch vụ AI",
     insufficientTokens: "Không đủ token để bắt đầu phiên stream.",
+    redirectError: "Không lấy được ID dự đoán để chuyển hướng.",
+    serverError: "Lỗi máy chủ",
+    disconnectedError: "Đã mất kết nối với máy chủ.",
+    connectError: "Kết nối thất bại",
+  },
+  errors: {
+    insufficientTokensTitle: "Không đủ Token",
+    insufficientTokensForStream: "Bạn không có đủ token để bắt đầu nhận diện trực tiếp.",
+    // ... các lỗi khác
   },
   dogdex: {
     title: "DogDex của tôi",
@@ -576,6 +587,23 @@ export default {
         trend: "Xu hướng",
         lastActive: "Hoạt động cuối",
       },
+      cloudinaryCredits: "Credits gói Cloudinary ({plan})",
+      creditInfo: "1 Credit = 1000 Biến đổi hoặc 1GB Lưu trữ/Băng thông",
+      used: "Đã dùng",
+      transformations: "Số lần biến đổi",
+      transformationsDesc: "Thay đổi kích thước, tạo bằng AI, tối ưu hóa",
+      netStorage: "Lưu trữ ròng",
+      limit: "Giới hạn",
+      sharedCreditLimit: "Dùng chung giới hạn Credit",
+      bandwidth: "Băng thông (30 ngày)",
+      csv: {
+        userName: "Tên người dùng",
+        email: "Email",
+        plan: "Gói",
+        tokensUsed: "Tokens đã dùng",
+        tokensLimit: "Giới hạn Tokens",
+        lastActive: "Hoạt động cuối",
+      },
     },
     userManagement: {
       title: "Quản lý người dùng",
@@ -606,6 +634,12 @@ export default {
         "Tạo và xuất các báo cáo chi tiết về hoạt động của hệ thống.",
       reportControls: "Tùy chọn báo cáo",
       selectDateRange: "Chọn khoảng thời gian",
+      usersByPlanDesc: "Phân bổ người dùng hiện tại theo các gói cước.",
+      predictionSourceTitle: "Phân tích nguồn dự đoán",
+      predictionSourceDesc: "Tỷ lệ dự đoán từ ảnh, video và camera trực tiếp.",
+      feedbackStatusTitle: "Tình trạng Feedback",
+      revenueByPlanTitle: "Doanh thu theo Gói",
+      revenueByPlanDesc: "Tổng doanh thu từ mỗi gói trong khoảng thời gian đã chọn.",
       generateReport: "Tạo báo cáo",
       export: "Xuất file",
       exportExcel: "Xuất Excel (.xlsx)",
@@ -630,6 +664,7 @@ export default {
     sourceImage: "Ảnh tải lên",
     sourceVideo: "Video tải lên",
     sourceStream: "Chụp từ Camera",
+    source: "Nguồn",
     sortBy: "Sắp xếp theo",
     sortNewest: "Mới nhất trước",
     sortOldest: "Cũ nhất trước",
@@ -770,4 +805,32 @@ export default {
   plans: {
     title: "Gói cước",
   },
+  rankPage: {
+    title: "Bảng Xếp Hạng | DogDex",
+    description: "Xem bảng xếp hạng các nhà sưu tầm giống chó hàng đầu trên toàn thế giới, quốc gia và thành phố.",
+    headerTitle: "Bảng Xếp Hạng",
+    headerDescription: "Vinh danh những nhà sưu tầm xuất sắc nhất",
+    scope: {
+      global: "Toàn cầu",
+      country: "Quốc gia",
+      city: "Thành phố",
+    },
+    search: {
+      country: "Nhập tên quốc gia...",
+      city: "Nhập tên thành phố...",
+    },
+    loading: "Đang cập nhật dữ liệu...",
+    error: "Không thể tải bảng xếp hạng.",
+    empty: {
+      title: "Chưa có dữ liệu xếp hạng.",
+      description: "Nhập khu vực để bắt đầu tìm kiếm.",
+    },
+    table: {
+      rank: "Hạng",
+      collector: "Nhà sưu tầm",
+      region: "Khu vực",
+      achievement: "Thành tích",
+    },
+    unupdated: "Chưa cập nhật",
+  }
 };

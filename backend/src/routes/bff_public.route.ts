@@ -60,4 +60,37 @@ router.get('/plans/:slug', bffPublicController.getPublicPlanBySlug);
  */
 router.post('/contact', bffPublicController.handleContactForm);
 
+/**
+ * @swagger
+ * /bff/public/leaderboard:
+ *   get:
+ *     tags: [BFF-Public]
+ *     summary: Xem bảng xếp hạng
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema: { enum: [global, country, city] }
+ *       - in: query
+ *         name: value
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: OK
+ */
+router.get('/leaderboard',  bffPublicController.getLeaderboard);
+
+/**
+ * @swagger
+ * /bff/public/leaderboard/locations:
+ *   get:
+ *     tags: [BFF-Public]
+ *     summary: Lấy danh sách địa điểm để lọc
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         required: true
+ *         schema: { enum: [country, city] }
+ */
+router.get('/leaderboard/locations',  bffPublicController.getLeaderboardLocations);
+
 export default router;

@@ -1,6 +1,6 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
+  "name": "dogdex-project",
+  "version": "1.10.8",
   "private": true,
   "scripts": {
     "build": "next build",
@@ -43,6 +43,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
+    "country-state-city": "^3.2.1",
     "date-fns": "4.1.0",
     "embla-carousel-react": "latest",
     "framer-motion": "^12.23.24",

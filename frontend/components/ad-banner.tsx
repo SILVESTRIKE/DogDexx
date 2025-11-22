@@ -12,7 +12,7 @@ export default function AdBanner() {
   if (!isVisible) return null
 
   return (
-    <div className="bg-gradient-to-r from-primary/20 to-primary/10 border-b border-primary/20 py-3 px-4">
+    <div className="position-absolute top-0 bg-gradient-to-r from-primary/20 to-primary/10 border-b border-primary/20 py-3 px-4">
       <div className="container mx-auto flex items-center justify-between gap-4">
         <div className="flex-1">
           <p className="text-sm font-medium">

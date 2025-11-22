@@ -409,12 +409,12 @@ export const predictionService = {
             return `${result.public_id}.${result.format}`;
         };
 
-        console.log("Bắt đầu xử lý AI và upload file gốc song song...");
+        logger.info("Bắt đầu xử lý AI và upload file gốc song song...");
         const [predictionResult, originalMediaPathForDb] = await Promise.all([
             sendToAIService(),
             uploadOriginalToCloudinary()
         ]);
-        console.log("Xử lý AI và upload file gốc đã hoàn tất.");
+        logger.info("Xử lý AI và upload file gốc đã hoàn tất.");
 
         if (!predictionResult?.predictions || !predictionResult?.processed_media_base64) {
           throw new Error("Kết quả từ AI service không hợp lệ.");
@@ -429,14 +429,14 @@ export const predictionService = {
         });
         await newMedia.save();
         
-        console.log("Đang upload file đã xử lý...");
+        logger.info("Đang upload file đã xử lý...");
         const processedFolder = `public/processed/${type}s`;
         const processedMediaPathForDb = await uploadBase64ToCloudinary(
             predictionResult.processed_media_base64,
             processedFolder,
             type
         );
-        console.log("Upload file đã xử lý hoàn tất.");
+        logger.info("Upload file đã xử lý hoàn tất.");
         
         analyticsService.trackEvent({
           eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
