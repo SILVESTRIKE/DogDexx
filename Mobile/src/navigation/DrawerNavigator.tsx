@@ -99,24 +99,6 @@ export default function DrawerNavigator() {
                   style={styles.menuItems}
                   showsVerticalScrollIndicator={false}
                 >
-                  {/* <TouchableOpacity style={styles.menuItem}>
-                    <View style={styles.menuIcon}>
-                      <Ionicons
-                        name="settings-outline"
-                        size={22}
-                        color="#007AFF"
-                      />
-                    </View>
-                    <Text style={styles.menuText}>
-                      {t('footer.setting') || 'Setting'}
-                    </Text>
-                    <Ionicons
-                      name="chevron-forward"
-                      size={16}
-                      color="#999"
-                      style={styles.chevron}
-                    />
-                  </TouchableOpacity> */}
                   <TouchableOpacity
                     style={styles.menuItem}
                     onPress={() => {
@@ -161,7 +143,13 @@ export default function DrawerNavigator() {
                     />
                   </TouchableOpacity>
 
-                  <TouchableOpacity style={styles.menuItem}>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      closeDrawer();
+                      navigation.navigate('AboutScreen');
+                    }}
+                  >
                     <View style={styles.menuIcon}>
                       <Ionicons
                         name="information-circle-outline"
@@ -179,6 +167,30 @@ export default function DrawerNavigator() {
                       style={styles.chevron}
                     />
                   </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.menuItem}
+                    onPress={() => {
+                      closeDrawer();
+                      navigation.navigate('ProfileScreen1');
+                    }}
+                  >
+                    <View style={styles.menuIcon}>
+                      <Ionicons
+                        name="person-outline"
+                        size={22}
+                        color="#007AFF"
+                      />
+                    </View>
+                    <Text style={styles.menuText}>
+                      {t('nav.profile') || 'Profile'}
+                    </Text>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={16}
+                      color="#999"
+                      style={styles.chevron}
+                    />
+                  </TouchableOpacity>
 
                   <View style={styles.languageToggleContainer}>
                     <LanguageToggle />
@@ -186,24 +198,26 @@ export default function DrawerNavigator() {
 
                   <View style={styles.divider} />
 
-                  <TouchableOpacity
-                    style={[styles.menuItem, styles.logoutItem]}
-                    onPress={() => {
-                      closeDrawer();
-                      logout();
-                    }}
-                  >
-                    <View style={[styles.menuIcon, styles.logoutIcon]}>
-                      <Ionicons
-                        name="log-out-outline"
-                        size={22}
-                        color="#DC3545"
-                      />
-                    </View>
-                    <Text style={[styles.menuText, styles.logoutText]}>
-                      {t('nav.logout') || 'Logout'}
-                    </Text>
-                  </TouchableOpacity>
+                  {user?.username !=='Guest' && (
+                    <TouchableOpacity
+                      style={[styles.menuItem, styles.logoutItem]}
+                      onPress={() => {
+                        closeDrawer();
+                        logout();
+                      }}
+                    >
+                      <View style={[styles.menuIcon, styles.logoutIcon]}>
+                        <Ionicons
+                          name="log-out-outline"
+                          size={22}
+                          color="#DC3545"
+                        />
+                      </View>
+                      <Text style={[styles.menuText, styles.logoutText]}>
+                        {t('nav.logout') || 'Logout'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </ScrollView>
 
                 {/* Footer */}

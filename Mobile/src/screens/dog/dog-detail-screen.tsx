@@ -100,6 +100,7 @@ export default function DogDetailScreen() {
   }
 
   const dog = data.breed
+  console.log(dog.mediaUrl);
   const collected = data.collectionStatus.isCollected
 
   const renderStat = (label: string, value: number, icon: React.ReactNode, color: string) => (

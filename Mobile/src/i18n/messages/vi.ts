@@ -1,6 +1,6 @@
 export default {
   common: {
-    appName: "DogDex AI",
+    appName: "DogDex",
     loading: "Đang tải...",
     error: "Đã có lỗi xảy ra",
     success: "Thành công",
@@ -16,9 +16,11 @@ export default {
     searchPlaceholder: "Tìm kiếm...",
     page: "Trang",
     filter: "Lọc",
+    all: "Tất cả",
     sort: "Sắp xếp",
     viewAll: "Xem tất cả",
     guest: "Khách",
+    getStarted: "Bắt đầu ngay",
   },
   nav: {
     detect: "Nhận diện",
@@ -624,6 +626,40 @@ export default {
     cardPlaceholder: "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
     pay: "Thanh toán",
     failed: "Thanh toán thất bại",
+  },
+  contact: {
+    title: "Liên hệ với chúng tôi",
+    description:
+      "Điền vào biểu mẫu dưới đây và chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.",
+    emailLabel: "Email của bạn",
+    emailPlaceholder: "ban@example.com",
+    messageLabel: "Nội dung tin nhắn",
+    messagePlaceholder: "Nhập tin nhắn của bạn tại đây...",
+    submit: "Gửi tin nhắn",
+    submitSuccess: "Tin nhắn của bạn đã được gửi thành công!",
+    submitError: "Gửi tin nhắn thất bại. Vui lòng thử lại sau.",
+  },
+  about: {
+    title: "Về DogDex AI",
+    subtitle: "Cách mạng hóa việc nhận dạng giống chó bằng trí tuệ nhân tạo",
+    mission: "Sứ mệnh của chúng tôi",
+    missionText:
+      "Chúng tôi tin rằng công nghệ nên làm cho thế giới kết nối hơn. DogDex AI sử dụng AI tiên tiến để giúp những người yêu chó, bác sĩ thú y và nhà nghiên cứu nhận dạng giống chó ngay lập tức. Sứ mệnh của chúng tôi là làm cho việc nhận dạng giống chó có thể tiếp cận được với mọi người, ở mọi nơi.",
+    team: "Đội ngũ của chúng tôi",
+    teamText:
+      "Được xây dựng bởi một đội ngũ tâm huyết gồm các nhà nghiên cứu AI, những người yêu chó và các kỹ sư phần mềm tận tâm tạo ra trải nghiệm nhận dạng giống chó tốt nhất.",
+    ready: "Sẵn sàng để bắt đầu?",
+    fastTitle: "Nhanh như chớp",
+    fastDesc:
+      "Nhận dạng giống chó theo thời gian thực được hỗ trợ bởi AI tiên tiến",
+    secureTitle: "An toàn & Riêng tư",
+    secureDesc:
+      "Dữ liệu của bạn được mã hóa và không bao giờ chia sẻ với bên thứ ba",
+    communityTitle: "Phát triển bởi cộng đồng",
+    communityDesc:
+      "Tham gia cùng hàng ngàn người yêu chó để cùng nhau cải thiện AI",
+    globalTitle: "Quy mô toàn cầu",
+    globalDesc: "Hỗ trợ hơn 200 giống chó từ khắp nơi trên thế giới",
   },
   language: {
     toggle: "Chuyển đổi ngôn ngữ",

@@ -20,7 +20,7 @@ import { LoginResponse } from '../../lib/types';
 type LoginScreenProps = NativeStackScreenProps<
   ProfileStackParamList,
   'LoginScreen'
->;
+>;  
 
 export default function LoginScreen({ navigation }: LoginScreenProps) {
   const { user, setUser, logout , login} = useAuth();

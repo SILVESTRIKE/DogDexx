@@ -1,14 +1,18 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
 import { AlertCircle } from "lucide-react-native"
 import { useI18n } from "../lib/i18n-context"
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../navigation/RootNavigator";
+import { useNavigation } from "@react-navigation/native";
+import { ScanStackParamList } from "../navigation/ScanStack";
 
 interface ErrorViewProps {
   error: string
 }
-
+type AboutScreenRouteProp = NativeStackNavigationProp<ScanStackParamList>;
 export default function ErrorView({ error }: ErrorViewProps) {
   const { t } = useI18n()
-
+  const navigation = useNavigation<AboutScreenRouteProp>();
   return (
     <View style={styles.container}>
       <View style={styles.card}>
@@ -17,7 +21,7 @@ export default function ErrorView({ error }: ErrorViewProps) {
         </View>
         <Text style={styles.title}>{t("common.error")}</Text>
         <Text style={styles.message}>{error}</Text>
-        <TouchableOpacity style={styles.button}>
+        <TouchableOpacity style={styles.button} onPress={() => navigation.goBack()}>
           <Text style={styles.buttonText}>{t("common.back")}</Text>
         </TouchableOpacity>
       </View>

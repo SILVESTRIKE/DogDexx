@@ -1,189 +1,196 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  ActivityIndicator,
   Dimensions,
-  Alert,
+  ActivityIndicator,
 } from 'react-native';
-import {
-  Camera,
-  useCameraDevice,
-  useCameraPermission,
-} from 'react-native-vision-camera';
-
+import { Camera, useCameraDevice, PhotoFile } from 'react-native-vision-camera';
+import ImageResizer from 'react-native-image-resizer';
 import RNFS from 'react-native-fs';
-// Icons - sử dụng react-native-vector-icons hoặc expo-vector-icons
+import { useNavigation } from '@react-navigation/native';
 import Icon from 'react-native-vector-icons/Feather';
 import { apiClient } from '../../lib/api-client';
-import { captureRef } from 'react-native-view-shot';
-import { FeedStackParamList } from '../../navigation/FeedStack';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { FeedStackParamList } from '../../navigation/FeedStack';
 import { useI18n } from '../../lib/i18n-context';
+
 // Types
+interface BoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
 interface Detection {
   detectedBreed: string;
   confidence: number;
-  boundingBox?: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
+  boundingBox?: BoundingBox;
 }
 
+// Constants
+const STREAM_FRAME_WIDTH = 640;
+const FRAME_INTERVAL_MS = 200; // 5 FPS
+const WS_URL = 'ws://your-server-url/stream'; // Thay đổi URL của bạn
 type Props = NativeStackScreenProps<FeedStackParamList, 'LiveScreen'>;
 export default function LiveDetectionScreen({ navigation, route }: Props) {
-  const { t } = useI18n();
+  const device = useCameraDevice('back');
   const cameraRef = useRef<Camera>(null);
   const wsRef = useRef<WebSocket | null>(null);
+  // const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { hasPermission, requestPermission } = useCameraPermission();
-  const device = useCameraDevice('back');
+  const isCapturingRef = useRef<boolean>(false);
+  const { t } = useI18n();
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [detections, setDetections] = useState<Detection[]>([]);
+  const [hasPermission, setHasPermission] = useState(false);
 
-  // Initialize WebSocket - SỬ DỤNG LẠI apiClient
-  const initializeWebSocket = async () => {
+  // Request camera permission
+  useEffect(() => {
+    (async () => {
+      const status = await Camera.requestCameraPermission();
+      setHasPermission(status === 'granted');
+    })();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopCamera('Component Unmount');
+    };
+  }, []);
+
+  // Initialize WebSocket
+  const initializeWebSocket = useCallback(async () => {
     try {
-      // Import apiClient từ file của bạn
       const ws = await apiClient.connectStreamPrediction1();
-      console.log('[RN] WebSocket connecting to:', ws);
 
       ws.onopen = () => {
-        console.log('[BFF-WS] WebSocket connected');
-        console.log('[RN] WebSocket ready state:', ws.readyState);
+        console.log('[WS] Connected');
         setIsConnected(true);
+        setIsConnecting(false);
       };
 
-      ws.onmessage = (event: any) => {
+      ws.onmessage = event => {
         try {
           const data = JSON.parse(event.data);
-          console.log('[BFF-WS] Message received:', data);
+
           if (data.type === 'final_result') {
-            console.log('[BFF-WS] Final result received:', data);
+            console.log('[WS] Final result received:', data);
             if (data.predictionId) {
-              stopCamera('Stream Completed');
-              navigation.navigate('ResulteScreen', { id: data.predictionId });
-            } else {
-              console.error(
-                '[BFF-WS] Final result missing predictionId:',
-                data,
+              console.log(
+                '[WS] Navigating to Results with ID:',
+                data.predictionId,
               );
-              Alert.alert('Error', 'Failed to get prediction ID for redirect.');
+              stopCamera('Received Final Result');
+              // navigation.navigate('Results' as never, { id: data.predictionId } as never);
+              navigation.navigate('ResulteScreen', { id: data.predictionId });
             }
           } else if (data.type === 'endOfStream') {
-            console.log('[BFF-WS] Stream ended:', data.message);
+            console.log('[WS] Stream ended:', data.message);
             stopCamera('Stream Completed');
           } else if (data && Array.isArray(data.detections)) {
             setDetections(data.detections);
           } else if (data.error) {
-            const errorMessage = data.error || 'An unknown error occurred.';
-            console.error('[BFF-WS] Error from server:', errorMessage);
-            Alert.alert('Server Error', errorMessage);
+            console.error('[WS] Server error:', data.error);
           }
         } catch (error) {
-          console.error('[RN] Error parsing WebSocket message:', error);
+          console.error('[WS] Parse error:', error);
         }
       };
 
-      ws.onerror = (event: any) => {
-        console.error('[BFF-WS] WebSocket error occurred:', event.code);
+      ws.onerror = () => {
+        console.error('[WS] Error occurred');
         setIsConnected(false);
       };
 
-      ws.onclose = (event: any) => {
-        console.log(
-          `[BFF-WS] WebSocket disconnected: Code=${event.code}, Reason=${event.reason}`,
-        );
+      ws.onclose = event => {
+        console.log(`[WS] Closed: Code=${event.code}`);
         setIsConnected(false);
-        stopCamera('Connection Closed');
         if (event.code !== 1000 && event.code !== 1005) {
-          let message = 'Connection to server closed unexpectedly.';
-          switch (event.code) {
-            case 1008:
-              message =
-                'Insufficient tokens or policy violation. Stream stopped.';
-              break;
-            case 1011:
-              message = 'Server error occurred. Please try again later.';
-              break;
-            default:
-              message += ` (Code: ${event.code})`;
-          }
-
-          //Alert.alert('Disconnected', message);
+          stopCamera('Connection Closed');
         }
       };
 
       wsRef.current = ws;
     } catch (error) {
-      console.error('[RN] Error connecting WebSocket:', error);
-      Alert.alert(
-        'Connection Error',
-        'Failed to connect to the detection service. Please try again later.',
-      );
+      console.error('[WS] Connection error:', error);
+      setIsConnecting(false);
     }
-  };
+  }, [navigation]);
 
   // Send frame to WebSocket
-  const sendFrameToWebSocket = async () => {
-    //  if (!isStreaming) console.log('Not streaming currently');
-    console.log('isStreaming status:', wsRef.current!.readyState);
+  const sendFrameToWebSocket = useCallback(async () => {
+    const camera = cameraRef.current;
+
     if (
-      !cameraRef.current ||
+      !camera ||
       !wsRef.current ||
-      wsRef.current.readyState !== WebSocket.OPEN
+      wsRef.current.readyState !== WebSocket.OPEN ||
+      isCapturingRef.current
     ) {
-      console.log('Camera not ready or WebSocket not open or not streaming');
       return;
     }
+
+    isCapturingRef.current = true;
 
     try {
-      // Chụp ảnh từ camera
-      const photo = await cameraRef.current.takePhoto({
-        flash: 'off',
+      // Capture photo
+      const photo: PhotoFile = await camera.takePhoto({
+        enableShutterSound: false,
       });
-      const base64 = await RNFS.readFile(photo.path, 'base64');
-      const dataUrl = `data:image/jpeg;base64,${base64}`;
+
+      const photoUri = `file://${photo.path}`;
+
+      // Calculate target dimensions
+      const aspectRatio = photo.height / photo.width;
+      const targetWidth = STREAM_FRAME_WIDTH;
+      const targetHeight = Math.round(targetWidth * aspectRatio);
+
+      // Resize image
+      const resizedImage = await ImageResizer.createResizedImage(
+        photoUri,
+        targetWidth,
+        targetHeight,
+        'JPEG',
+        60,
+        0,
+        undefined,
+        false,
+        { mode: 'contain', onlyScaleDown: false },
+      );
+
+      // Read as base64
+      const base64Data = await RNFS.readFile(resizedImage.uri, 'base64');
+
+      // Send via WebSocket
       if (wsRef.current?.readyState === WebSocket.OPEN) {
+        const dataUrl = `data:image/jpeg;base64,${base64Data}`;
         wsRef.current.send(dataUrl);
-        console.log('Frame sent to WebSocket');
       }
+
+      // Cleanup temp files
+      await RNFS.unlink(photo.path).catch(() => {});
+      await RNFS.unlink(resizedImage.uri.replace('file://', '')).catch(
+        () => {},
+      );
     } catch (error) {
-      //console.error('[Camera] Capture error:', error);// isstreaming đặt kiểm tra ngay đầu thì nó không gửi luôn
+      console.warn('[Camera] Frame capture error:', error);
+    } finally {
+      isCapturingRef.current = false;
     }
-  };
+  }, []);
 
-  // Start camera and streaming
-  const startCamera = async () => {
-    if (!hasPermission) {
-      const granted = await requestPermission();
-      if (!granted) {
-        Alert.alert(
-          'Permission Required',
-          'Camera permission is required to use this feature.',
-        );
-        return;
-      }
-    }
-    if (
-      wsRef.current &&
-      (wsRef.current.readyState === WebSocket.OPEN ||
-        wsRef.current.readyState === WebSocket.CONNECTING)
-    ) {
-      console.log('Socket already exists/connecting');
-      return;
-    }
-
+  // Start camera streaming
+  const startCamera = useCallback(async () => {
     if (isStreaming) {
-      stopCamera('User initiated');
-      return;
+      stopCamera('Restart');
     }
 
     setIsStreaming(true);
@@ -191,19 +198,16 @@ export default function LiveDetectionScreen({ navigation, route }: Props) {
     setIsConnecting(true);
 
     await initializeWebSocket();
-    setIsConnecting(false);
 
-    //Gửi frame mỗi 200ms (5 FPS)
+    // Start frame capture interval
     frameIntervalRef.current = setInterval(() => {
       sendFrameToWebSocket();
-    }, 1000);
-  };
+    }, FRAME_INTERVAL_MS);
+  }, [isStreaming, initializeWebSocket, sendFrameToWebSocket]);
 
-  // Stop camera
-  const stopCamera = (reason: string = 'Client initiated') => {
-   // console.log(`[RN] Stopping camera1: ${reason}`);
-    setIsStreaming(false);
-    setDetections([]);
+  // Stop camera streaming
+  const stopCamera = useCallback((reason: string = 'Client initiated') => {
+    console.log('[Camera] Stopping:', reason);
 
     if (frameIntervalRef.current) {
       clearInterval(frameIntervalRef.current);
@@ -216,12 +220,11 @@ export default function LiveDetectionScreen({ navigation, route }: Props) {
       }
       wsRef.current = null;
     }
-  };
 
-  useEffect(() => {
-    return () => {
-      stopCamera('Component Unmount');
-    };
+    setIsStreaming(false);
+    setIsConnected(false);
+    setIsConnecting(false);
+    setDetections([]);
   }, []);
 
   // Render connection status badge
@@ -230,7 +233,7 @@ export default function LiveDetectionScreen({ navigation, route }: Props) {
 
     if (isConnected) {
       return (
-        <View style={styles.badgeConnected}>
+        <View style={[styles.badge, styles.badgeConnected]}>
           <Icon name="wifi" size={12} color="#fff" />
           <Text style={styles.badgeText}>Connected</Text>
         </View>
@@ -239,25 +242,43 @@ export default function LiveDetectionScreen({ navigation, route }: Props) {
 
     if (isConnecting) {
       return (
-        <View style={styles.badgeConnecting}>
-          <ActivityIndicator size="small" color="#666" />
-          <Text style={styles.badgeTextDark}>Connecting...</Text>
+        <View style={[styles.badge, styles.badgeConnecting]}>
+          <ActivityIndicator size="small" color="#fff" />
+          <Text style={styles.badgeText}>Connecting...</Text>
         </View>
       );
     }
 
     return (
-      <View style={styles.badgeConnecting}>
-        <Icon name="wifi-off" size={12} color="#666" />
-        <Text style={styles.badgeTextDark}>Connecting...</Text>
+      <View style={[styles.badge, styles.badgeDisconnected]}>
+        <Icon name="wifi-off" size={12} color="#fff" />
+        <Text style={styles.badgeText}>Disconnected</Text>
       </View>
     );
   };
 
+  // No permission view
+  if (!hasPermission) {
+    return (
+      <View style={styles.centered}>
+        <Icon name="camera-off" size={48} color="#888" />
+        <Text style={styles.noPermissionText}>Camera permission required</Text>
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => Camera.requestCameraPermission()}
+        >
+          <Text style={styles.buttonText}>Grant Permission</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
+  // No device view
   if (!device) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.errorText}>No camera device found</Text>
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#3b82f6" />
+        <Text style={styles.loadingText}>Loading camera...</Text>
       </View>
     );
   }
@@ -267,213 +288,190 @@ export default function LiveDetectionScreen({ navigation, route }: Props) {
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.title}>{t('live.title')}</Text>
-        <Text style={styles.subtitle}>{t('live.subtitle')}</Text>
+        <Text style={styles.subtitle}>Real-time dog breed detection</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Camera Card */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <View style={styles.cardTitleRow}>
-              <Text style={styles.cardTitle}>Camera</Text>
-              {renderStatusBadge()}
-            </View>
-            <TouchableOpacity
-              style={[
-                styles.button,
-                isStreaming ? styles.buttonDanger : styles.buttonPrimary,
-              ]}
-              onPress={
-                isStreaming ? () => stopCamera('User stopped') : startCamera
-              }
-            >
-              <Icon
-                name={isStreaming ? 'camera-off' : 'camera'}
-                size={16}
-                color="#fff"
-              />
-              <Text style={styles.buttonText}>
-                {isStreaming ? 'Tắt Camera' : 'Bật Camera'}
+      {/* Camera View */}
+      <View style={styles.cameraContainer}>
+        <View style={styles.cameraHeader}>
+          <View style={styles.cameraHeaderLeft}>
+            <Text style={styles.cameraTitle}>Camera</Text>
+            {renderStatusBadge()}
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.cameraButton,
+              isStreaming ? styles.stopButton : styles.startButton,
+            ]}
+            onPress={isStreaming ? () => stopCamera() : startCamera}
+          >
+            <Icon
+              name={isStreaming ? 'camera-off' : 'camera'}
+              size={16}
+              color="#fff"
+            />
+            <Text style={styles.cameraButtonText}>
+              {isStreaming ? t('live.stopCamera') : t('live.startCamera')}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.cameraWrapper}>
+          {isStreaming ? (
+            <Camera
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              device={device}
+              isActive={true}
+              photo={true}
+            />
+          ) : (
+            <View style={styles.cameraPlaceholder}>
+              <Icon name="camera" size={64} color="#666" />
+              <Text style={styles.placeholderText}>
+                {t('live.clickToStart')}
               </Text>
-            </TouchableOpacity>
-          </View>
+            </View>
+          )}
+        </View>
+      </View>
 
-          {/* Camera View */}
-          <View style={styles.cameraContainer}>
-            {isStreaming ? (
-              <Camera
-                ref={cameraRef}
-                style={styles.camera}
-                device={device}
-                isActive={isStreaming}
-                photo={true}
-              />
-            ) : (
-              <View style={styles.cameraPlaceholder}>
-                <Icon name="camera" size={64} color="#999" />
-                <Text style={styles.placeholderText}>
-                  {t('live.clickToStart')}
+      {/* Instructions Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{t('live.instructions')}</Text>
+        <Text style={styles.instruction}>• {t('live.instruction1')}</Text>
+        <Text style={styles.instruction}>• {t('live.instruction2')}</Text>
+        <Text style={styles.instruction}>• {t('live.instruction3')}</Text>
+        <Text style={styles.instruction}>• {t('live.instruction4')}</Text>
+      </View>
+
+      {/* Detections Card */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>
+          {t('live.title')} ({detections.length})
+        </Text>
+        <ScrollView style={styles.detectionsList}>
+          {detections.length === 0 && isStreaming ? (
+            <Text style={styles.lookingText}> {t('live.searching')} </Text>
+          ) : (
+            detections.map((det, index) => (
+              <View key={index} style={styles.detectionItem}>
+                <Text style={styles.breedName}>
+                  {det.detectedBreed.replace(/-/g, ' ')}
                 </Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Instructions Card */}
-        <View style={[styles.card, styles.instructionsCard]}>
-          <Text style={styles.cardTitleSmall}>{t('live.instructions')}</Text>
-          <View style={styles.instructionsList}>
-            <Text style={styles.instruction}>{t('live.instruction1')}</Text>
-            <Text style={styles.instruction}>{t('live.instruction2')}</Text>
-            <Text style={styles.instruction}>{t('live.instruction3')}</Text>
-            <Text style={styles.instruction}>{t('live.instruction4')}</Text>
-          </View>
-        </View>
-
-        {/* Detections Card */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            {t('live.title')} ({detections.length})
-          </Text>
-          <ScrollView style={styles.detectionsList}>
-            {detections.length === 0 && isStreaming ? (
-              <Text style={styles.noDetections}> {t('live.searching')}</Text>
-            ) : (
-              detections.map((det, index) => (
-                <View key={index} style={styles.detectionItem}>
-                  <Text style={styles.detectionBreed}>
-                    {det.detectedBreed.replace(/-/g, ' ')}
+                <View style={styles.confidenceBadge}>
+                  <Text style={styles.confidenceText}>
+                    {(det.confidence * 100).toFixed(1)}%
                   </Text>
-                  <View style={styles.confidenceBadge}>
-                    <Text style={styles.confidenceText}>
-                      {(det.confidence * 100).toFixed(1)}%
-                    </Text>
-                  </View>
                 </View>
-              ))
-            )}
-          </ScrollView>
-        </View>
-      </ScrollView>
+              </View>
+            ))
+          )}
+        </ScrollView>
+      </View>
     </View>
   );
 }
+
+const { width } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+    padding: 16,
+  },
+  centered: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#0f172a',
   },
   header: {
-    padding: 20,
-    paddingTop: 60,
-    backgroundColor: '#fff',
+    marginBottom: 16,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#000',
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 14,
     color: '#666',
+    marginTop: 4,
   },
-  content: {
-    flex: 1,
-    padding: 16,
-  },
-  card: {
+  cameraContainer: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  cardHeader: {
+    borderWidth: 2,
+    borderColor: '#334155',
+    overflow: 'hidden',
     marginBottom: 16,
   },
-  cardTitleRow: {
+  cameraHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  cameraHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+    gap: 8,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#000',
-  },
-  cardTitleSmall: {
+  cameraTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 12,
   },
-  button: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 8,
-  },
-  buttonPrimary: {
-    backgroundColor: '#3b82f6',
-  },
-  buttonDanger: {
-    backgroundColor: '#ef4444',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
   },
   badgeConnected: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#3b82f6',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    backgroundColor: '#22c55e',
   },
   badgeConnecting: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#e5e5e5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    backgroundColor: '#6b7280',
+  },
+  badgeDisconnected: {
+    backgroundColor: '#ef4444',
   },
   badgeText: {
+    fontSize: 12,
     color: '#fff',
-    fontSize: 12,
     fontWeight: '500',
-    marginLeft: 4,
   },
-  badgeTextDark: {
-    color: '#666',
-    fontSize: 12,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-  cameraContainer: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
+  cameraButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 8,
-    overflow: 'hidden',
+    gap: 6,
   },
-  camera: {
-    flex: 1,
+  startButton: {
+    backgroundColor: '#3b82f6',
+  },
+  stopButton: {
+    backgroundColor: '#ef4444',
+  },
+  cameraButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cameraWrapper: {
+    height: (width - 32) * 0.5625, // 16:9 aspect ratio
+    backgroundColor: '#000',
+    position: 'relative', // Thêm dòng này
+    overflow: 'hidden', // Thêm dòng này để đảm bảo camera không tràn ra ngoài
   },
   cameraPlaceholder: {
     flex: 1,
@@ -481,22 +479,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   placeholderText: {
-    color: '#999',
-    marginTop: 16,
+    color: '#666',
+    marginTop: 12,
     fontSize: 14,
   },
-  instructionsCard: {
-    backgroundColor: '#f9fafb',
+  card: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 16,
+    marginBottom: 12,
   },
-  instructionsList: {
-    gap: 8,
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 12,
   },
   instruction: {
     fontSize: 14,
-    color: '#666',
+    color: '#94a3b8',
+    marginBottom: 6,
   },
   detectionsList: {
-    maxHeight: 200,
+    maxHeight: 150,
+  },
+  lookingText: {
+    color: '#94a3b8',
+    fontSize: 14,
   },
   detectionItem: {
     flexDirection: 'row',
@@ -504,35 +515,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#e5e5e5',
+    borderBottomColor: '#334155',
   },
-  detectionBreed: {
+  breedName: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '500',
-    color: '#000',
     textTransform: 'capitalize',
   },
   confidenceBadge: {
-    backgroundColor: '#f3f4f6',
+    backgroundColor: '#334155',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e5e5e7',
+    borderRadius: 8,
   },
   confidenceText: {
+    color: '#94a3b8',
     fontSize: 12,
-    color: '#666',
   },
-  noDetections: {
-    fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
-    paddingVertical: 16,
-  },
-  errorText: {
+  noPermissionText: {
+    color: '#888',
+    marginTop: 12,
     fontSize: 16,
-    color: '#ef4444',
-    textAlign: 'center',
+  },
+  loadingText: {
+    color: '#888',
+    marginTop: 12,
+  },
+  button: {
+    backgroundColor: '#3b82f6',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  buttonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

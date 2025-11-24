@@ -219,7 +219,7 @@ export default function ProfileScreen({ navigation }: ProfileScreenProps) {
           <View style={styles.statIcon}>
             <Icon name="checkmark-circle" size={24} color="#4CAF50" />
           </View>
-          <Text style={styles.statValue}>{completionPercentage}%</Text>
+          <Text style={styles.statValue}> {achievementStats?.totalBreeds && achievementStats.totalBreeds > 0 ? Math.round((achievementStats.totalCollected / achievementStats.totalBreeds) * 100) : 0}%</Text>
           <Text style={styles.statLabel}>{t('profile.stats.completion')}</Text>
         </View>
       </View>

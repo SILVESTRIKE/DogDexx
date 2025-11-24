@@ -145,66 +145,54 @@ export class ApiClient {
   }
 
   // SỬA LẠI: Hàm request<T>
-  public async request<T>(
+   public async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    requiresAuth = false,
+    requiresAuth = false
   ): Promise<T> {
     const url = new URL(endpoint, this.baseUrl).toString();
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...(options.headers as Record<string, string>),
-    };
+    const headers: Record<string, string> = { ...options.headers };
 
-    // const token = await TokenManager.getAccessToken();
-    const token = await AsyncStorage.getItem('accessToken');
-    //console.log('vuhvdu:',token)
+    // KHÔNG set Content-Type nếu body là FormData, trình duyệt sẽ tự làm.
+    // Nếu không, nó sẽ bị thiếu 'boundary' và request sẽ bị treo.
+    if (!(options.body instanceof FormData)) {
+      headers["Content-Type"] = "application/json";
+    }
+
+    let token = await TokenManager.getAccessToken();
     if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
+      headers["Authorization"] = `Bearer ${token}`;
     } else if (requiresAuth) {
-      throw new Error('Token is not provided for an authenticated request.');
+      throw new Error("Token is not provided for an authenticated request.");
     }
 
     try {
-      const response = await fetch(url, { ...options, headers });
+      let response = await fetch(url, { ...options, headers });
 
-      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
+      if (response.status === 401 && await TokenManager.getRefreshToken()) {
+        const refreshed = await this.handleUnauthorized();
 
-      if (response.status === 401 && requiresAuth) {
-        const refreshed = await this.refreshAccessToken();
         if (refreshed) {
-          const newToken = TokenManager.getAccessToken();
+          // Lấy token mới và xây dựng lại header để thử lại
+          const newToken = await TokenManager.getAccessToken();
           if (newToken) {
-            headers['Authorization'] = `Bearer ${newToken}`;
+            headers["Authorization"] = `Bearer ${newToken}`;
           }
-          const retryResponse = await fetch(url, { ...options, headers });
-
-          this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
-
-          if (!retryResponse.ok) {
-            const retryErrorData = await retryResponse.json().catch(() => ({}));
-            const retryErrorMessage =
-              retryErrorData.errors?.[0]?.message ||
-              retryErrorData.message ||
-              `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
-            throw new Error(retryErrorMessage);
-          }
-
-          return retryResponse.json();
+          response = await fetch(url, { ...options, headers }); // Thử lại
         } else {
-          TokenManager.clearTokens();
-          throw new Error('Authentication failed: Unable to refresh token.111');
+          throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
         }
       }
 
+      this.handleTokenHeaders(response);
+
       if (!response.ok) {
-        if (response.status === 304) {
-        } else {
+        if (response.status !== 304) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage =
             errorData.errors?.[0]?.message ||
             errorData.message ||
-            `API Error: ${response.status} ${response.statusText} on ${url}`;
+            `API Error: ${response.status} ${response.statusText}`;
           throw new Error(errorMessage);
         }
       }
@@ -215,156 +203,84 @@ export class ApiClient {
 
       return response.json();
     } catch (error) {
-      console.error('[ApiClient] Request failed:', error, `(URL: ${url})`);
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
+      // BỎ QUA LỖI ABORT: Lỗi này xảy ra khi một request bị hủy bỏ,
+      // thường là do component unmount (ví dụ trong React Strict Mode).
+      // Đây là hành vi mong muốn, không cần log ra console.
+      if (error instanceof Error && error.name === 'AbortError') return Promise.reject(error);
+
+      console.error("[ApiClient] Request failed:", error, `(URL: ${url})`);
+      if (error instanceof TypeError && error.message === "Failed to fetch") {
         throw new Error(
-          'Network error: Could not connect to the server. Please check your internet connection or contact support.',
+          "Network error: Could not connect to the server. Please check your internet connection or contact support."
         );
       }
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('An unexpected error occurred.');
+      if (error instanceof Error) throw error;
+      throw new Error("An unexpected error occurred.");
     }
   }
 
-  private async requestWithFormData<T>(
+   private async requestWithFormData<T>(
     endpoint: string,
     formData: FormData,
-    requiresAuth = false,
+    requiresAuth = false
   ): Promise<T> {
-    const url = new URL(endpoint, this.baseUrl).toString();
-    const headers: Record<string, string> = {};
-
-    const token = TokenManager.getAccessToken();
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    const options: RequestInit = {
-      method: 'POST',
+    return this.request<T>(endpoint, {
+      method: "POST",
       body: formData,
-      headers: headers,
-    };
-
-    try {
-      const response = await fetch(url, options);
-
-      this.handleTokenHeaders(response); // <-- GỌI HELPER Ở ĐÂY
-
-      if (response.status === 401 && requiresAuth) {
-        const refreshed = await this.refreshAccessToken();
-        if (refreshed) {
-          const newToken = TokenManager.getAccessToken();
-          if (newToken) {
-            const retryHeaders = {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            };
-            const retryOptions = { ...options, headers: retryHeaders };
-            const retryResponse = await fetch(url, retryOptions);
-
-            this.handleTokenHeaders(retryResponse); // <-- GỌI HELPER CHO LẦN RETRY
-
-            if (!retryResponse.ok) {
-              const retryErrorData = await retryResponse
-                .json()
-                .catch(() => ({}));
-              const retryErrorMessage =
-                retryErrorData.errors?.[0]?.message ||
-                retryErrorData.message ||
-                `API Error: ${retryResponse.status} ${retryResponse.statusText} on ${url}`;
-              throw new Error(retryErrorMessage);
-            }
-            return retryResponse.json();
-          }
-        }
-        TokenManager.clearTokens();
-        throw new Error('Authentication failed: Unable to refresh token.');
-      }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        const errorMessage =
-          errorData.errors?.[0]?.message ||
-          errorData.message ||
-          `API Error: ${response.status} ${response.statusText} on ${url}`;
-        throw new Error(errorMessage);
-      }
-      return response.json();
-    } catch (error) {
-      console.error(
-        '[ApiClient] FormData request failed:',
-        error,
-        `(URL: ${url})`,
-      );
-      if (error instanceof TypeError && error.message === 'Failed to fetch') {
-        throw new Error(
-          'Network error: Could not connect to the server. Please check your internet connection or contact support.',
-        );
-      }
-      if (error instanceof Error) {
-        throw error;
-      }
-      throw new Error('Something went wrong during the file upload.');
-    }
+    }, requiresAuth);
   }
-
-  private async requestWithUploadProgress<T>(
+private async requestWithUploadProgress<T>(
     endpoint: string,
     formData: FormData,
     onProgress: (progress: number) => void,
-    requiresAuth = false,
+    requiresAuth = false
   ): Promise<T> {
     return new Promise(async (resolve, reject) => {
-      const url = new URL(endpoint, this.baseUrl).toString();
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', url, true);
+        const url = new URL(endpoint, this.baseUrl).toString();
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", url, true);
 
-      // const token = TokenManager.getAccessToken();
-      const token = await AsyncStorage.getItem('accessToken');
-      if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        const token = await TokenManager.getAccessToken();
+        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
-      xhr.upload.onprogress = event => {
-        if (event.lengthComputable) {
-          const percentComplete = (event.loaded / event.total) * 100;
-          onProgress(percentComplete);
-        }
-      };
-
-      xhr.onload = () => {
-        this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
-
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText));
-          } catch (e) {
-            reject(new Error('Failed to parse server response.'));
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percentComplete = (event.loaded / event.total) * 100;
+            onProgress(percentComplete);
           }
-        } else {
-          try {
-            const errorData = JSON.parse(xhr.responseText);
-            const errorMessage =
-              errorData.errors?.[0]?.message ||
-              errorData.message ||
-              `API Error: ${xhr.status} ${xhr.statusText}`;
-            reject(new Error(errorMessage));
-          } catch (e) {
-            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+        };
+
+        xhr.onload = () => {
+          this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
+          
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              resolve(JSON.parse(xhr.responseText));
+            } catch (e) {
+              reject(new Error("Failed to parse server response."));
+            }
+          } else {
+            try {
+              const errorData = JSON.parse(xhr.responseText);
+              const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
+              reject(new Error(errorMessage));
+            } catch (e) {
+              reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+            }
           }
-        }
-      };
+        };
 
-      xhr.onerror = () => {
-        reject(new Error('Network error occurred during the upload.'));
-      };
+        xhr.onerror = () => {
+          reject(new Error("Network error occurred during the upload."));
+        };
 
-      xhr.send(formData);
+        xhr.send(formData);
     });
   }
 
+
   private async refreshAccessToken(): Promise<boolean> {
-    const refreshToken = TokenManager.getRefreshToken();
+    const refreshToken = await TokenManager.getRefreshToken();
     if (!refreshToken) return false;
 
     try {
@@ -378,7 +294,7 @@ export class ApiClient {
       if (response.ok) {
         const data = await response.json();
         if (data.accessToken && data.refreshToken) {
-          TokenManager.setTokens(data.accessToken, data.refreshToken);
+         await TokenManager.setTokens(data.accessToken, data.refreshToken);
           return true;
         }
         return false; // Treat as failure if tokens are missing
@@ -421,7 +337,7 @@ export class ApiClient {
 
   async logout() {
     // 1. Lấy refreshToken từ TokenManager
-    const refreshToken = TokenManager.getRefreshToken();
+    const refreshToken = await TokenManager.getRefreshToken();
     // 2. Gửi nó lên trong body của request
     return this.request<any>(
       '/bff/user/logout',
@@ -556,7 +472,7 @@ export class ApiClient {
     // const formData = new FormData();
     // formData.append("file", file);
     // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
-    const requiresAuth = !!TokenManager.getAccessToken();
+    const requiresAuth = !!await TokenManager.getAccessToken();
     return this.requestWithUploadProgress<any>(
       '/bff/predict/video',
       formData,
@@ -636,6 +552,7 @@ export class ApiClient {
       true,
     );
   }
+  
 
   // ----- MODIFIED: HÀM MỚI ĐƯỢC THÊM VÀO ĐÂY -----
   async getPredictionHistoryById(
@@ -695,7 +612,7 @@ export class ApiClient {
   // WebSocket connection methods for real-time detection
   async createWebSocketConnection(endpoint: string): WebSocket {
     const wsUrl = API_BASE_URL.replace(/^http/, 'ws');
-    const token = TokenManager.getAccessToken();
+    const token = await TokenManager.getAccessToken();
 
     // Add token as query parameter for WebSocket authentication
     const url = token
@@ -882,6 +799,11 @@ export class ApiClient {
       true,
     );
   }
+  async deleteCurrentUser() {
+    return this.request<any>("/bff/user/profile", {
+      method: "DELETE",
+    }, true);
+  }
   async cancelUserSubscription(subscriptionId: string) {
     return this.request<any>(
       `/bff/admin/subscriptions/${subscriptionId}/cancel`,
@@ -889,6 +811,17 @@ export class ApiClient {
         method: 'POST',
       },
       true,
+    );
+  }
+    async submitContactForm(payload: {
+    email: string;
+    message: string;
+    captchaToken: string;
+  }): Promise<{ message: string }> {
+    return this.request<{ message: string }>(
+      "/bff/public/contact",
+      { method: "POST", body: JSON.stringify(payload) },
+      false
     );
   }
 }
