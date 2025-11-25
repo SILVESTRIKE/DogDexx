@@ -1,21 +1,29 @@
-# main.py
 import uvicorn
 from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import JSONResponse
+from fastapi.concurrency import run_in_threadpool
+from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from ultralytics import YOLO
+from ultralytics.utils.plotting import Annotator, colors
 import cv2
 import numpy as np
 import tempfile
 import os
-import uuid
 import base64
-import traceback
 import imageio
-import sys
+import httpx
+import torch
+import asyncio
+import gc
 from typing import List, Dict, Any
 from dotenv import load_dotenv
-from ultralytics.utils.plotting import Annotator, colors
+from pydantic import BaseModel, HttpUrl
+
+# ==============================================================================
+# 0. GLOBAL SETTINGS
+# ==============================================================================
+torch.set_num_threads(1) # Giới hạn thread CPU để tránh nghẽn server
 
 # ==============================================================================
 # 1. CONFIGURATION
@@ -23,417 +31,376 @@ from ultralytics.utils.plotting import Annotator, colors
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
-# MONGO_URI = os.getenv("MONGO_URI")
-MONGO_URI = "nothingz"
+MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
-TRACKER_CONFIG = "bytetrack.yaml"
+COCO_DOG_CLASS_ID = 16 
 
-# ID của lớp 'dog' trong bộ dữ liệu COCO mà yolov8n được huấn luyện
-COCO_DOG_CLASS_ID = 16
+class URLPayload(BaseModel):
+    url: HttpUrl
 
-# --- Dynamic Configuration Holder ---
 class Config:
     def __init__(self):
-        self.model = None  # Model chính, chuyên sâu về giống chó, được config từ DB
-        self.pre_filter_model = None # Model bộ lọc, được gán cứng, tự động tải về
-        self.set_defaults()
-
-        # Kết nối MongoDB
+        self.classify_model = None   # Model CHÍNH (Nhận diện giống - Nặng)
+        self.detect_model = None     # Model PHỤ (Tìm vị trí chó - Nhẹ)
+        self.device = "cpu"
+        
+        # Kết nối DB
         try:
-            if not MONGO_URI: raise ValueError("MONGO_URI environment variable is not set.")
-            self.mongo_client = MongoClient(MONGO_URI)
-            self.mongo_client.admin.command('ismaster')
-            print(f"MongoDB connection successful")
-            self.db = self.mongo_client[DB_NAME]
+            if MONGO_URI:
+                self.mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+                self.db = self.mongo_client[DB_NAME]
+                print("✅ MongoDB connection successful", flush=True)
+            else:
+                self.db = None
         except Exception as e:
-            print(f"WARNING: Could not connect to MongoDB. Error: {e}")
+            print(f"⚠️ MongoDB Error: {e}", flush=True)
             self.db = None
 
-        # Tải model chính từ config DB
         self.load() 
-        
-        # Tải model bộ lọc một cách độc lập
-        self._load_hardcoded_pre_filter_model()
+        self._load_detector()
 
-        # Kiểm tra cuối cùng
-        if self.model is None or self.pre_filter_model is None:
-            raise RuntimeError("One or more models failed to initialize. Check logs. Shutting down.")
-            
-    def _load_hardcoded_pre_filter_model(self):
-        model_name = "yolo11n.pt"
-        model_path = os.path.join("models", model_name)
-        print("-" * 50)
-        print(f"Attempting to load hardcoded pre-filter model: {model_path}")
+    def _load_detector(self):
+        """Load model Nano nhẹ chỉ để tìm vị trí (Logic của V9.6)"""
+        path = "models/yolo11n.pt"
+        if not os.path.exists("models"): os.makedirs("models")
         try:
-            # Đảm bảo thư mục 'models' tồn tại
-            model_dir = os.path.dirname(model_path)
-            if not os.path.exists(model_dir):
-                os.makedirs(model_dir)
-                print(f"Created directory: {model_dir}")
-
-            # YOLO(model_path) sẽ tự động tải file vào đường dẫn chỉ định nếu nó không tồn tại.
-            self.pre_filter_model = YOLO(model_path)
-            self.pre_filter_model.to(self.DEVICE)
-            print(f"Pre-filter model '{model_path}' loaded successfully.")
-            print("-" * 50)
+            print(f"--> Loading DETECTOR (yolo11n)...", flush=True)
+            self.detect_model = YOLO(path)
+            self.detect_model.to(self.device)
         except Exception as e:
-            print(f"FATAL: Could not load or download pre-filter model '{model_path}'. Error: {e}")
-            traceback.print_exc()
-            self.pre_filter_model = None
-            print("-" * 50)
-
+            print(f"❌ Detector load failed: {e}. Will use Classify Model for detection.", flush=True)
+            self.detect_model = None
 
     def load(self, config_data: dict = None):
-        """Tải cấu hình và model CHÍNH từ DB."""
-        if config_data:
-            print("Applying configuration from provided data (e.g., /config/reload)...")
-            self.apply_config_and_load_model(config_data)
+        if config_data: 
+            self._apply_config(config_data)
         else:
-            print("Loading MAIN model configuration from MongoDB on initial startup...")
-            if self.db is None:
-                print("⚠️ DB not connected. Using hardcoded defaults for MAIN model.")
-                self.apply_config_and_load_model({})
-                return
+            full_config = {}
+            if self.db is not None:
+                try:
+                    config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
+                    print(f"[CONFIG] Đọc từ DB (configurations): {config_doc}", flush=True)
+                    model_doc = self.db.ai_models.find_one({"status": "ACTIVE", "taskType": "DOG_BREED_CLASSIFICATION"})
+                    print(f"[CONFIG] Đọc từ DB (ai_models): {model_doc}", flush=True)
 
-            config_doc = self.db.configurations.find_one({"key": "model_thresholds"})
-            active_model_doc = self.db.ai_models.find_one({"status": "ACTIVE", "taskType": "DOG_BREED_CLASSIFICATION"})
+                    full_config = config_doc if config_doc else {}
+                    if model_doc:
+                        full_config["model_path"] = model_doc.get("fileName")
+                        full_config["huggingface_repo"] = model_doc.get("huggingFaceRepo")
+                except Exception as e:
+                    print(f"⚠️ [CONFIG] Lỗi khi đọc cấu hình từ DB: {e}", flush=True)
 
-            full_config = config_doc if config_doc else {}
-            if active_model_doc:
-                full_config["model_path"] = active_model_doc.get("fileName")
-                full_config["huggingface_repo"] = active_model_doc.get("huggingFaceRepo")
+            print(f"[CONFIG] Tổng hợp cấu hình cuối cùng để áp dụng: {full_config}", flush=True)
+            self._apply_config(full_config)
+
+    def _apply_config(self, config_data: dict):
+        print(f"[CONFIG] Bắt đầu áp dụng cấu hình: {config_data}", flush=True)
+        self.IMAGE_CONF = config_data.get("image_conf", 0.25)
+        self.VIDEO_CONF = config_data.get("video_conf", 0.5)
+        self.STREAM_CONF = config_data.get("stream_conf", 0.4)
+        self.IOU= config_data.get("iou", 0.5)
+        self.device = config_data.get("device", "cpu")
+        
+        filename = os.path.basename(config_data.get("model_path") or "model_v8s_pro.pt")
+        self.MODEL_PATH = os.path.join("models", filename)
+        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
+        
+        print("--- [CONFIG] Giá trị đã áp dụng ---", flush=True)
+        print(f"  - IMAGE_CONF: {self.IMAGE_CONF}", flush=True)
+        print(f"  - VIDEO_CONF: {self.VIDEO_CONF}", flush=True)
+        print(f"  - STREAM_CONF: {self.STREAM_CONF}", flush=True)
+        print(f"  - device: {self.device}", flush=True)
+        print(f"  - MODEL_PATH: {self.MODEL_PATH}", flush=True)
+        print(f"  - HUGGINGFACE_REPO: {self.HUGGINGFACE_REPO}", flush=True)
+        print("---------------------------------", flush=True)
+        if not os.path.exists(os.path.dirname(self.MODEL_PATH)): os.makedirs(os.path.dirname(self.MODEL_PATH))
+        if not os.path.exists(self.MODEL_PATH): self._download_model()
             
-            if not config_doc and not active_model_doc:
-                print("⚠️ No configuration or active model found in DB. Using hardcoded defaults for MAIN model.")
-
-            self.apply_config_and_load_model(full_config)
-        
-    def apply_config_and_load_model(self, config_data: dict):
-        """Áp dụng cấu hình và chỉ tải lại model CHÍNH."""
-        self.IMAGE_CONF_THRESHOLD = config_data.get("image_conf", self.IMAGE_CONF_THRESHOLD)
-        self.VIDEO_CONF_THRESHOLD = config_data.get("video_conf", self.VIDEO_CONF_THRESHOLD)
-        self.STREAM_CONF_THRESHOLD = config_data.get("stream_conf", self.STREAM_CONF_THRESHOLD)
-        self.STREAM_HIGH_CONF_THRESHOLD = config_data.get("stream_high_conf", self.STREAM_HIGH_CONF_THRESHOLD)
-        self.DEVICE = config_data.get("device", self.DEVICE)
-        
-        model_filename = os.path.basename(config_data.get("model_path") or self.MODEL_PATH)
-        self.MODEL_PATH = os.path.join("models", model_filename)
-        self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", self.HUGGINGFACE_REPO)
-
-        print("✅ Main model configuration applied:")
-        print(f"   - Model Path: {self.MODEL_PATH}")
-        print(f"   - Device: {self.DEVICE}")
-
-        if not self.MODEL_PATH:
-            print("❌ FATAL: Main model path is missing. Cannot load model.")
-            self.model = None
-            return
-
-        model_dir = os.path.dirname(self.MODEL_PATH)
-        if model_dir and not os.path.exists(model_dir):
-            os.makedirs(model_dir)
-
-        if not os.path.exists(self.MODEL_PATH) and self.HUGGINGFACE_REPO:
-            self.download_model()
-
         try:
-            if not os.path.exists(self.MODEL_PATH):
-                raise FileNotFoundError(f"Main model file not found at {self.MODEL_PATH}")
-
-            print(f"Loading MAIN model from path: {self.MODEL_PATH} onto device: {self.DEVICE}")
-            self.model = YOLO(self.MODEL_PATH) 
-            self.model.to(self.DEVICE)
-            print("✅ MAIN model loaded successfully with classes:", self.model.names)
+            print(f"--> Loading CLASSIFIER: {self.MODEL_PATH}...", flush=True)
+            self.classify_model = YOLO(self.MODEL_PATH)
+            self.classify_model.to(self.device)
+            # Warmup
+            self.classify_model(np.zeros((640, 640, 3), dtype=np.uint8), verbose=False) 
+            print("✅ CLASSIFIER loaded.", flush=True)
         except Exception as e:
-            print(f"❌ FATAL: Error loading MAIN model from path '{self.MODEL_PATH}'. Error: {e}")
-            self.model = None
+            print(f"❌ Classify model error: {e}", flush=True)
 
-    def download_model(self):
+    def _download_model(self):
         from huggingface_hub import hf_hub_download
-        print(f"Main model not found at {self.MODEL_PATH}. Downloading from Hugging Face...")
-        try:
-            hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.MODEL_PATH), local_dir=os.path.dirname(self.MODEL_PATH))
-            print("Model downloaded successfully.")
-        except Exception as e:
-            print(f"Error downloading model from repo '{self.HUGGINGFACE_REPO}': {e}")
-    
-    def set_defaults(self):
-        self.IMAGE_CONF_THRESHOLD = 0.25
-        self.VIDEO_CONF_THRESHOLD = 0.5
-        self.STREAM_CONF_THRESHOLD = 0.4
-        self.STREAM_HIGH_CONF_THRESHOLD = 0.8
-        self.DEVICE = "cuda"
-        self.MODEL_PATH = "models/model_v8s_pro.pt"
-        self.HUGGINGFACE_REPO = "HakuDevon/Dog_Breed_ID"
+        try: hf_hub_download(repo_id=self.HUGGINGFACE_REPO, filename=os.path.basename(self.MODEL_PATH), local_dir="models")
+        except: pass
+
+app = FastAPI(title="Dog Breed AI - Hybrid v12")
+app.add_middleware(
+    CORSMiddleware, 
+    allow_origins=["*"], 
+    allow_credentials=True, 
+    allow_methods=["*"], 
+    allow_headers=["*"]
+)
+config = Config()
 
 # ==============================================================================
-# 2. INITIALIZATION
+# 2. LOGIC XỬ LÝ (CPU BOUND)
 # ==============================================================================
-app = FastAPI(title="Dog Breed Inference API", description="An API to predict dog breeds using a smart two-stage YOLOv8 pipeline.", version="8.0.0")
 
-try:
-    config = Config()
-except RuntimeError as e:
-    print(f"❌ FATAL STARTUP ERROR: {e}")
-    sys.exit(1)
+def get_padded_crop(img, box, padding_pct=0.2): 
+    x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
+    h, w, _ = img.shape
+    pad_w, pad_h = int((x2-x1)*padding_pct), int((y2-y1)*padding_pct)
+    return img[max(0, y1-pad_h):min(h, y2+pad_h), max(0, x1-pad_w):min(w, x2+pad_w)]
 
-# ==============================================================================
-# 3. HELPER FUNCTIONS
-# ==============================================================================
 def process_results(results, model) -> List[Dict[str, Any]]:
-    detections = []
-    if not model or not results or not hasattr(results, 'boxes') or not results.boxes:
-        return detections
-        
-    boxes = results.boxes
-    track_ids = (boxes.id.int().cpu().tolist() if boxes.id is not None else [None] * len(boxes))
-    class_ids = boxes.cls.int().cpu().tolist()
-    confs = boxes.conf.float().cpu().tolist()
-    xyxy_coords = boxes.xyxy.cpu().tolist()
-
-    for track_id, class_id, conf, xyxy in zip(track_ids, class_ids, confs, xyxy_coords):
-        detections.append({
-            "track_id": track_id,
-            "class_id": class_id,
-            "class": model.names[class_id], 
+    dets = []
+    if not results or not results[0].boxes: return dets
+    boxes = results[0].boxes
+    ids = boxes.id.int().cpu().tolist() if boxes.id is not None else [None]*len(boxes)
+    
+    for t_id, c_id, conf, xyxy in zip(ids, boxes.cls.int().cpu().tolist(), boxes.conf.float().cpu().tolist(), boxes.xyxy.cpu().tolist()):
+        dets.append({
+            "track_id": t_id,
+            "class_id": c_id,
+            "class": model.names[c_id],
             "confidence": conf,
-            "box": [round(coord) for coord in xyxy],
+            "box": [int(x) for x in xyxy]
         })
-    return detections
+    return dets
 
-def draw_custom_annotations(frame, detections: List[Dict[str, Any]], model):
-    annotated_frame = frame.copy()
-    if not model:
-        return annotated_frame
-        
-    annotator = Annotator(annotated_frame, line_width=2, example=str(model.names))
-
-    for det in detections:
-        label = f"{det['class']} {det['confidence']:.2f}"
-        if det.get("track_id") is not None:
-            label = f"ID:{det['track_id']} {label}"
-        annotator.box_label(det["box"], label, color=colors(det["class_id"], True))
+def draw_annotations(img, dets):
+    annotator = Annotator(img, line_width=2)
+    for d in dets:
+        label = f"{d['class']} {d['confidence']:.2f}"
+        if d.get("track_id") is not None: label = f"ID:{d['track_id']} " + label
+        annotator.box_label(d["box"], label, color=colors(int(d.get("track_id") or 0), True))
     return annotator.result()
 
-# ==============================================================================
-# 4. API ENDPOINTS
-# ==============================================================================
-@app.get("/", summary="Health Check")
-def health_check():
-    return JSONResponse(content={"status": "ok", "message": "YOLOv8 Inference Service is running."})
+# --- LOGIC ẢNH: GIỮ NGUYÊN SỨC MẠNH CỦA V9.6 ---
+def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
+    nparr = np.frombuffer(image_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None: raise ValueError("Invalid image")
 
-@app.post("/config/reload", summary="Reload configuration from DB")
-def reload_config(payload: dict = Body(...)):
+    # 1. Dùng Detect Model (Nhẹ) để tìm TẤT CẢ vật thể (Chó, Mèo, Xe...)
+    detector = config.detect_model if config.detect_model else config.classify_model
+    # Conf thấp để không bỏ sót
+    detect_res = detector(img, conf=0.15, verbose=False) 
+    base_objects = process_results(detect_res, detector)
 
-    """Forces the service to reload its configuration and model from the database."""
-    try:
-        config.load(config_data=payload)
-        if not config.model:
-            return JSONResponse(content={"status": "error", "message": "Configuration reloaded but model failed to load. Check logs."}, status_code=500)
-            
-        return JSONResponse(content={"status": "ok", "message": "Configuration and model reloaded successfully.", "model": config.model.names, "device": config.DEVICE, "image_conf_threshold": config.IMAGE_CONF_THRESHOLD, "video_conf_threshold": config.VIDEO_CONF_THRESHOLD, "stream_conf_threshold": config.STREAM_CONF_THRESHOLD, "stream_high_conf_threshold": config.STREAM_HIGH_CONF_THRESHOLD})
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(content={"status": "error", "message": str(e)}, status_code=500)
-
-
-@app.get("/config", summary="Get current configuration")
-def get_config():
-    """Returns the currently active configuration of the AI service."""
-    if not config.model:
-        model_names = "Model not loaded"
-    else:
-        model_names = config.model.names
-
-    current_config = {
-        "model_path": config.MODEL_PATH,
-        "device": config.DEVICE,
-        "image_conf_threshold": config.IMAGE_CONF_THRESHOLD,
-        "video_conf_threshold": config.VIDEO_CONF_THRESHOLD,
-        "stream_conf_threshold": config.STREAM_CONF_THRESHOLD,
-        "stream_high_conf_threshold": config.STREAM_HIGH_CONF_THRESHOLD,
-        "model_classes": model_names,
-    }
-    return JSONResponse(content={"status": "ok", "configuration": current_config})
-
-@app.post("/predict/image", summary="Predict from a single image with smart filtering")
-async def predict_from_image_file(file: UploadFile = File(...)):
-    if not config.model or not config.pre_filter_model:
-        return JSONResponse(content={"status": "error", "message": "Models not loaded"}, status_code=503)
-    try:
-        contents = await file.read()
-        nparr = np.frombuffer(contents, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            return JSONResponse(content={"status": "error", "message": "Could not decode image."}, status_code=400)
-
-        # Giai đoạn 1: Chạy model bộ lọc nhanh trên toàn bộ ảnh
-        pre_filter_results = config.pre_filter_model(img, conf=0.1, verbose=False)
-        all_detections = process_results(pre_filter_results[0], config.pre_filter_model)
+    final_results = []
+    
+    # 2. Duyệt từng vật thể
+    for obj in base_objects:
+        # Nếu là CHÓ (hoặc model detect chỉ có class chó)
+        # Giả sử detect_model là COCO (80 class), class 16 là chó
+        is_dog = (obj['class_id'] == COCO_DOG_CLASS_ID) or (len(detector.names) == 1)
         
-        # Kiểm tra xem có chó trong kết quả không
-        dog_found = any(d['class_id'] == COCO_DOG_CLASS_ID for d in all_detections)
-        final_detections, annotated_image = [], img
-        
-        if dog_found:
-            # Giai đoạn 2: Có chó, chạy model chính trên TOÀN BỘ ảnh
-            print("Dog detected. Running main model for breed classification on the full image.")
-            main_model_results = config.model.track(img, persist=False, conf=config.IMAGE_CONF_THRESHOLD, verbose=False)
-            final_detections = process_results(main_model_results[0], config.model)
-            annotated_image = draw_custom_annotations(img, final_detections, config.model)
-        elif all_detections:
-            # Không có chó, nhưng có vật khác -> trả về kết quả từ bộ lọc
-            print(f"No dogs found. Returning general detections: {[d['class'] for d in all_detections]}")
-            final_detections = all_detections
-            annotated_image = draw_custom_annotations(img, final_detections, config.pre_filter_model)
+        if is_dog:
+            # Cắt ảnh (Crop) và chạy Model Classify (Nặng & Chính xác)
+            crop = get_padded_crop(img, obj["box"])
+            if crop.size > 0:
+                cls_res = config.classify_model(crop, conf=config.IMAGE_CONF, verbose=False)
+                cls_dets = process_results(cls_res, config.classify_model)
+                
+                if cls_dets:
+                    # Lấy kết quả tốt nhất và map lại box gốc
+                    best = max(cls_dets, key=lambda x: x["confidence"])
+                    best["box"] = obj["box"]
+                    final_results.append(best)
+                else:
+                    # Classify không ra -> Vẫn giữ là "Dog"
+                    obj["class"] = "Unknown Dog"
+                    final_results.append(obj)
         else:
-            print("No objects detected.")
+            # Không phải chó (Mèo, Người...) -> Giữ nguyên để hiển thị
+            final_results.append(obj)
 
-        _, buffer = cv2.imencode(".jpg", annotated_image)
-        processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
+    annotated_img = draw_annotations(img, final_results)
+    _, buf = cv2.imencode(".jpg", annotated_img)
+    return {
+        "predictions": final_results,
+        "processed_media_base64": base64.b64encode(buf).decode("utf-8"),
+        "media_type": "image/jpeg"
+    }
 
-        return JSONResponse(content={
-            "predictions": sorted(final_detections, key=lambda x: x["confidence"], reverse=True),
-            "processed_media_base64": processed_image_base64,
-            "media_type": "image/jpeg",
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
-@app.post("/predict/video", summary="Process a video with smart filtering")
-async def predict_from_video_file(file: UploadFile = File(...)):
-    if not config.model or not config.pre_filter_model: 
-        return JSONResponse(content={"status": "error", "message": "Models not loaded"}, status_code=503)
-
-    tmp_in_path, tmp_out_path = "", ""
+# --- LOGIC VIDEO: GIỮ SỨC MẠNH CỦA V10 (Optimized) ---
+def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as t_in, \
+         tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as t_out:
+        t_in.write(video_bytes)
+        t_in_path, t_out_path = t_in.name, t_out.name
+    
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_in, \
-             tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_out:
-            contents = await file.read()
-            tmp_in.write(contents)
-            tmp_in_path, tmp_out_path = tmp_in.name, tmp_out.name
+        # Dùng Detect Model để Track (nhanh hơn dùng Classify Model track)
+        tracker = config.detect_model if config.detect_model else config.classify_model
         
-        cap = cv2.VideoCapture(tmp_in_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        video_writer = imageio.get_writer(tmp_out_path, fps=fps, codec="libx264", pixelformat="yuv420p", macro_block_size=1)
-        tracked_objects = {}
+        # Cache: { track_id: {class: "Husky", conf: 0.9} }
+        # Logic: Chỉ classify 1 lần cho mỗi ID để tiết kiệm CPU
+        breed_cache = {}
+        unique_results = {}
         
-        # Giai đoạn 1: Dùng model lọc để quét qua video
-        pre_filter_stream = config.pre_filter_model.track(tmp_in_path, stream=True, conf=0.5, verbose=False)
+        VID_STRIDE = 3 # Nhảy frame để tăng tốc
+        
+        results_gen = tracker.track(
+            t_in_path, stream=True, persist=True, 
+            conf=config.VIDEO_CONF, vid_stride=VID_STRIDE, verbose=False
+        )
 
-        for pre_filter_results in pre_filter_stream:
-            frame = pre_filter_results.orig_img
-            all_detections = process_results(pre_filter_results, config.pre_filter_model)
-            dog_found = any(d['class_id'] == COCO_DOG_CLASS_ID for d in all_detections)
+        cap = cv2.VideoCapture(t_in_path)
+        fps = cap.get(cv2.CAP_PROP_FPS) / VID_STRIDE
+        writer = imageio.get_writer(t_out_path, fps=min(fps, 20), codec="libx264", pixelformat="yuv420p")
 
-            annotated_frame, current_frame_detections = frame, []
-
-            if dog_found:
-                # Giai đoạn 2: Có chó, chạy model chính trên TOÀN BỘ frame
-                main_model_results = config.model.track(frame, persist=True, conf=config.VIDEO_CONF_THRESHOLD, verbose=False, tracker=TRACKER_CONFIG)
-                current_frame_detections = process_results(main_model_results[0], config.model)
-                annotated_frame = draw_custom_annotations(frame, current_frame_detections, config.model)
-            elif all_detections:
-                # Không có chó, dùng kết quả từ bộ lọc
-                current_frame_detections = all_detections
-                annotated_frame = draw_custom_annotations(frame, current_frame_detections, config.pre_filter_model)
+        for res in results_gen:
+            frame = res.orig_img
+            frame_dets = []
             
-            # Logic thu thập các đối tượng đã được track không đổi
-            for det in current_frame_detections:
-                track_id = det.get("track_id")
-                unique_key = f"{det['class']}-{track_id}" 
-                if track_id is not None and (unique_key not in tracked_objects or det["confidence"] > tracked_objects[unique_key]["confidence"]):
-                    tracked_objects[unique_key] = det
-            
-            rgb_frame = cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB)
-            video_writer.append_data(rgb_frame)
+            if res.boxes and res.boxes.id is not None:
+                boxes = res.boxes.xyxy.cpu().tolist()
+                ids = res.boxes.id.int().cpu().tolist()
+                classes = res.boxes.cls.int().cpu().tolist()
 
-        video_writer.close()
+                for t_id, box, cls_id in zip(ids, boxes, classes):
+                    is_dog = (cls_id == COCO_DOG_CLASS_ID) or (len(tracker.names) == 1)
+                    
+                    if is_dog:
+                        # Nếu ID này chưa từng được Classify -> Crop & Classify ngay
+                        if t_id not in breed_cache:
+                            crop = get_padded_crop(frame, box)
+                            if crop.size > 0:
+                                c_res = config.classify_model(crop, conf=0.4, verbose=False)
+                                c_dets = process_results(c_res, config.classify_model)
+                                if c_dets:
+                                    best = max(c_dets, key=lambda x: x["confidence"])
+                                    breed_cache[t_id] = {"class": best["class"], "confidence": best["confidence"]}
+                                else:
+                                    breed_cache[t_id] = {"class": "Dog", "confidence": 0.0}
+                            else:
+                                breed_cache[t_id] = {"class": "Dog", "confidence": 0.0}
+                        
+                        # Lấy info từ Cache
+                        info = breed_cache[t_id]
+                        det_obj = {
+                            "track_id": t_id, "box": [int(x) for x in box],
+                            "class": info["class"], "confidence": info["confidence"]
+                        }
+                        frame_dets.append(det_obj)
+                        unique_results[t_id] = det_obj
+                    else:
+                        # Vật thể khác (Mèo...)
+                        frame_dets.append({
+                            "track_id": t_id, "box": [int(x) for x in box],
+                            "class": tracker.names[cls_id], "confidence": 0.5
+                        })
+
+            writer.append_data(cv2.cvtColor(draw_annotations(frame, frame_dets), cv2.COLOR_BGR2RGB))
+        
+        writer.close()
         cap.release()
         
-        final_predictions = list(tracked_objects.values())
-        with open(tmp_out_path, "rb") as video_file:
-            processed_video_base64 = base64.b64encode(video_file.read()).decode("utf-8")
-
-        return JSONResponse(content={
-            "predictions": sorted(final_predictions, key=lambda x: x.get("track_id", 0)),
-            "processed_media_base64": processed_video_base64,
-            "media_type": "video/mp4",
-        })
-    except Exception as e:
-        traceback.print_exc()
-        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
+        with open(t_out_path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+            
+        gc.collect()
+        return {"predictions": list(unique_results.values()), "processed_media_base64": b64}
     finally:
-        if 'cap' in locals() and cap and cap.isOpened(): cap.release()
-        if 'video_writer' in locals() and video_writer: video_writer.close()
-        if os.path.exists(tmp_in_path): os.unlink(tmp_in_path)
-        if os.path.exists(tmp_out_path): os.unlink(tmp_out_path)
+        if os.path.exists(t_in_path): os.unlink(t_in_path)
+        if os.path.exists(t_out_path): os.unlink(t_out_path)
+
+# ==============================================================================
+# 3. API ASYNC (NON-BLOCKING)
+# ==============================================================================
+
+@app.get("/")
+def health(): return {"status": "ok", "version": "12.0-Hybrid"}
+
+@app.post("/config/reload")
+def reload(p: dict = Body(...)): config.load(p); return {"status": "ok"}
+
+@app.post("/predict/image")
+async def predict_image(file: UploadFile = File(...)):
+    if not config.classify_model: return JSONResponse({"status": "error"}, 503)
+    data = await file.read()
+    # Chạy CPU bound task trong ThreadPool để không block server
+    res = await run_in_threadpool(cpu_process_image, data)
+    return JSONResponse(res)
+
+@app.post("/predict/video")
+async def predict_video(file: UploadFile = File(...)):
+    if not config.classify_model: return JSONResponse({"status": "error"}, 503)
+    data = await file.read()
+    res = await run_in_threadpool(cpu_process_video, data)
+    return JSONResponse(res)
+
+@app.post("/predict/url")
+async def predict_url(payload: URLPayload):
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(str(payload.url), follow_redirects=True)
+        ct = resp.headers.get("content-type", "").lower()
+        if "image" in ct:
+            res = await run_in_threadpool(cpu_process_image, resp.content)
+            return JSONResponse(res)
+        elif "video" in ct:
+            res = await run_in_threadpool(cpu_process_video, resp.content)
+            return JSONResponse(res)
+    return JSONResponse({"status": "error"}, 400)
+
+# ==============================================================================
+# 4. WEBSOCKET STREAM
 
 @app.websocket("/predict-stream")
-async def predict_stream(websocket: WebSocket):
+async def ws_stream(websocket: WebSocket):
+    """
+    Logic Stream chuẩn V10:
+    - Nhận Frame -> Track -> Trả JSON.
+    - Không xử lý Text.
+    - Không Resize ngoài luồng (dùng imgsz=640 của YOLO).
+    """
     await websocket.accept()
-    if not config.model or not config.pre_filter_model: 
-        await websocket.send_json({"status": "error", "message": "Models not loaded"})
-        await websocket.close(); return
+    # Ở V12 mình gọi là classify_model, nhưng logic là Main Model của V10
+    if not config.classify_model: 
+        await websocket.close()
+        return
+    
+    print(f"[AI-WS] Stream connected (V10 Logic).", flush=True)
 
     try:
         while True:
-            message = await websocket.receive()
-            if message["type"] == "websocket.disconnect": raise WebSocketDisconnect
-            data = message.get("text", "")
-            if not data.startswith('data:image'): continue
-
-            img_data = base64.b64decode(data.split(",")[1])            
-            nparr = np.frombuffer(img_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
-            if img is not None:
-                # Giai đoạn 1: Chạy model bộ lọc nhanh trên toàn bộ frame
-                pre_filter_results = config.pre_filter_model(img, conf=config.STREAM_CONF_THRESHOLD, verbose=False)
-                all_detections = process_results(pre_filter_results[0], config.pre_filter_model)
-                dog_found = any(d['class_id'] == COCO_DOG_CLASS_ID for d in all_detections)
-                
-                response_payload = {"status": "detecting", "detections": []}
-
-                if dog_found:
-                    # Giai đoạn 2: Có chó, chạy model chính trên TOÀN BỘ frame
-                    main_model_results = config.model.track(img, persist=True, conf=config.STREAM_CONF_THRESHOLD, verbose=False, tracker=TRACKER_CONFIG)
-                    final_detections = process_results(main_model_results[0], config.model)
+            data = await websocket.receive()
+            
+            # Client gửi ảnh dưới dạng bytes
+            if "bytes" in data:
+                # Hàm này bọc logic V10 để chạy async
+                def process_frame_v10(binary_data):
+                    nparr = np.frombuffer(binary_data, np.uint8)
+                    frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     
-                    high_conf_detections = [d for d in final_detections if d["confidence"] > config.STREAM_HIGH_CONF_THRESHOLD]
-                    if high_conf_detections:
-                        annotated_frame = draw_custom_annotations(img, high_conf_detections, config.model)
-                        _, buffer = cv2.imencode(".jpg", annotated_frame)
-                        processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
-                        response_payload = {
-                            "status": "captured", 
-                            "predictionId": str(uuid.uuid4()), 
-                            "processed_media_base64": processed_image_base64,
-                            "media_type": "image/jpeg", 
-                            "detections": high_conf_detections,
-                        }
-                        await websocket.send_json(response_payload)
-                        break # Kết thúc stream khi đã chụp được ảnh chất lượng cao
-                    else:
-                        response_payload["detections"] = final_detections
-                elif all_detections:
-                    # Không có chó, trả về kết quả từ bộ lọc
-                    response_payload["detections"] = all_detections
+                    if frame is None: return None
+
+                    # LOGIC V10 GỐC: imgsz=640, track trực tiếp
+                    results = config.classify_model.track(
+                        frame,
+                        persist=True,
+                        conf=config.STREAM_CONF, # Lấy từ config
+                        iou=0.5,
+                        verbose=False,
+                        imgsz=640 
+                    )
+                    return process_results(results, config.classify_model)
+
+                # Chạy trong Threadpool để không treo server (Non-blocking)
+                detections = await run_in_threadpool(process_frame_v10, data["bytes"])
                 
-                await websocket.send_json(response_payload)
-            else:
-                await websocket.send_json({"status": "error", "message": "Could not decode image."})
+                # Chỉ gửi JSON (Logic V10)
+                if detections is not None:
+                    await websocket.send_json({
+                        "status": "detecting", 
+                        "detections": detections
+                    })
 
     except WebSocketDisconnect:
-        print("[WS] Client disconnected.")
+        print("[AI-WS] Stream disconnected")
     except Exception as e:
-        print(f"WebSocket Error: {e}")
-        traceback.print_exc()
+        print(f"[AI-WS] Error: {e}")
 
-
-# ==============================================================================
-# 5. SERVER RUN
-# ==============================================================================
 if __name__ == "__main__":
-    port = int(os.environ.get('PORT', 8000))
-    uvicorn.run("main:app", host="localhost", port=port, reload=True)
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get('PORT', 8000)))
