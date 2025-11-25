@@ -200,7 +200,6 @@ const proxyOptions: Options = {
     close: (res, socket, head) => {
     },
     error: (err, req, res) => {
-      console.error('[HPM] Proxy Error:', err);
       if ('writeHead' in res) {
         if (!res.headersSent) {
           res.writeHead(502, { 'Content-Type': 'application/json' });

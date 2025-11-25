@@ -68,7 +68,7 @@ export const feedbackService = {
         logger.info(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
 
       } catch (error) {
-        console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
+        logger.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
       }
     } else {
       logger.info(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
@@ -218,7 +218,7 @@ export const feedbackService = {
               : feedback.user_submitted_label;
           const breedName = slugify(rawBreedName || '');
           if (!breedName) {
-            console.warn(`[Feedback Service] Could not determine breed name for feedback ${id}. Using 'unknown'. Raw name: ${rawBreedName}`);
+            logger.warn(`[Feedback Service] Could not determine breed name for feedback ${id}. Using 'unknown'. Raw name: ${rawBreedName}`);
             to_public_id = `dataset/approved/unknown/${fileName}`;
           } else {
             to_public_id = `dataset/approved/${breedName}/${fileName}`;
@@ -242,7 +242,7 @@ export const feedbackService = {
           feedback.file_path = `${to_public_id}${fileExtension}`;
           logger.info(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
         } catch (error) {
-          console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
+          logger.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
         }
       } else {
         logger.info(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
@@ -268,7 +268,7 @@ export const feedbackService = {
         }
       } catch (error: any) {
         if (error.http_code !== 404) { // Ignore if not found
-          console.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
+          logger.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
         }
       }
       await PredictionHistoryModel.updateOne({ _id: feedback.prediction_id }, { $set: { isCorrect: null } });
@@ -321,7 +321,7 @@ export const feedbackService = {
       const subject = 'Cảm ơn bạn đã đóng góp cho DogBreedID!';
       const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${updatedFeedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
       
-      emailService.sendEmail(user.email, subject, text).catch(err => console.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
+      emailService.sendEmail(user.email, subject, text).catch(err => logger.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
     }
 
     return updatedFeedback;

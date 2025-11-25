@@ -60,7 +60,7 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         setAchievementStats(achievementsResponse.stats);
 
       } catch (error) {
-        console.error("[v0] Failed to load user collection:", error);
+        console.error("Failed to load user collection:", error);
       }
     } else { // Guest
       // Guest logic can be simplified or removed if not needed
@@ -93,7 +93,6 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         }
       } catch (error) {
         toast.error("Failed to update collection.");
-        console.error("[v0] Failed to toggle collection:", error);
       }
     } else { // Guest user
       toast.info("Please log in to manage your collection.");

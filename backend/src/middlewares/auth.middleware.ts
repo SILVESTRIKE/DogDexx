@@ -42,8 +42,6 @@ export const authMiddleware = async (
 
     next();
   } catch (error) {
-    // Log lỗi ra để debug nếu cần
-    // console.log("Auth Middleware Error:", error);
     return next(new NotAuthorizedError("Token is invalid or expired"));
   }
 };

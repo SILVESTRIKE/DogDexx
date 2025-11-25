@@ -5,6 +5,7 @@ import Configuration, {
 import { AIModelService } from './ai_models.service';
 import { CONFIG_KEYS } from '../constants/config.constants';
 import { AppError } from '../errors';
+import { logger } from '../utils/logger.util';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
@@ -17,7 +18,7 @@ export class ConfigService {
 
     if (!configDoc) {
       // Nếu không có config, tạo một cái mặc định và trả về
-      console.warn("Configuration not found, creating a default one.");
+      logger.warn("Configuration not found, creating a default one.");
       return Configuration.create({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
     }
     return configDoc;
@@ -107,7 +108,7 @@ export class ConfigService {
       }
       throw new AppError(`AI service returned an error: ${response.data.message}`);
     } catch (error: any) {
-      console.error('Error reloading AI service:', error.message);
+      logger.error('Error reloading AI service:', error.message);
       const errorMessage = error.response?.data?.message || error.message;
       throw new AppError(`Failed to trigger AI service reload: ${errorMessage}`); // 502 Bad Gateway
     }

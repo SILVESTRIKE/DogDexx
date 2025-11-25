@@ -140,7 +140,7 @@ export class AIModelService {
 
       return newModel;
     } catch (error: any) {
-      console.error("Error during Hugging Face upload or DB creation:", error);
+      logger.error("Error during Hugging Face upload or DB creation:", error);
       throw new AppError(`Failed to upload model: ${error.message}`);
     }
   }

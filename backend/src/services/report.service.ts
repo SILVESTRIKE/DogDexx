@@ -1,7 +1,6 @@
 import { UserModel } from '../models/user.model';
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel } from '../models/feedback.model';
-import { PlanModel } from '../models/plan.model';
 import { TransactionModel } from '../models/transaction.model';
 import { cloudinary } from '../config/cloudinary.config'; // THÊM: Import Cloudinary
 import * as ExcelJS from 'exceljs';
@@ -9,6 +8,7 @@ import {
   Document, Packer, Paragraph, TextRun, HeadingLevel, 
   Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType 
 } from 'docx';
+import { logger } from '../utils/logger.util';
 
 export interface ReportDateRange {
   startDate: Date;
@@ -97,7 +97,7 @@ export class ReportService {
 
       // 8. Cloudinary Usage (Gọi API real-time)
       cloudinary.api.usage().catch(err => {
-          console.error("Failed to fetch Cloudinary usage for report:", err.message);
+          logger.error("Failed to fetch Cloudinary usage for report:", err.message);
           return null;
       })
     ]);

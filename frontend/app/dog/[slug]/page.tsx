@@ -64,7 +64,6 @@ export default function DogDetailPage() {
         const response = await apiClient.getBreedBySlug(slug, locale)
         setData(response); // The API returns the full object { breed, collectionStatus, media }
       } catch (error) {
-        console.error("[v0] Failed to fetch breed:", error)
         setData(null);
       } finally {
         setLoading(false)
