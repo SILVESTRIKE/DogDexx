@@ -282,10 +282,9 @@ export const uploadModel = async (req: Request, res: Response, next: NextFunctio
 
 function transformDatasetFileForAdmin(req: Request, file: any) {
   if (!file) return null;
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
   return {
     ...file,
-    url: file.url ? `${baseUrl}${file.url}` : null,
+    url: file.url ? `${file.url}` : null,
   };
 }
 
