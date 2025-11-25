@@ -18,10 +18,6 @@ import { BreedChatBox } from "@/components/breed-chat-box";
 import { HealthRecommendations } from "@/components/health_rec";
 import { RecommendedProducts } from "@/components/product_rec";
 
-/**
- * Component con chứa logic chính để có thể sử dụng hook `useSearchParams`
- * một cách an toàn trong Next.js App Router.
- */
 function ResultsContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -45,13 +41,11 @@ function ResultsContent() {
   useEffect(() => {
     const historyId = searchParams.get('id');
 
-    // Hàm helper để xử lý dữ liệu kết quả và cập nhật state
     const processResultData = (result: BffPredictionResponse) => {
       setHasFeedback(result.hasFeedback ?? false); // Cập nhật state từ response
       setProcessedMediaUrl(result.processedMediaUrl);
       setPredictionId(result.predictionId); // Luôn set predictionId
 
-      // Ưu tiên kiểm tra message đặc biệt từ backend
       if (result.message) {
         setSpecialMessage(result.message);
         setAllDetections([]);
@@ -97,7 +91,6 @@ function ResultsContent() {
     fetchHistoryById();
 
     // Không cần dọn dẹp sessionStorage nữa.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locale]); // Chạy lại khi locale thay đổi
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -215,6 +208,7 @@ function ResultsContent() {
   const selectedBreedInfo = selectedDetection.breedInfo;
   const selectedDisplayName = selectedBreedInfo.breed;
   const selectedConfidence = Math.round(selectedDetection.confidence * 100);
+  const isDog = selectedBreedInfo.group !== "Object / Other";
 
   return (
     <main className="min-h-screen bg-background">
@@ -232,6 +226,7 @@ function ResultsContent() {
           </CardHeader>
           <CardContent>
             <div className="grid md:grid-cols-2 gap-8 items-center">
+              {/* --- CỘT TRÁI: ẢNH/VIDEO --- */}
               <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
                 {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
                   (
@@ -258,16 +253,25 @@ function ResultsContent() {
                   )
                 )}
               </div>
+
+              {/* --- CỘT PHẢI: THÔNG TIN CƠ BẢN --- */}
               <div className="space-y-4">
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    <Link href={`/dogdex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
-                      <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
-                        <MapPin className="h-3 w-3 mr-1" />
-                        {selectedBreedInfo.group || t("results.unknownOrigin")}
+                    {/* Nếu là chó thì link sang DogDex, nếu không thì chỉ hiện Badge tĩnh */}
+                    {isDog ? (
+                      <Link href={`/dogdex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
+                        <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
+                          <MapPin className="h-3 w-3 mr-1" />
+                          {selectedBreedInfo.group || t("results.unknownOrigin")}
+                        </Badge>
+                      </Link>
+                    ) : (
+                      <Badge variant="secondary" className="text-sm px-3 py-1">
+                        {selectedBreedInfo.group}
                       </Badge>
-                    </Link>
+                    )}
                   </div>
                 </div>
                 <div>
@@ -277,25 +281,32 @@ function ResultsContent() {
                   </div>
                   <Progress value={selectedConfidence} className="h-3" />
                 </div>
-                <Button
-                  onClick={() => router.push(`/dogdex?highlight=${selectedBreedInfo.slug}`)}
-                  size="lg"
-                  className="w-full gap-2"
-                >
-                  <BookOpen className="h-5 w-5" />
-                  {t("results.viewInDogDex")}
-                </Button>
-                <Link href={`/dog/${selectedBreedInfo.slug}`}>
-                  <Button variant="outline" size="lg" className="w-full bg-transparent">
-                    {t("results.viewDetails")}
-                  </Button>
-                </Link>
+
+                {/* --- CHỈ HIỆN CÁC NÚT ĐIỀU HƯỚNG NẾU LÀ CHÓ --- */}
+                {isDog && (
+                  <>
+                    <Button
+                      onClick={() => router.push(`/dogdex?highlight=${selectedBreedInfo.slug}`)}
+                      size="lg"
+                      className="w-full gap-2"
+                    >
+                      <BookOpen className="h-5 w-5" />
+                      {t("results.viewInDogDex")}
+                    </Button>
+                    <Link href={`/breed/${selectedBreedInfo.slug}`}>
+                      <Button variant="outline" size="lg" className="w-full bg-transparent">
+                        {t("results.viewDetails")}
+                      </Button>
+                    </Link>
+                  </>
+                )}
               </div>
             </div>
           </CardContent>
         </Card>
 
         <div className="space-y-8">
+          {/* --- THANH CHỌN ĐỐI TƯỢNG (DROPDOWN) --- */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl font-bold">{t("results.detailsTitle")}</h2>
             {allDetections.length > 1 && (
@@ -322,75 +333,98 @@ function ResultsContent() {
 
           {selectedBreedInfo ? (
             <>
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="border-2">
-                  <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" />{t("results.characteristics")}</CardTitle></CardHeader>
-                  <CardContent className="space-y-4">
-                    <div>
-                      <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />{t("results.energy")}</span><span className="text-sm font-bold">{selectedBreedInfo.energy_level ?? '?'}/5</span></div>
-                      <Progress value={(selectedBreedInfo.energy_level ?? 0) * 20} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Brain className="h-4 w-4 text-secondary" />{t("results.trainability")}</span><span className="text-sm font-bold">{selectedBreedInfo.trainability ?? '?'}/5</span></div>
-                      <Progress value={(selectedBreedInfo.trainability ?? 0) * 20} className="h-2" />
-                    </div>
-                    <div>
-                      <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Wind className="h-4 w-4 text-accent" />{t("results.shedding")}</span><span className="text-sm font-bold">{selectedBreedInfo.shedding_level ?? '?'}/5</span></div>
-                      <Progress value={(selectedBreedInfo.shedding_level ?? 0) * 20} className="h-2" />
-                    </div>
-                  </CardContent>
+              {/* --- ĐIỀU KIỆN ẨN/HIỆN CHI TIẾT --- */}
+              {isDog ? (
+                <>
+                  {/* --- NẾU LÀ CHÓ: HIỆN ĐẦY ĐỦ --- */}
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <Card className="border-2">
+                      <CardHeader><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-primary" />{t("results.characteristics")}</CardTitle></CardHeader>
+                      <CardContent className="space-y-4">
+                        <div>
+                          <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Activity className="h-4 w-4 text-primary" />{t("results.energy")}</span><span className="text-sm font-bold">{selectedBreedInfo.energy_level ?? '?'}/5</span></div>
+                          <Progress value={(selectedBreedInfo.energy_level ?? 0) * 20} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Brain className="h-4 w-4 text-secondary" />{t("results.trainability")}</span><span className="text-sm font-bold">{selectedBreedInfo.trainability ?? '?'}/5</span></div>
+                          <Progress value={(selectedBreedInfo.trainability ?? 0) * 20} className="h-2" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-2"><span className="text-sm font-medium flex items-center gap-2"><Wind className="h-4 w-4 text-accent" />{t("results.shedding")}</span><span className="text-sm font-bold">{selectedBreedInfo.shedding_level ?? '?'}/5</span></div>
+                          <Progress value={(selectedBreedInfo.shedding_level ?? 0) * 20} className="h-2" />
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2">
+                      <CardHeader><CardTitle className="flex items-center gap-2"><Ruler className="h-5 w-5 text-primary" />{t("results.physicalInfo")}</CardTitle></CardHeader>
+                      <CardContent className="space-y-3">
+                        <div><p className="text-sm text-muted-foreground">{t("results.height")}</p><p className="font-semibold">{selectedBreedInfo.height}</p></div>
+                        <div><p className="text-sm text-muted-foreground">{t("results.weight")}</p><p className="font-semibold">{selectedBreedInfo.weight}</p></div>
+                        <div><p className="text-sm text-muted-foreground">{t("results.lifespan")}</p><p className="font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" />{selectedBreedInfo.life_expectancy}</p></div>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="border-2">
+                      <CardHeader><CardTitle className="flex items-center gap-2"><Heart className="h-5 w-5 text-primary" />{t("results.temperament")}</CardTitle></CardHeader>
+                      <CardContent>
+                        <div className="flex flex-wrap gap-2">
+                          {selectedBreedInfo.temperament?.slice(0, 6).map((trait) => (<Badge key={trait} variant="secondary">{trait}</Badge>))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  <Card className="border-2">
+                    <CardHeader><CardTitle>{t("results.description")}</CardTitle></CardHeader>
+                    <CardContent><p className="text-muted-foreground leading-relaxed">{selectedBreedInfo.description}</p></CardContent>
+                  </Card>
+
+                  <div className="space-y-8">
+                    <HealthRecommendations breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
+                    <RecommendedProducts breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
+                  </div>
+                </>
+              ) : (
+                // --- NẾU KHÔNG PHẢI LÀ CHÓ: HIỆN CARD THÔNG BÁO ĐƠN GIẢN ---
+                <Card className="bg-muted/30 border-dashed border-2">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                            <AlertTriangle className="h-5 w-5" />
+                            Non-Dog Object Detected
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="text-lg text-center py-8 text-muted-foreground">
+                        <p>{selectedBreedInfo.description}</p>
+                    </CardContent>
                 </Card>
-
-                <Card className="border-2">
-                  <CardHeader><CardTitle className="flex items-center gap-2"><Ruler className="h-5 w-5 text-primary" />{t("results.physicalInfo")}</CardTitle></CardHeader>
-                  <CardContent className="space-y-3">
-                    <div><p className="text-sm text-muted-foreground">{t("results.height")}</p><p className="font-semibold">{selectedBreedInfo.height}</p></div>
-                    <div><p className="text-sm text-muted-foreground">{t("results.weight")}</p><p className="font-semibold">{selectedBreedInfo.weight}</p></div>
-                    <div><p className="text-sm text-muted-foreground">{t("results.lifespan")}</p><p className="font-semibold flex items-center gap-2"><Calendar className="h-4 w-4" />{selectedBreedInfo.life_expectancy}</p></div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border-2">
-                  <CardHeader><CardTitle className="flex items-center gap-2"><Heart className="h-5 w-5 text-primary" />{t("results.temperament")}</CardTitle></CardHeader>
-                  <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedBreedInfo.temperament?.slice(0, 6).map((trait) => (<Badge key={trait} variant="secondary">{trait}</Badge>))}
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <Card className="border-2">
-                <CardHeader><CardTitle>{t("results.description")}</CardTitle></CardHeader>
-                <CardContent><p className="text-muted-foreground leading-relaxed">{selectedBreedInfo.description}</p></CardContent>
-              </Card>
-
-              {/* --- TÍCH HỢP COMPONENT MỚI --- */}
-              <div className="space-y-8">
-                <HealthRecommendations breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
-                <RecommendedProducts breedSlug={selectedBreedInfo.slug} breedName={selectedBreedInfo.breed} />
-              </div>
-
+              )}
             </>
           ) : (
             <p className="text-center text-muted-foreground py-8">{t("results.noDetails")}</p>
           )}
         </div>
+
         <div className="h-4" />
+        
+        {/* Feedback form luôn hiện để user report nếu AI nhận diện sai */}
         <FeedbackForm
           detectedBreed={selectedDisplayName}
           confidence={selectedConfidence}
           imageUrl={""} 
           predictionId={predictionId}
-          initialSubmitted={hasFeedback} // Truyền trạng thái ban đầu xuống form
+          initialSubmitted={hasFeedback}
         />
 
-        <div className="mt-12">
-          <BreedChatBox
-            breedSlug={selectedBreedInfo.slug}
-            breedName={selectedBreedInfo.breed}
-          />
-        </div>
+        {/* --- CHAT BOX: CHỈ HIỆN NẾU LÀ CHÓ --- */}
+        {isDog && (
+          <div className="mt-12">
+            <BreedChatBox
+              breedSlug={selectedBreedInfo.slug}
+              breedName={selectedBreedInfo.breed}
+            />
+          </div>
+        )}
       </div>
     </main>
   )
@@ -398,6 +432,5 @@ function ResultsContent() {
 
 
 export default function ResultsPage() {
-  // Bọc ResultsContent để đảm bảo hook `useSearchParams` hoạt động đúng
   return <ResultsContent />;
 }

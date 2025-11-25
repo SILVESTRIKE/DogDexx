@@ -21,6 +21,7 @@ export default {
     viewAll: "Xem tất cả",
     guest: "Khách",
     getStarted: "Bắt đầu ngay",
+    dogBreed: "giống chó",
   },
   nav: {
     detect: "Nhận diện",
@@ -86,6 +87,7 @@ export default {
     newPassword: "Mật khẩu mới",
     otp: "Mã OTP",
     resetPasswordButton: "Đặt lại mật khẩu",
+    errorCaptcha: "Xác thực Captcha thất bại. Vui lòng thử lại.",
   },
   about: {
     title: "Về DogDex AI",
@@ -142,6 +144,8 @@ export default {
       finishing: "Sắp xong rồi, đang tổng hợp kết quả...",
       success: "Hoàn tất! Đang chuyển hướng...",
     },
+    dragDropDescriptionMobile: "Kéo thả hoặc nhấn để tải lên từ thiết bị của bạn",
+
   },
   results: {
     title: "Kết quả nhận diện",
@@ -175,7 +179,7 @@ export default {
     tryAgain: "Thử Lại",
     chatWithAI: {
       title: "Hỏi AI",
-      placeholder: "Nhập câu hỏi của bạn về {breedName}...",
+      placeholder: "Nhập câu hỏi của bạn về giống chó {breedName}...",
       send: "Gửi",
       remaining: "Còn lại {count} lượt hỏi",
       limitReached: "Bạn đã hết lượt hỏi đáp.",
@@ -228,12 +232,6 @@ export default {
     stopCamera: "Tắt camera",
     clickToStart: 'Nhấn "Bật camera" để bắt đầu',
     searching: "Đang tìm kiếm chó...",
-    noDetection: "Chưa phát hiện chó nào",
-    instructions: "Hướng dẫn",
-    instruction1: "Đảm bảo có đủ ánh sáng",
-    instruction2: "Giữ camera ổn định",
-    instruction3: "Đưa chó vào giữa khung hình",
-    instruction4: "Hệ thống sẽ tự động nhận diện",
     detectionsTitle: "Kết quả thời gian thực",
     connected: "Đã kết nối đến dịch vụ AI",
     insufficientTokens: "Không đủ token để bắt đầu phiên stream.",
@@ -241,6 +239,15 @@ export default {
     serverError: "Lỗi máy chủ",
     disconnectedError: "Đã mất kết nối với máy chủ.",
     connectError: "Kết nối thất bại",
+    tips: {
+      title: "Mẹo để nhận diện tốt hơn",
+      tip1: "Đảm bảo có đủ ánh sáng, tránh ngược sáng.",
+      tip2: "Giữ camera ổn định và không bị rung.",
+      tip3: "Đưa toàn bộ cơ thể chó vào khung hình.",
+      tip4: "Hệ thống sẽ tự động nhận diện khi tìm thấy chó.",
+      tip5: "Để có kết quả tốt nhất, hãy sử dụng camera có độ phân giải cao.",
+      tip6: "Giảm thiểu các yếu tố gây xao nhãng nền.",
+    },
   },
   errors: {
     insufficientTokensTitle: "Không đủ Token",
@@ -265,8 +272,7 @@ export default {
     sourceStream: "Sưu tầm qua Camera",
     sourceManual: "Thêm thủ công",
     unlockDetails: "Sưu tầm để mở khóa chi tiết",
-    notCollectedTooltip:
-      "Chưa sưu tầm. Hãy nhận diện giống chó này để mở khóa!",
+    notCollectedTooltip: "Chưa sưu tầm. Hãy nhận diện giống chó này để mở khóa!",
     sort: {
       nameAsc: "Tên (A-Z)",
       nameDesc: "Tên (Z-A)",
@@ -300,6 +306,26 @@ export default {
     allAchievements: "Tất cả thành tích",
     completed: "Đã hoàn thành",
     collectCount: "Sưu tầm {count} chó",
+    unlockedOn: "Mở khóa vào",
+  },
+  contact: {
+    formTitle: "Liên hệ với chúng tôi",
+    formDesc: "Bạn có câu hỏi hoặc góp ý? Hãy gửi tin nhắn cho chúng tôi.",
+    emailLabel: "Email",
+    emailPlaceholder: "tenban@example.com",
+    messageLabel: "Tin nhắn",
+    messagePlaceholder: "Nhập nội dung tin nhắn của bạn...",
+    submitButton: "Gửi tin nhắn",
+    submitting: "Đang gửi...",
+    successTitle: "Gửi thành công!",
+    successDescription: "Chúng tôi đã nhận được tin nhắn của bạn.",
+    errorTitle: "Gửi thất bại",
+    errorDescription: "Có lỗi xảy ra, vui lòng thử lại sau.",
+    captchaError: "Không thể xác minh Captcha. Vui lòng thử lại.",
+    thankYouTitle: "Cảm ơn bạn!",
+    thankYouDesc: "Tin nhắn của bạn đã được gửi đi. Đội ngũ hỗ trợ sẽ phản hồi sớm nhất có thể.",
+    sendAnother: "Gửi tin nhắn khác",
+    recaptchaText: "Trang web được bảo vệ bởi reCAPTCHA và tuân thủ Chính sách quyền riêng tư cũng như Điều khoản dịch vụ của Google."
   },
   profile: {
     title: "Hồ sơ",
@@ -320,6 +346,8 @@ export default {
       name: "Họ và tên",
       username: "Tên người dùng",
       email: "Địa chỉ Email",
+      city: "Thành phố",
+      country: "Quốc gia",
     },
     password: {
       title: "Đổi mật khẩu",
@@ -336,6 +364,12 @@ export default {
     danger: {
       title: "Khu vực nguy hiểm",
       description: "Các hành động không thể hoàn tác cho tài khoản của bạn",
+      deleteAccountButton: "Xóa tài khoản",
+      deleteConfirmTitle: "Bạn có chắc chắn muốn xóa tài khoản?",
+      deleteConfirmDescription: "Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn, bao gồm bộ sưu tập, thành tích và lịch sử sẽ bị xóa. Vui lòng nhập mật khẩu của bạn để xác nhận.",
+      passwordConfirmation: "Xác nhận mật khẩu của bạn",
+      confirmDeleteButton: "Tôi hiểu, xóa tài khoản của tôi",
+      passwordRequired: "Yêu cầu nhập mật khẩu để xác nhận.",
     },
   },
   feedback: {
@@ -345,7 +379,7 @@ export default {
     wasCorrect: "Kết quả nhận diện có chính xác không?",
     yes: "Có",
     no: "Không",
-    correctBreed: "Giống chó đúng là gì?",
+    correctBreed: "giống chó đúng là gì?",
     selectBreed: "Chọn giống chó...",
     additionalComments: "Nhận xét thêm (tùy chọn)",
     commentsPlaceholder: "Cho chúng tôi biết thêm về kết quả nhận diện...",
@@ -679,6 +713,7 @@ export default {
     deleteSuccess: "Xóa dự đoán thành công.",
     deleteError: "Xóa dự đoán thất bại.",
     loginRequired: "Vui lòng đăng nhập để xem lịch sử dự đoán của bạn",
+    loadMore: "Tải thêm",
   },
   footer: {
     company: "Công ty",
@@ -781,18 +816,6 @@ export default {
       "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
     pay: "Thanh toán",
     failed: "Thanh toán thất bại",
-  },
-  contact: {
-    title: "Liên hệ với chúng tôi",
-    description:
-      "Điền vào biểu mẫu dưới đây và chúng tôi sẽ liên hệ lại với bạn sớm nhất có thể.",
-    emailLabel: "Email của bạn",
-    emailPlaceholder: "ban@example.com",
-    messageLabel: "Nội dung tin nhắn",
-    messagePlaceholder: "Nhập tin nhắn của bạn tại đây...",
-    submit: "Gửi tin nhắn",
-    submitSuccess: "Tin nhắn của bạn đã được gửi thành công!",
-    submitError: "Gửi tin nhắn thất bại. Vui lòng thử lại sau.",
   },
   language: {
     toggle: "Chuyển đổi ngôn ngữ",

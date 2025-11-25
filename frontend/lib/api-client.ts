@@ -181,18 +181,26 @@ export class ApiClient {
       this.handleTokenHeaders(response);
 
       if (!response.ok) {
+        // SỬA LỖI: Cung cấp thông báo lỗi tốt hơn cho các lỗi server.
+        if (response.status >= 500) {
+          throw new Error(
+            `Server Error: ${response.status}. Please try again later or contact support.`
+          );
+        }
         if (response.status !== 304) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage =
             errorData.errors?.[0]?.message ||
             errorData.message ||
-            `API Error: ${response.status} ${response.statusText}`;
+            `Request failed with status: ${response.status} ${response.statusText}`;
           throw new Error(errorMessage);
         }
       }
 
-      if (response.status === 204) {
-        return Promise.resolve(null as T);
+      // SỬA LỖI: Xử lý các response không có nội dung (204) hoặc có content-length là 0
+      const contentType = response.headers.get("content-type");
+      if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
+        return Promise.resolve(undefined as T);
       }
 
       return response.json();
@@ -310,6 +318,7 @@ export class ApiClient {
     firstName: string;
     lastName: string;
     avatar?: File;
+    captchaToken: string;
   }) {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => {
@@ -325,10 +334,10 @@ export class ApiClient {
     });
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, captchaToken: string) {
     return this.request<any>("/bff/user/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, captchaToken }),
     });
   }
 
@@ -382,11 +391,12 @@ export class ApiClient {
   }
 
   // Delete current user (requires auth)
-  async deleteCurrentUser() {
+  async deleteCurrentUser(password: string) {
     return this.request<any>(
       "/bff/user/profile",
       {
         method: "DELETE",
+        body: JSON.stringify({ password }),
       },
       true
     );
@@ -523,6 +533,7 @@ export class ApiClient {
     files.forEach((file) => formData.append("files", file));
     return this.requestWithFormData<any>("/bff/predict/batch", formData, true); // Giữ lại true vì batch thường là tính năng cho user
   }
+  
 
   async submitPredictionFeedback(
     predictionId: string,
@@ -638,8 +649,8 @@ export class ApiClient {
   }
   // --------------------------------------------------
 
-  async deletePredictionHistory(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(
+  async deletePredictionHistory(id: string): Promise<void> {
+    return this.request<void>(
       `/bff/predict/history/${id}`,
       {
         method: "DELETE",
@@ -687,15 +698,6 @@ export class ApiClient {
     return new WebSocket(url);
   }
 
-  async connectLiveDetection(): Promise<WebSocket> {
-    if (TokenManager.getRefreshToken()) {
-      await this.refreshAccessToken();
-    }
-
-    const token = TokenManager.getAccessToken();
-    return this._createWebSocketConnection(token, "/bff/live");
-  }
-
   // Convenience method for stream prediction WebSocket
   async connectStreamPrediction(): Promise<WebSocket> {
     if (TokenManager.getRefreshToken()) {
@@ -703,6 +705,17 @@ export class ApiClient {
     }
     const token = TokenManager.getAccessToken();
     return this._createWebSocketConnection(token, "/bff/predict/stream");
+  }
+  
+  async saveStreamPrediction(payload: { processed_media_base64: string; detections: any[]; media_type: string }): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "/bff/predict/stream/save",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      false 
+    );
   }
 
   // Subscription endpoints

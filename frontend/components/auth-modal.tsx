@@ -12,6 +12,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Country, State } from 'country-state-city';
+// 1. IMPORT RECAPTCHA
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3"; 
 
 interface AuthModalProps {
   isOpen: boolean
@@ -22,6 +24,10 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProps) {
   const { login, register, verifyOtp } = useAuth()
+  
+  // 2. KHỞI TẠO HOOK
+  const { executeRecaptcha } = useGoogleReCaptcha(); 
+
   const router = useRouter()
   const searchParams = useSearchParams()
   const { t } = useI18n()
@@ -35,10 +41,9 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   const [otp, setOtp] = useState("")
   
   // --- LOCATION STATES ---
-  const [selectedCountryCode, setSelectedCountryCode] = useState("VN") // Mặc định Vietnam
+  const [selectedCountryCode, setSelectedCountryCode] = useState("VN") 
   const [selectedCityName, setSelectedCityName] = useState("")
 
-  // Memoize danh sách để tối ưu hiệu năng
   const allCountries = useMemo(() => Country.getAllCountries(), []);
   const citiesOfCountry = useMemo(() => {
     return State.getStatesOfCountry(selectedCountryCode) || [];
@@ -57,12 +62,31 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
 
     try {
       if (view === "form") {
+        // 3. KIỂM TRA & LẤY TOKEN RECAPTCHA
+        if (!executeRecaptcha) {
+          console.error("ReCAPTCHA chưa sẵn sàng.");
+          toast.error("Hệ thống bảo mật chưa sẵn sàng, vui lòng reload trang.");
+          setIsLoading(false);
+          return;
+        }
+
+        // Tạo token (action tương ứng với mode)
+        const token = await executeRecaptcha(mode === "login" ? "login" : "register");
+
+        if (!token) {
+          toast.error("Không thể xác thực danh tính (Bot detection).");
+          setIsLoading(false);
+          return;
+        }
+
         if (mode === "login") {
-          await login(email, password)
+          // 4. TRUYỀN TOKEN VÀO HÀM LOGIN
+          // (Lưu ý: AuthContext của bạn phải nhận tham số thứ 3 là token)
+          await login(email, password, token) 
+          
           toast.success(t('auth.loginTitle') + " thành công!")
           resetAndClose()
           
-          // Redirect logic
           const redirectUrl = searchParams.get("redirect")
           if (redirectUrl) {
             const [path, params] = redirectUrl.split('?')
@@ -79,37 +103,35 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             return
           }
 
-          // Lấy tên quốc gia từ mã code (để lưu vào DB cho đẹp)
           const countryData = allCountries.find(c => c.isoCode === selectedCountryCode);
           const countryName = countryData ? countryData.name : "Vietnam";
 
+          // 5. TRUYỀN TOKEN VÀO OBJECT REGISTER
           const response = await register({
             email,
             password,
             username,
             firstName,
             lastName,
-            country: countryName, // Gửi tên quốc gia
-            city: selectedCityName, // Gửi tên thành phố
-            // avatar: avatar // Nếu có upload avatar thì thêm vào
+            country: countryName, 
+            city: selectedCityName, 
+            captchaToken: token // <--- Thêm dòng này
           })
           
           setMessage(response.message || "Mã OTP đã được gửi tới email của bạn.")
-          setView("otp") // Chuyển sang màn hình nhập OTP
+          setView("otp") 
         }
       } else { 
         // === OTP LOGIC ===
+        // OTP thường không cần ReCAPTCHA v3 nếu flow trước đó đã check, 
+        // nhưng nếu API yêu cầu thì bạn cũng phải gọi executeRecaptcha ở đây.
         await verifyOtp(email, otp)
         setMessage(t('auth.otpSuccess'))
-        
-        // Sau khi verify xong, chuyển về login để người dùng đăng nhập lại
-        // Hoặc có thể tự động login luôn tùy logic auth context của bạn
         toast.success("Xác thực thành công! Vui lòng đăng nhập.")
         setView("form")
         onSwitchMode("login")
       }
     } catch (err: any) {
-      // Hiển thị lỗi từ backend (VD: "Tài khoản chưa xác thực...")
       toast.error("Thất bại", { description: err.message || "Có lỗi xảy ra" });
       setError(err.message);
     } finally {
@@ -134,10 +156,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </DialogDescription>
         </DialogHeader>
 
-        {/* VIEW: FORM LOGIN/REGISTER */}
+        {/* Form Content giữ nguyên như cũ */}
         {view === 'form' && (
           <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
-            {mode === "register" && (
+             {/* ... Nội dung form giữ nguyên ... */}
+             {mode === "register" && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
@@ -160,7 +183,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   />
                 </div>
 
-                {/* SELECTION QUỐC GIA & THÀNH PHỐ */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Quốc gia</Label>
@@ -170,7 +192,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                         value={selectedCountryCode}
                         onChange={(e) => {
                           setSelectedCountryCode(e.target.value);
-                          setSelectedCityName(""); // Reset city khi đổi nước
+                          setSelectedCityName(""); 
                         }}
                       >
                         {allCountries.map((c) => (
@@ -189,7 +211,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                          disabled={citiesOfCountry.length === 0}
                       >
                         <option value="">-- Chọn TP --</option>
-                        {/* SỬA LỖI KEY Ở ĐÂY: Thêm index vào key */}
                         {citiesOfCountry.map((state, index) => (
                           <option key={`${state.name}-${index}`} value={state.name}>{state.name}</option>
                         ))}
@@ -209,7 +230,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
               <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />
             </div>
 
-            {/* HELPER LINK FOR LOGIN */}
             {mode === 'login' && (
               <div className="flex justify-between items-center mt-2">
                 <button type="button" onClick={() => {
@@ -227,7 +247,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </form>
         )}
 
-        {/* VIEW: OTP INPUT */}
         {view === 'otp' && (
           <form id="otp-form" onSubmit={handleSubmit} className="space-y-6 flex flex-col items-center py-4">
             <div className="text-center space-y-2">
@@ -243,15 +262,12 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </form>
         )}
 
-        {/* VIEW: FORGOT/RESET (Giữ nguyên hoặc gọi component con) */}
         {view === 'forgot' && (
            <div className="text-center py-8 text-sm text-gray-500">Tính năng quên mật khẩu đang cập nhật... <button onClick={()=>setView('form')} className="text-primary underline">Quay lại</button></div>
         )}
 
-        {/* ERROR MESSAGE */}
         {error && <p className="text-sm text-red-500 text-center mt-2">{error}</p>}
 
-        {/* SUBMIT BUTTON */}
         <Button 
           type="submit" 
           form={view === 'form' ? 'auth-form' : 'otp-form'} 
@@ -263,7 +279,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
            mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
         </Button>
 
-        {/* SWITCH MODE FOOTER */}
         <div className="text-center text-sm mt-4">
           {mode === "login" ? (
             <span>{t("auth.noAccount")} <button type="button" onClick={() => onSwitchMode("register")} className="text-primary hover:underline font-medium">{t("auth.registerNow")}</button></span>

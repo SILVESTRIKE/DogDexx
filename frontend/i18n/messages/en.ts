@@ -21,6 +21,7 @@ export default {
     viewAll: "View All",
     guest: "Guest",
     getStarted: "Get Started",
+    dogBreed: "dog breed",
   },
   nav: {
     detect: "Detect",
@@ -234,6 +235,15 @@ export default {
     detectionsTitle: "Real-time Detections",
     connected: "Connected to AI Service",
     insufficientTokens: "Not enough tokens for streaming session.",
+    tips: {
+      title: "Tips for Better Detection",
+      tip1: "Ensure adequate lighting, avoid backlight.",
+      tip2: "Keep the camera steady and avoid shaking.",
+      tip3: "Include the entire dog in the frame.",
+      tip4: "The system will automatically detect when a dog is found.",
+      tip5: "For best results, use a high-resolution camera.",
+      tip6: "Minimize background distractions.",
+    },
   },
   errors: {
     insufficientTokensTitle: "Not Enough Tokens",
@@ -292,6 +302,25 @@ export default {
     completed: "Completed",
     collectCount: "Collect {count} dogs",
   },
+  contact: {
+    formTitle: "Contact Us",
+    formDesc: "Do you have any questions or feedback? Send us a message.",
+    emailLabel: "Email",
+    emailPlaceholder: "yourname@example.com",
+    messageLabel: "Message",
+    messagePlaceholder: "Enter your message here...",
+    submitButton: "Send Message",
+    submitting: "Sending...",
+    successTitle: "Message Sent!",
+    successDescription: "We have received your message.",
+    errorTitle: "Failed to Send",
+    errorDescription: "An error occurred, please try again later.",
+    captchaError: "Captcha verification failed. Please try again.",
+    thankYouTitle: "Thank You!",
+    thankYouDesc: "Your message has been sent. Our support team will respond as soon as possible.",
+    sendAnother: "Send Another Message",
+    recaptchaText: "This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply."
+  },
   profile: {
     title: "Profile",
     backToHome: "Back to Home",
@@ -311,6 +340,8 @@ export default {
       name: "Full Name",
       username: "Username",
       email: "Email Address",
+      country: "Country",
+      city: "City",
     },
     password: {
       title: "Change Password",
@@ -327,6 +358,16 @@ export default {
     danger: {
       title: "Danger Zone",
       description: "Irreversible actions for your account",
+      deleteAccount: "Delete Account",
+      deleteDescription:
+        "Permanently delete your account and all associated data.",
+      deleteConfirmTitle: "Are you sure you want to delete your account?",
+      deleteConfirmDescription: "This action cannot be undone. All your data, including collections, achievements, and history will be deleted. Please enter your password to confirm.",
+      passwordConfirmation: "Confirm your password",
+      confirmDeleteButton: "I understand, delete my account",
+      passwordRequired: "Password is required to confirm.",
+      deleteAccountButton: "Delete Account",
+      
     },
   },
   feedback: {
@@ -628,6 +669,9 @@ export default {
     deleteSuccess: "Prediction deleted successfully.",
     deleteError: "Failed to delete prediction.",
     loginRequired: "Please login to view your prediction history",
+    sourceStream: "Live Capture",
+    sourceImage: "Image Upload",
+    sourceVideo: "Video Upload",
   },
   footer: {
     company: "Company",
@@ -723,17 +767,6 @@ export default {
     cardPlaceholder: "Payment form will be integrated here with Stripe/MoMo",
     pay: "Pay",
     failed: "Payment failed",
-  },
-  contact: {
-    title: "Contact Us",
-    description: "Fill out the form below and we'll get back to you as soon as possible.",
-    emailLabel: "Your Email",
-    emailPlaceholder: "you@example.com",
-    messageLabel: "Your Message",
-    messagePlaceholder: "Enter your message here...",
-    submit: "Send Message",
-    submitSuccess: "Your message has been sent successfully!",
-    submitError: "Failed to send message. Please try again later.",
   },
   language: {
     toggle: "Toggle language",

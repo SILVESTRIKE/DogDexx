@@ -8,7 +8,7 @@ export default function Footer() {
   const { t } = useI18n()
 
   return (
-    <footer className="relative border-t bg-background/40 backdrop-blur-lg mt-20 overflow-hidden">
+    <footer className="relative border-t bg-background/40 backdrop-blur-lg overflow-hidden">
       {/* 1. BACKGROUND GLOW EFFECTS (Đồng bộ với theme) */}
       <div className="pointer-events-none absolute inset-0 z-0">
          {/* Top Gradient Line */}

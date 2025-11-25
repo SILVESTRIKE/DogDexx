@@ -1,6 +1,6 @@
 export interface User {
   id: string;
-  plan: 'free' | 'starter' | 'professional' | 'enterprise' | 'guest';
+  plan: "free" | "starter" | "professional" | "enterprise" | "guest";
   username: string;
   email?: string; // Optional vì guest không có email
   role?: "user" | "de" | "admin"; // Optional vì guest không có role
@@ -9,22 +9,25 @@ export interface User {
   firstName?: string;
   lastName?: string;
   avatarUrl?: string;
-  
+  country?: string;
+  city?: string;
   remainingTokens: number;
   tokenAllotment: number;
 }
 
-
 export interface AuthTokens {
-  accessToken: string
-  refreshToken: string
+  accessToken: string;
+  refreshToken: string;
 }
-export type CollectionSource = 'image_upload' | 'video_upload' | 'stream_capture';
+export type CollectionSource =
+  | "image_upload"
+  | "video_upload"
+  | "stream_capture";
 
 export interface UserCollectionItem {
   _id: string;
   user_id: string;
-  breed_id: { _id: string; breed: string; slug: string; group: string; };
+  breed_id: { _id: string; breed: string; slug: string; group: string };
   first_collected_at: string;
   collection_count: number;
   source: CollectionSource;
@@ -48,7 +51,7 @@ export interface ProfileResponse {
       limit: number;
       totalPages: number;
     };
-  }
+  };
 }
 
 export interface RegisterResponse {
@@ -95,19 +98,19 @@ export interface DogBreed {
 }
 
 export interface PaginatedDogBreedResponse {
-  data: DogBreed[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
+  data: DogBreed[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface YoloPrediction {
-  track_id?: number
-  box: number[]
-  class: string
-  confidence: number
-  class_id?: number
+  track_id?: number;
+  box: number[];
+  class: string;
+  confidence: number;
+  class_id?: number;
 }
 interface BoundingBox {
   x: number;
@@ -134,54 +137,55 @@ export interface PredictionHistoryItem {
 }
 
 export interface PredictionResponse {
-  success: boolean
-  predictions: YoloPrediction[]
-  processedImageUrl?: string
-  history?: PredictionHistoryItem
+  success: boolean;
+  predictions: YoloPrediction[];
+  processedImageUrl?: string;
+  history?: PredictionHistoryItem;
 }
 
 export interface FeedbackPayload {
-  isCorrect: boolean
-  submittedLabel?: string
-  notes?: string
+  isCorrect: boolean;
+  submittedLabel?: string;
+  notes?: string;
 }
 
 export interface Achievement {
-  title: string // Đổi từ name
-  description: string
-  icon: string
-  unlocked: boolean
-  unlockedAt?: string | null // Thêm trường này
-  requiredCount: number // Thêm trường này
+  title: string; // Đổi từ name
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: string | null; // Thêm trường này
+  requiredCount: number; // Thêm trường này
 }
 
 export interface CollectionStats {
   totalBreeds: number;
   collectedBreeds: number;
   progress: number;
-  recentlyAdded?: DogBreed[]
+  recentlyAdded?: DogBreed[];
 }
 
 export interface MediaUploadResponse {
-  success: boolean
-  mediaPath: string
-  mediaId: string
+  success: boolean;
+  mediaPath: string;
+  mediaId: string;
 }
 
 export interface ApiError {
-  message: string
-  error?: any
+  message: string;
+  error?: any;
 }
 
 // THÊM MỚI: Cấu trúc cho tin nhắn lỗi qua WebSocket
 export interface WebSocketError {
-  type: 'error';
-  code?: 'INSUFFICIENT_TOKENS' | string; // Mã lỗi để xác định nguyên nhân
+  type: "error";
+  code?: "INSUFFICIENT_TOKENS" | string; // Mã lỗi để xác định nguyên nhân
   message: string;
 }
 
 // Cấu trúc cho một con chó được phát hiện trong mảng 'detections'
 export interface Detection {
+  track_id?: number; // <<< THÊM DÒNG NÀY
   detectedBreed: string; // slug
   confidence: number;
   boundingBox: BoundingBox;
@@ -232,14 +236,15 @@ export interface EnrichedDogBreed {
 // THÊM MỚI: Các kiểu dữ liệu cho Gói cước (Plan)
 export interface Plan {
   name: string;
-  slug: 'free' | 'starter' | 'professional' | 'enterprise' | 'guest';
+  slug: "free" | "starter" | "professional" | "enterprise" | "guest";
   priceMonthly: number;
   priceYearly: number;
   tokenAllotment: number; // Số token được cấp mỗi chu kỳ
   apiAccess: boolean;
   description?: string; // Mô tả ngắn cho gói
   isFeatured?: boolean; // Gói nổi bật
-  features?: { // Danh sách các tính năng nổi bật
+  features?: {
+    // Danh sách các tính năng nổi bật
     name: string;
     included: boolean;
   }[];
@@ -262,7 +267,13 @@ export interface Subscription {
     _id: string;
     name: string;
   };
-  status: 'active' | 'pending_approval' | 'canceled' | 'expired' | 'past_due' | 'unpaid';
+  status:
+    | "active"
+    | "pending_approval"
+    | "canceled"
+    | "expired"
+    | "past_due"
+    | "unpaid";
   startDate: string;
   endDate: string | null;
   createdAt: string;
@@ -276,11 +287,12 @@ export interface LeaderboardEntry {
   city?: string;
   totalCollected: number;
   rank: number;
+  role?: string;
 }
 
 export interface LeaderboardResponse {
   success: boolean;
-  scope: 'global' | 'country' | 'city';
+  scope: "global" | "country" | "city";
   filterValue: string;
   data: LeaderboardEntry[];
 }

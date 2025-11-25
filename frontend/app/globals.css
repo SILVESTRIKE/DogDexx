@@ -8,55 +8,32 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  /* --- Light mode: Dog Friendly / Warm Earthy Theme --- */
-  
-  /* Nền: Màu Ngà/Kem trứng (Ivory/Warm White) - Dịu mắt, ấm áp */
+  /* --- Light mode --- */
   --background: #fffbf2; 
-  
-  /* Chữ: Màu Nâu đen (Espresso) - Đọc rõ nhưng mềm hơn màu đen tuyền */
   --foreground: #432818; 
-
-  /* Card: Trắng tinh để làm nổi bật hình ảnh chú chó và nội dung trên nền ngà */
   --card: #ffffff;
   --card-foreground: #432818;
-  
   --popover: #ffffff;
   --popover-foreground: #432818;
-  
-  /* Primary: Màu Cà Phê / Nâu Caramel (Vừa giống màu lông chó, vừa nổi bật) */
-  --primary: rgb(160, 82, 45); /* Sienna / Burnt Orange tone */
+  --primary: rgb(160, 82, 45);
   --primary-foreground: #ffffff;
-  
-  /* Secondary: Màu Be / Bánh quy (Biscuit/Latte) - Trung hòa, dùng cho button phụ/nền phụ */
   --secondary: #f3e5d0;
   --secondary-foreground: #432818;
-  
-  /* Muted: Màu xám ấm nhẹ */
   --muted: #f5f0e6;
   --muted-foreground: #8d7b68;
-  
-  /* Accent: Dùng khi hover, màu kem đậm hơn background chút xíu */
   --accent: #fff7ed; 
   --accent-foreground: rgb(160, 82, 45);
-  
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  
-  /* Border: Màu be nâu nhạt */
   --border: #e6dbce;
   --input: #e6dbce;
-  
-  /* Ring: Màu nâu cà phê nhạt đi */
   --ring: rgba(160, 82, 45, 0.5);
-  
   --radius: 1rem;
-  
-  /* Fonts */
   --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
 }
 
 .dark {
-  /* Dark mode: Giữ nguyên phong cách công nghệ (Deep Blue/Black) */
+  /* Dark mode */
   --background: #020617; 
   --foreground: #f8fafc;
   --card: #0f172a;
@@ -76,6 +53,7 @@
   --border: #1e293b;
   --input: #1e293b;
   --ring: rgb(45, 143, 247);
+  --success: #22c55e;
 }
 
 @theme inline {
@@ -116,13 +94,33 @@
   * {
     @apply border-border outline-ring/50;
   }
+  
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased relative;
     
-    /* Đổi gradient tím cũ sang gradient màu Nâu Cam (Amber) nhẹ nhàng cho hợp tone */
-    background-image: 
-        radial-gradient(at 50% 0%, rgba(160, 82, 45, 0.08) 0px, transparent 50%),
-        url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23a0522d' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    background-image: radial-gradient(at 50% 0%, color-mix(in srgb, var(--primary), transparent 90%) 0px, transparent 50%);
+
+
+    cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 60 60'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z' fill='%23ffffff' stroke='%23000000' stroke-width='2' transform='rotate(45 30 30)'/%3E%3C/svg%3E") 16 16, auto;
+  }
+
+  /* LỚP HỌA TIẾT CỤC XƯƠNG (MASK BACKGROUND) - GIỮ NGUYÊN */
+  body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1; 
+    pointer-events: none;
+    background-color: var(--foreground);
+    
+    /* SVG pattern */
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='black' stroke-width='2' transform='rotate(-45 30 30)'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='black' stroke-width='2' transform='rotate(-45 30 30)'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    
+    opacity: 0.05; 
   }
 }
 
@@ -132,26 +130,25 @@
   display: none !important;
 }
 
-/* TÙY CHỈNH SCROLLBAR */
 ::-webkit-scrollbar {
   background-color: transparent;
   width: 0;
 }
-/* Ẩn scrollbar trên WebKit (Chrome, Safari) */
 ::-webkit-scrollbar-thumb {
   background-color: transparent;
   width: 0;
 }
 
-a:hover {
-  cursor: pointer;
+/* Đảm bảo link cũng hiện con chuột xương */
+a, button, [role="button"] {
+  cursor: inherit; 
 }
-/* custom load spinner thành animation con chó chạy */
+
 @keyframes dog-run {
   0% { background-position: 0% }
   100% { background-position: 100% }
 }
-/*intro khi truy cập trang lần đầu bằng clip*/
+
 @keyframes clip-intro {
   0% {
     clip-path: circle(0% at 50% 50%);
@@ -160,7 +157,7 @@ a:hover {
     clip-path: circle(150% at 50% 50%);
   }
 }
-/* Animation for toast notifications to middle */
+
 @keyframes toast-slide-in-middle {
   from {
     transform: translateY(100%);

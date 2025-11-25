@@ -1,37 +1,66 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useI18n } from "@/lib/i18n-context";
 import { useAuth } from "@/lib/auth-context";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Send } from "lucide-react";
+import { Send, CheckCircle2 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import ReCaptcha from "react-google-recaptcha";
+// 1. Thay đổi import: Bỏ ReCaptcha cũ, dùng Hook mới
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 export function ContactForm() {
-  const { t } = useI18n();
-  const { user } = useAuth();
+  const { t } = useI18n(); 
+  const { user, isAuthenticated, setAuthModalOpen, setAuthModalMode } = useAuth();
+  
+  // 2. Gọi Hook
+  const { executeRecaptcha } = useGoogleReCaptcha();
+
   const [email, setEmail] = useState(user?.email || "");
   const [message, setMessage] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const recaptchaRef = useRef<ReCaptcha>(null);
+  
+  // 3. Xóa cái useRef đi, không cần nữa
+  // const recaptchaRef = useRef<ReCaptcha>(null);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.email) {
+      setEmail(user.email);
+    }
+  }, [isAuthenticated, user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!isAuthenticated) {
+      setAuthModalMode("login");
+      setAuthModalOpen(true);
+      return;
+    }
     setIsSubmitting(true);
 
     try {
-      const captchaToken = await recaptchaRef.current?.executeAsync();
-      if (!captchaToken) {
-        throw new Error("Could not verify CAPTCHA. Please try again.");
+      // 4. KIỂM TRA & LẤY TOKEN BẰNG HOOK (Giống AuthModal)
+      if (!executeRecaptcha) {
+         toast.error("ReCAPTCHA chưa sẵn sàng.");
+         return;
       }
-      recaptchaRef.current?.reset();
+      
+      // Action đặt tên là 'contact' để phân biệt trong Google Console
+      const captchaToken = await executeRecaptcha("contact"); 
+      
+      if (!captchaToken) {
+        throw new Error(t("contact.captchaError"));
+      }
+
+      // Xóa dòng reset ref cũ đi
+      // recaptchaRef.current?.reset();
 
       await apiClient.submitContactForm({
         email,
@@ -40,91 +69,119 @@ export function ContactForm() {
       });
 
       setSubmitted(true);
-      toast.success(t('contact.successTitle'), {
-        description: t('contact.successDescription'),
+      toast.success(t("contact.successTitle"), {
+        description: t("contact.successDescription"),
       });
-
     } catch (error: any) {
-      toast.error(t('contact.errorTitle'), {
-        description: error.message || t('contact.errorDescription'),
+      toast.error(t("contact.errorTitle"), {
+        description: error.message || t("contact.errorDescription"),
       });
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // ... (Phần GlassContainer giữ nguyên) ...
+  const GlassContainer = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+    <div className="relative group">
+      <div className="absolute -inset-0.5 bg-gradient-to-r from-primary/50 to-ring/50 rounded-[2rem] blur opacity-30 transition duration-500 group-hover:opacity-50 pointer-events-none" />
+      <div className={cn("relative z-10 bg-background/60 backdrop-blur-xl border border-white/10 shadow-2xl rounded-[1.8rem] overflow-hidden p-6 md:p-10", className)}>
+        {children}
+      </div>
+    </div>
+  );
+
   if (submitted) {
-    return (
-      <Card className="border-2 border-primary">
-        <CardContent className="pt-6">
-          <div className="text-center py-8">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-primary/10 mb-4">
-              <Send className="h-8 w-8 text-primary" />
+     // ... (Giữ nguyên) ...
+     return (
+        // ... Code phần success giữ nguyên ...
+        <GlassContainer className="flex flex-col items-center justify-center text-center py-16 animate-in fade-in zoom-in-95 duration-500">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-green-400/20 to-emerald-600/20 flex items-center justify-center mb-6 shadow-[0_0_30px_-5px_rgba(16,185,129,0.3)]">
+            <CheckCircle2 className="h-10 w-10 text-green-500" />
             </div>
-            <h3 className="text-xl font-bold mb-2">{t('contact.thankYou')}</h3>
-            <p className="text-muted-foreground">
-              {t('contact.thankYouDescription')}
+            <h3 className="text-2xl font-bold mb-3 bg-clip-text text-transparent bg-gradient-to-r from-primary to-foreground">
+            {t("contact.thankYouTitle")}
+            </h3>
+            <p className="text-muted-foreground max-w-md mx-auto leading-relaxed">
+            {t("contact.thankYouDesc")}
             </p>
-          </div>
-        </CardContent>
-      </Card>
-    );
+            <Button
+            variant="ghost"
+            className="mt-8 hover:bg-primary/10"
+            onClick={() => {
+                setSubmitted(false);
+                setMessage("");
+            }}
+            >
+            {t("contact.sendAnother")}
+            </Button>
+        </GlassContainer>
+     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('contact.title')}</CardTitle>
-        <CardDescription>{t('contact.description')}</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2">
-            <Label htmlFor="email">{t('contact.emailLabel')}</Label>
-            <Input
-              id="email"
-              type="email"
-              placeholder={t('contact.emailPlaceholder')}
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="text-base"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="message">{t('contact.messageLabel')}</Label>
-            <Textarea
-              id="message"
-              placeholder={t('contact.messagePlaceholder')}
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={5}
-              required
-              className="resize-none text-base"
-            />
-          </div>
-
-          <ReCaptcha
-            ref={recaptchaRef}
-            size="invisible"
-            sitekey={process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY!}
+    <div className="animate-in fade-in zoom-in-95 duration-500">
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* ... (Các input giữ nguyên) ... */}
+        
+        <div className="space-y-2">
+          <Label htmlFor="email" className="text-sm font-medium ml-1">
+            {t("contact.emailLabel")}
+          </Label>
+          <Input
+            id="email"
+            type="email"
+            placeholder={t("contact.emailPlaceholder")}
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            disabled={isAuthenticated}
+            className="h-12 rounded-xl bg-secondary/30 border-white/10 focus:border-primary/50 focus:ring-primary/20 focus:bg-background/80 transition-all duration-300"
           />
+        </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="message" className="text-sm font-medium ml-1">
+            {t("contact.messageLabel")}
+          </Label>
+          <Textarea
+            id="message"
+            placeholder={t("contact.messagePlaceholder")}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            rows={5}
+            required
+            className="rounded-xl bg-secondary/30 border-white/10 focus:border-primary/50 focus:ring-primary/20 focus:bg-background/80 transition-all duration-300 resize-none min-h-[120px]"
+          />
+        </div>
+
+        {/* 5. XÓA COMPONENT <ReCaptcha /> CŨ ĐI */}
+
+        <div className="pt-2">
           <Button
             type="submit"
             disabled={!email.trim() || !message.trim() || isSubmitting}
-            size="lg"
-            className="w-full gap-2"
+            className="w-full h-12 rounded-xl text-base font-semibold bg-gradient-to-r from-primary to-violet-600 hover:from-violet-600 hover:to-primary shadow-lg shadow-primary/25 transition-all duration-300"
           >
-            <Send className="h-5 w-5" />
-            {isSubmitting ? t('contact.submitting') : t('contact.submit')}
+            {isSubmitting ? (
+              <span className="flex items-center gap-2">
+                <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                {t("contact.submitting")}
+              </span>
+            ) : (
+              <span className="flex items-center gap-2">
+                <Send className="h-4 w-4" />
+                {t("contact.submitButton")}
+              </span>
+            )}
           </Button>
-          <p className="text-xs text-muted-foreground text-center pt-2">
-            This site is protected by reCAPTCHA and the Google <a href="https://policies.google.com/privacy" className="underline">Privacy Policy</a> and <a href="https://policies.google.com/terms" className="underline">Terms of Service</a> apply.
+          
+          {/* Giữ lại dòng này để tuân thủ chính sách Google */}
+          <p className="text-[10px] text-muted-foreground/60 text-center mt-4">
+            {t("contact.recaptchaText")}
           </p>
-        </form>
-      </CardContent>
-    </Card>
+        </div>
+      </form>
+    </div>
   );
 }

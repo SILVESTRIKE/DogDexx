@@ -16,11 +16,13 @@ interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<LoginResponse>;
+  login: (email: string, password: string, captchaToken: string) => Promise<LoginResponse>;
   logout: () => void;
   register: (data: any) => Promise<RegisterResponse>;
   verifyOtp: (email: string, otp: string) => Promise<any>;
   setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  deleteAccount: (password: string) => Promise<void>;
+  deletePredictionHistory: (historyId: string) => Promise<void>;
   refetchUser: () => Promise<void>;
 
   // Các thuộc tính để điều khiển modal
@@ -122,8 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // <-- Chỉ chạy MỘT LẦN
 
-  const login = async (email: string, password: string) => {
-    const response = await apiClient.login(email, password);
+  const login = async (email: string, password: string, captchaToken: string) => {
+    const response = await apiClient.login(email, password, captchaToken);
     TokenManager.setTokens(
       response.tokens.accessToken,
       response.tokens.refreshToken
@@ -197,9 +199,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return response;
   };
 
-  const deleteAccount = useCallback(async () => {
+  const deletePredictionHistory = useCallback(
+    async (historyId: string) => {
+      await apiClient.deletePredictionHistory(historyId); // Hàm này giờ không trả về gì (Promise<void>)
+      toast({
+        title: t("common.success") || "Thành công",
+        description: t("history.deleteSuccess") || "Đã xóa lịch sử dự đoán.",
+      });
+    },
+    [t, toast]
+  );
+
+  const deleteAccount = useCallback(async (password: string) => {
     try {
-      await apiClient.deleteCurrentUser();
+      await apiClient.deleteCurrentUser(password);
       TokenManager.clearTokens();
       setUser(null);
       toast({
@@ -222,6 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout,
     register,
     verifyOtp,
+    deletePredictionHistory,
     deleteAccount,
     setUser,
     refetchUser,

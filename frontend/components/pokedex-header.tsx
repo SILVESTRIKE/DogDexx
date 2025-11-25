@@ -2,7 +2,7 @@
 
 import { memo, useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Award, ArrowUpDown, Filter, ChevronUp, ChevronDown, Sparkles } from "lucide-react";
+import { Search, Award, ArrowUpDown, Filter, ChevronUp, ChevronDown, Sparkles, Trophy } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -53,7 +53,7 @@ export const DogDexHeader = memo(function DogDexHeader({
 
   return (
     // Changed: top values to match the new Navbar height (Mobile: ~56px, Desktop: ~69px)
-    <header className="sticky top-[56px] md:top-[69px] z-40 border-b border-white/10 bg-background/60 backdrop-blur-xl shadow-sm transition-all duration-300">
+    <header className="sticky top-[53px] md:top-[69px] z-40 border-b border-white/10 bg-background/60 backdrop-blur-xl shadow-sm transition-all duration-300">
       <div
         className={cn(
           "container mx-auto px-4 transition-all duration-300 ease-in-out relative",
@@ -75,24 +75,35 @@ export const DogDexHeader = memo(function DogDexHeader({
               className="overflow-hidden"
             >
               {/* Stats & Achievements Section */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+              <div className="flex flex-row items-center justify-between gap-2 md:gap-4 mb-6">
                 <div className="flex items-center gap-3">
                   <div className="inline-flex items-center gap-2 bg-primary/10 border border-primary/20 text-primary px-4 py-1.5 rounded-full font-bold text-sm md:text-base shadow-sm shadow-primary/10">
                     <Sparkles className="h-4 w-4" />
                     {t("dogdex.collected")}: {collectionStats?.collectedBreeds ?? 0}/{totalCount}
                   </div>
                 </div>
-                
-                <Link href="/achievements" className="w-full md:w-auto">
+                <div className="flex items-center gap-1 md:gap-2">
+                  <Link href="/achievements">
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full md:w-auto gap-2 rounded-full hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                      className="gap-2 rounded-full hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
                     >
                       <Award className="h-4 w-4 text-amber-500" />
-                      {t("nav.achievements")}
+                      <span className="hidden sm:inline">{t("nav.achievements")}</span>
                     </Button>
                   </Link>
+                  <Link href="/rank">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2 rounded-full hover:bg-secondary/80 text-muted-foreground hover:text-foreground"
+                    >
+                      <Trophy className="h-4 w-4 text-slate-400" />
+                      <span className="hidden sm:inline">{t("nav.rank")}</span>
+                    </Button>
+                  </Link>
+                </div>
               </div>
 
               {/* Search & Filters Section */}

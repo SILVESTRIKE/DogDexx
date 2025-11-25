@@ -162,16 +162,21 @@ export function Navbar() {
       })
   ), [navLinks, isAuthenticated, isLinkActive]);
 
-  const userMenuContent = useMemo(() => {
+  const userMenuContent = useMemo(() => {    
+    // Phần hiển thị token, tách ra để tái sử dụng
+    const tokenDisplay = user && typeof user.remainingTokens === 'number' ? (
+      <div className="hidden sm:flex items-center gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-3 py-1 text-sm font-medium text-foreground backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
+        <Coins className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500" />
+        <span className="font-mono text-xs md:text-sm">{user.remainingTokens}/{user.tokenAllotment}</span>
+      </div>
+    ) : null;
+
     if (isAuthenticated && user) {
       return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 md:gap-3 cursor-pointer group">
-                <div className="hidden sm:flex items-center gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-3 py-1 text-sm font-medium text-foreground backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
-                  <Coins className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500" />
-                  <span className="font-mono text-xs md:text-sm">{user.remainingTokens}/{user.tokenAllotment}</span>
-                </div>
+                {tokenDisplay}
                 <Button variant="ghost" className="flex items-center gap-2 rounded-full pl-1 pr-2 h-8 md:h-9 hover:bg-primary/10">
                   <Avatar className="h-7 w-7 md:h-8 md:w-8 border-2 border-white shadow-sm">
                     <AvatarImage src={user.avatarUrl} alt={user.username} />
@@ -208,6 +213,7 @@ export function Navbar() {
     
     return (
       <div className="flex items-center gap-2 md:gap-3">
+        {tokenDisplay} {/* <-- Hiển thị token cho cả khách */}
         <div className="hidden md:flex items-center gap-2">
           <Button onClick={() => handleAuthClick("login")} variant="ghost" className="rounded-full h-9 font-semibold hover:bg-primary/10 hover:text-primary">{t("nav.login")}</Button>
           <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9 bg-primary text-white font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105">{t("nav.register")}</Button>

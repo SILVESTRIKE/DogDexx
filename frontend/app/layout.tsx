@@ -5,28 +5,20 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppProviders } from "@/lib/app-providers";
 import { AppLayout } from "@/components/app-layout";
-import {DogClickEffect} from "@/components/paw-click"
-import {
-  Geist,
-  Geist_Mono,
-  Plus_Jakarta_Sans as V0_Font_Plus_Jakarta_Sans,
-  IBM_Plex_Mono as V0_Font_IBM_Plex_Mono,
-  Lora as V0_Font_Lora,
-} from "next/font/google";
+import { DogClickEffect } from "@/components/paw-click";
+import { BackgroundEffects } from "@/components/background-effects";
 import WalkingDog from "@/components/walking-dog";
-// Initialize fonts
-const plusJakartaSans = V0_Font_Plus_Jakarta_Sans({
+import RecaptchaProvider from "@/components/providers/recaptcha-provider"; 
+
+import {
+  Geist_Mono,
+  Plus_Jakarta_Sans,
+} from "next/font/google";
+
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["200", "300", "400", "500", "600", "700", "800"],
-  variable: "--font-geist-sans", // Sử dụng lại biến CSS cũ để không cần sửa file CSS
-});
-const _ibmPlexMono = V0_Font_IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700"],
-});
-const _lora = V0_Font_Lora({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-geist-sans",
 });
 
 const geistMono = Geist_Mono({
@@ -36,11 +28,8 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   icons: {
-    // Cung cấp các icon khác nhau cho theme sáng và tối
     icon: [
-      // Icon cho theme sáng (nền trắng)
       { url: "/LogoWebBlack.png", media: "(prefers-color-scheme: light)" },
-      // Icon cho theme tối (nền đen)
       { url: "/LogoWebWhite.png", media: "(prefers-color-scheme: dark)" },
     ],
   },
@@ -61,8 +50,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body
-        className="antialiased"
-        // className="antialiased select-none"
+        className="antialiased min-h-screen relative"
         suppressHydrationWarning={true}
         style={{ "--navbar-height": "69px" } as React.CSSProperties}
       >
@@ -72,11 +60,23 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppProviders>
-            <DogClickEffect />
-            <AppLayout>{children}</AppLayout>
-          </AppProviders>
-          <WalkingDog />
+          <RecaptchaProvider>
+            <AppProviders>
+              {/* BACKGROUND */}
+              <BackgroundEffects />
+              
+              {/* EFFECTS */}
+              <DogClickEffect />
+              
+              {/* LAYOUT & CONTENT */}
+              <AppLayout>
+                {children}
+              </AppLayout>
+              
+              {/* DECORATION */}
+              <WalkingDog />
+            </AppProviders>
+          </RecaptchaProvider>
         </ThemeProvider>
       </body>
     </html>

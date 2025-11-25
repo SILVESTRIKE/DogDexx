@@ -2,20 +2,27 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, useAnimation, PanInfo } from "framer-motion";
+import { useTheme } from "next-themes";
 
-// --- CẤU HÌNH ASSET ---
+// --- CẤU HÌNH ---
 const DOG_WIDTH = 64;
 const DOG_HEIGHT = 48;
+const SCALE = 2;
 const TOTAL_ROWS = 9;
 const TOTAL_COLS = 8;
+const CHASE_RANGE = 300; // Tầm nhìn: 350px thì bắt đầu đuổi
+const CATCH_RANGE = 50; // Tầm bắt: 60px thì dừng lại xin ăn
 
-// Mapping đúng hàng trong ảnh Sprite
+// --- ẢNH ---
+const DOG_IMAGE_LIGHT = "/Dogs-Remastered-02.png";
+const DOG_IMAGE_DARK = "/Dogs-Remastered-10.png";
+
 const SPRITES = {
-  IDLE: 0, // Đứng vẫy đuôi
-  SIT: 1, // Ngồi
+  IDLE: 0,
+  SIT: 1,
   LIE_START: 2,
-  RUN: 3, // Chạy (Hàng 5)
-  WALK: 4, // Đi bộ (Hàng 6)
+  RUN: 3,
+  WALK: 4,
   SCARED: 5,
   BEG: 7,
   SLEEP: 8,
@@ -29,128 +36,213 @@ type Behavior =
   | "SLEEP"
   | "DRAGGING"
   | "FALLING"
-  | "PET";
+  | "PET"
+  | "CHASE"
+  | "BEG"; // Thêm BEG
 
-export default function RealisticPixelDog() {
+export default function WalkingDog() {
   const [behavior, setBehavior] = useState<Behavior>("IDLE");
-  const [direction, setDirection] = useState(1); // 1: Phải, -1: Trái
+  const [direction, setDirection] = useState(1);
   const [showHeart, setShowHeart] = useState(false);
+  const [tick, setTick] = useState(0); // Trigger render
 
-  const xPos = useRef(0); // Vị trí X hiện tại (để tính toán logic)
-  const isInteracting = useRef(false);
+  const { resolvedTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
+
+  const xPos = useRef(0);
+  const mouseX = useRef<number | null>(null); // Lưu vị trí chuột
+  const isInteracting = useRef(false); // Đang kéo thả hoặc được vuốt ve
   const controls = useAnimation();
 
-  // Helper tính vị trí background
+  useEffect(() => {
+    setMounted(true);
+    // 1. THEO DÕI CHUỘT
+    const handleMouseMove = (e: MouseEvent) => {
+      mouseX.current = e.clientX;
+    };
+    window.addEventListener("mousemove", handleMouseMove);
+    return () => window.removeEventListener("mousemove", handleMouseMove);
+  }, []);
+
+  const currentDogImage =
+    mounted && resolvedTheme === "dark" ? DOG_IMAGE_DARK : DOG_IMAGE_LIGHT;
+
   const getSpriteY = (rowIndex: number) =>
     `${(rowIndex / (TOTAL_ROWS - 1)) * 100}%`;
 
-  // --- AI: BỘ NÃO CỦA CHÓ ---
+  // --- LOGIC SUY NGHĨ ---
   const thinkNextMove = useCallback(() => {
     if (isInteracting.current) return;
 
+    // A. LOGIC ĐUỔI XƯƠNG (Ưu tiên cao nhất)
+    if (mouseX.current !== null) {
+      // Tính tâm con chó (Vị trí x + một nửa chiều rộng * scale)
+      const dogCenterX = xPos.current + (DOG_WIDTH * SCALE) / 2;
+      const dist = Math.abs(mouseX.current - dogCenterX);
+
+      // Nếu trong tầm nhìn VÀ không đang ngủ say
+      if (dist < CHASE_RANGE && behavior !== "SLEEP" && behavior !== "PET") {
+        // Nếu đã bắt được (gần quá) -> Ngồi xin ăn
+        if (dist < CATCH_RANGE) {
+          // Quay mặt về phía chuột
+          if (mouseX.current > dogCenterX) setDirection(1);
+          else setDirection(-1);
+
+          setBehavior("BEG"); // Xin ăn
+          setTick((t) => t + 1);
+          return; // Dừng suy nghĩ, thực hiện BEG
+        }
+
+        // Nếu chưa bắt được -> Đuổi (RUN)
+        setBehavior("RUN");
+
+        // Xác định hướng đuổi
+        if (mouseX.current > dogCenterX) setDirection(1);
+        else setDirection(-1);
+
+        setTick((t) => t + 1);
+        return; // Dừng suy nghĩ random, thực hiện RUN đuổi
+      }
+    }
+
+    // B. LOGIC RANDOM (Nếu chuột ở xa hoặc đang ngủ)
     const rand = Math.random();
-    const screenW = window.innerWidth;
     const currentX = xPos.current;
+    const MARGIN = 50;
 
-    // 1. LOGIC VA CHẠM TƯỜNG
-    const MARGIN = 80;
+    // Đụng tường thì quay đầu
     if (currentX < MARGIN && direction === -1) {
-      setDirection(1); // Đụng tường trái -> Quay phải
-      setBehavior("IDLE"); // Đứng lại suy nghĩ chút
-      return;
-    }
-    if (currentX > screenW - MARGIN && direction === 1) {
-      setDirection(-1); // Đụng tường phải -> Quay trái
+      setDirection(1);
       setBehavior("IDLE");
+      setTick((t) => t + 1);
+      return;
+    }
+    if (
+      currentX > window.innerWidth - DOG_WIDTH * SCALE - MARGIN &&
+      direction === 1
+    ) {
+      setDirection(-1);
+      setBehavior("IDLE");
+      setTick((t) => t + 1);
       return;
     }
 
-    // 2. QUYẾT ĐỊNH HÀNH ĐỘNG TIẾP THEO
+    let nextBehavior: Behavior = "IDLE";
     if (behavior === "SLEEP") {
-      // Đang ngủ thì lười dậy lắm (80% ngủ tiếp)
-      if (rand > 0.8) setBehavior("SIT");
-      else setTimeout(thinkNextMove, 4000);
-      return;
+      if (rand > 0.8) nextBehavior = "SIT"; // Khó dậy
+      else nextBehavior = "SLEEP";
+    } else {
+      // Nếu vừa xin ăn xong (BEG) mà chuột đi xa rồi -> IDLE một tí
+      if (behavior === "BEG") {
+        nextBehavior = "IDLE";
+      } else {
+        if (rand < 0.3) nextBehavior = "WALK";
+        else if (rand < 0.45) nextBehavior = "RUN";
+        else if (rand < 0.75) nextBehavior = "IDLE";
+        else if (rand < 0.9) nextBehavior = "SIT";
+        else nextBehavior = "SLEEP";
+      }
     }
-
-    // Tỷ lệ hành động
-    if (rand < 0.3) setBehavior("WALK"); // 30% Đi bộ thong thả
-    else if (rand < 0.45)
-      setBehavior("RUN"); // 15% Nổi hứng chạy nhanh (Zoomies)
-    else if (rand < 0.85) setBehavior("IDLE"); // 20% Đứng chơi
-    else if (rand < 0.95) setBehavior("SIT"); // 10% Ngồi
-    else setBehavior("SLEEP"); // 5% Đi ngủ
+    setBehavior(nextBehavior);
+    setTick((t) => t + 1);
   }, [behavior, direction]);
 
-  // --- XỬ LÝ DI CHUYỂN & ANIMATION ---
+  // --- THỰC HIỆN HÀNH ĐỘNG ---
   useEffect(() => {
     let timeoutId: NodeJS.Timeout;
 
     const performAction = async () => {
       if (behavior === "DRAGGING" || behavior === "FALLING") return;
 
-      // --- LOGIC DI CHUYỂN (WALK vs RUN) ---
+      // 1. CHẠY HOẶC ĐI (Bao gồm cả chạy đuổi theo chuột)
       if (behavior === "WALK" || behavior === "RUN") {
-        // CẤU HÌNH TỐC ĐỘ TẠI ĐÂY
-        const MOVE_SPEED = behavior === "RUN" ? 350 : 60; // Pixel trên giây (Run nhanh gấp ~6 lần Walk)
+        const isChasing =
+          mouseX.current !== null &&
+          Math.abs(mouseX.current - (xPos.current + (DOG_WIDTH * SCALE) / 2)) <
+            CHASE_RANGE;
 
-        // Walk: Đi ngắn ngắn (50px - 150px)
-        // Run: Chạy đoạn dài hơn (200px - 500px)
-        const minRange = behavior === "RUN" ? 200 : 50;
-        const maxRange = behavior === "RUN" ? 500 : 150;
+        // Nếu đang đuổi (Chase) thì tốc độ bàn thờ, còn đi chơi thì thong thả
+        const MOVE_SPEED = behavior === "RUN" ? (isChasing ? 400 : 300) : 50;
 
-        let distance = Math.random() * (maxRange - minRange) + minRange;
+        let targetX: number;
 
-        // Tính đích đến
-        let targetX = xPos.current + distance * direction;
+        if (isChasing && mouseX.current !== null) {
+          // Đích đến là vị trí chuột (trừ đi một nửa người chó để nó đứng giữa chuột)
+          // Nhưng dừng lại cách chuột 1 đoạn nhỏ để không bị chồng lấn
+          const offset = direction === 1 ? -40 : 40;
+          targetX = mouseX.current - (DOG_WIDTH * SCALE) / 2 + offset;
+        } else {
+          // Logic đi random cũ
+          const minRange = behavior === "RUN" ? 100 : 30;
+          const maxRange = behavior === "RUN" ? 400 : 100;
+          let distance = Math.random() * (maxRange - minRange) + minRange;
+          targetX = xPos.current + distance * direction;
+        }
 
-        // Clamp (Kẹp) vị trí trong màn hình
+        // Clamp màn hình
+        const maxScreenX = window.innerWidth - DOG_WIDTH * SCALE;
         if (targetX < 0) targetX = 0;
-        if (targetX > window.innerWidth - DOG_WIDTH)
-          targetX = window.innerWidth - DOG_WIDTH;
+        if (targetX > maxScreenX) targetX = maxScreenX;
 
-        // Tính lại quãng đường thực tế sau khi kẹp
         const actualDist = Math.abs(targetX - xPos.current);
 
-        // Nếu quãng đường quá ngắn (do đụng tường), dừng lại luôn
+        // Nếu gần quá thì thôi đứng đó suy nghĩ tiếp
         if (actualDist < 10) {
-          setDirection((prev) => prev * -1);
-          setBehavior("IDLE");
+          if (isChasing) setBehavior("BEG"); // Đuổi kịp rồi thì xin
+          else setBehavior("IDLE");
+
+          setTick((t) => t + 1);
           return;
         }
 
-        // Tính thời gian di chuyển = Quãng đường / Tốc độ
         const duration = actualDist / MOVE_SPEED;
 
-        await controls.start({
-          x: targetX,
-          transition: {
-            duration: duration,
-            ease: "linear", // Dùng linear để tốc độ đều, ko bị trượt
-          },
-        });
+        try {
+          await controls.start({
+            x: targetX,
+            transition: { duration: duration, ease: "linear" },
+          });
+          xPos.current = targetX;
 
-        xPos.current = targetX;
-        thinkNextMove();
+          // Chạy xong 1 nhịp thì suy nghĩ tiếp (để check xem chuột có di chuyển chỗ khác không)
+          thinkNextMove();
+        } catch (e) {}
       }
 
-      // --- CÁC HÀNH ĐỘNG ĐỨNG YÊN ---
-      else if (["IDLE", "SNIFF", "SIT", "BEG", "HAPPY"].includes(behavior)) {
-        const duration = Math.random() * 2000 + 1000;
-        timeoutId = setTimeout(thinkNextMove, duration);
+      // 2. XIN ĂN (Khi bắt được chuột)
+      else if (behavior === "BEG") {
+        // Kiểm tra liên tục xem chuột có chạy mất không
+        // Nếu chuột chạy ra xa > CATCH_RANGE thì quay lại rượt tiếp
+        timeoutId = setTimeout(() => {
+          if (mouseX.current !== null) {
+            const dogCenterX = xPos.current + (DOG_WIDTH * SCALE) / 2;
+            const dist = Math.abs(mouseX.current - dogCenterX);
+            if (dist > CATCH_RANGE) {
+              thinkNextMove(); // Chuột chạy rồi, suy nghĩ tiếp (sẽ kích hoạt RUN)
+            } else {
+              // Chuột vẫn ở đó, tiếp tục xin (hoặc chuyển sang Happy nếu muốn)
+              // Ở đây mình loop lại BEG bằng cách gọi thinkNextMove, nó sẽ check dist < CATCH_RANGE và set BEG lại
+              thinkNextMove();
+            }
+          } else {
+            thinkNextMove();
+          }
+        }, 1000); // 1 giây check 1 lần
       }
 
-      // --- NGỦ ---
+      // 3. CÁC HÀNH ĐỘNG TĨNH KHÁC
       else if (behavior === "SLEEP") {
-        timeoutId = setTimeout(thinkNextMove, 6000); // Ngủ lâu hơn
-      }
-
-      // --- TƯƠNG TÁC ---
-      else if (behavior === "PET") {
+        timeoutId = setTimeout(thinkNextMove, 6000);
+      } else if (behavior === "PET") {
         setShowHeart(true);
         await new Promise((r) => setTimeout(r, 2000));
         setShowHeart(false);
-        setBehavior("SLEEP");
+        setBehavior("IDLE");
+        setTick((t) => t + 1);
+      } else {
+        // IDLE, SIT...
+        const duration = Math.random() * 2000 + 1000;
+        timeoutId = setTimeout(thinkNextMove, duration);
       }
     };
 
@@ -158,11 +250,11 @@ export default function RealisticPixelDog() {
 
     return () => {
       clearTimeout(timeoutId);
-      controls.stop();
+      controls.stop(); // Stop animation cũ nếu logic thay đổi đột ngột (ví dụ chuột di chuyển nhanh)
     };
-  }, [behavior, controls, direction, thinkNextMove]);
+  }, [behavior, controls, direction, thinkNextMove, tick]); // Tick giúp re-run effect
 
-  // --- DRAG & DROP ---
+  // --- HANDLERS ---
   const handleDragStart = () => {
     isInteracting.current = true;
     setBehavior("DRAGGING");
@@ -170,24 +262,23 @@ export default function RealisticPixelDog() {
   };
 
   const handleDragEnd = (_: any, info: PanInfo) => {
-    // Cập nhật vị trí xPos dựa trên nơi thả chuột
-    // Lấy vị trí tương đối của phần tử cha + delta
-    // Cách đơn giản nhất: Giả định vị trí hiện tại của animation là đúng
-    // (Framer motion tự handle visual x, ta chỉ cần update logic reference)
-    const parentRect = document.body.getBoundingClientRect(); // Hoặc container
-    // Với position fixed left-0, point.x là toạ độ màn hình chính xác
-    xPos.current = info.point.x - DOG_WIDTH / 2;
-
+    let newX = info.point.x - (DOG_WIDTH * SCALE) / 2;
+    if (newX < 0) newX = 0;
+    if (newX > window.innerWidth - DOG_WIDTH * SCALE)
+      newX = window.innerWidth - DOG_WIDTH * SCALE;
+    xPos.current = newX;
     setBehavior("FALLING");
-
+    setTick((t) => t + 1);
     controls
       .start({
         y: 0,
+        x: newX,
         transition: { type: "spring", stiffness: 400, damping: 25 },
       })
       .then(() => {
         isInteracting.current = false;
         setBehavior("WALK");
+        setTick((t) => t + 1);
       });
   };
 
@@ -196,19 +287,20 @@ export default function RealisticPixelDog() {
     isInteracting.current = true;
     controls.stop();
     setBehavior("PET");
+    setTick((t) => t + 1);
     setTimeout(() => {
       isInteracting.current = false;
     }, 2500);
   };
 
-  // --- RENDER PROPS ---
-
+  // --- RENDER ---
   const getCurrentSpriteRow = () => {
     switch (behavior) {
       case "WALK":
         return SPRITES.WALK;
       case "RUN":
-        return SPRITES.RUN;
+      case "CHASE":
+        return SPRITES.RUN; // Chase dùng sprite RUN
       case "IDLE":
         return SPRITES.IDLE;
       case "SIT":
@@ -218,7 +310,8 @@ export default function RealisticPixelDog() {
       case "FALLING":
         return SPRITES.SIT;
       case "PET":
-        return SPRITES.BEG;
+      case "BEG":
+        return SPRITES.BEG; // BEG và PET dùng chung sprite vẫy tay
       case "SLEEP":
         return SPRITES.SLEEP;
       default:
@@ -226,23 +319,21 @@ export default function RealisticPixelDog() {
     }
   };
 
-  // QUAN TRỌNG: TỐC ĐỘ ANIMATION (Guồng chân)
-  // Chạy thì chân phải guồng nhanh, đi thì thong thả
   const getAnimDuration = () => {
-    if (behavior === "RUN") return "0.4s"; // Guồng chân cực nhanh
-    if (behavior === "WALK") return "0.9s"; // Đi thong thả
-    if (behavior === "SLEEP") return "2.0s"; // Thở chậm rãi
-    if (behavior === "PET") return "0.6s"; // Nhảy vui vẻ
-    return "0.8s"; // Tốc độ trung bình cho vẫy đuôi
+    if (behavior === "RUN" || behavior === "CHASE") return "0.4s";
+    if (behavior === "WALK") return "0.9s";
+    if (behavior === "SLEEP") return "2.0s";
+    if (behavior === "PET" || behavior === "BEG") return "0.6s";
+    return "0.8s";
   };
 
   const getSteps = () => (behavior === "SLEEP" ? 4 : 7);
-  const getEndPosition = () => {
-    const steps = getSteps();
-    return `-${steps * DOG_WIDTH}px`;
-  };
+  const getEndPosition = () => `-${getSteps() * DOG_WIDTH}px`;
+
+  if (!mounted) return null;
+
   return (
-    <div className="fixed bottom-0 left-0 w-full h-0 z-[9999]">
+    <div className="fixed bottom-0 left-0 w-full h-0 z-[50]">
       <motion.div
         drag
         dragMomentum={false}
@@ -255,53 +346,58 @@ export default function RealisticPixelDog() {
         style={{
           width: DOG_WIDTH,
           height: DOG_HEIGHT,
-          scaleX: -direction,
-          originX: 0.5,
-          originY: 1,
+          transformOrigin: "bottom center",
+          scale: SCALE,
+          x: xPos.current,
         }}
       >
-        {/* EMOTIONS */}
-        <div
-          className="absolute -top-5 left-1/2 -translate-x-1/2 pointer-events-none whitespace-nowrap flex flex-col items-center"
-          style={{ transform: `scaleX(${-direction})` }}
-        >
+        <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 pointer-events-none flex flex-col items-center z-20 w-max">
           {showHeart && (
-            <div className="text-3xl animate-bounce drop-shadow-md">❤️</div>
+            <div className="text-md animate-bounce drop-shadow-md">❤️</div>
           )}
 
+          {/* Hiệu ứng bong bóng chat khi tương tác */}
           {behavior === "SLEEP" && (
-            <div className="bg-white/80 px-2 py-1 rounded-lg text-xs font-bold text-slate-600 animate-pulse border border-slate-200">
+            <div className="bg-background/90 px-2 py-0.5 rounded-full text-[8px] font-bold text-foreground animate-pulse border border-border shadow-sm">
               Zzz...
             </div>
           )}
-          {behavior === "RUN" && (
-            <div className="text-xs text-gray-400 italic animate-pulse pr-4">
-              💨
-            </div>
+          {behavior === "BEG" && (
+            <div className="text-md animate-bounce drop-shadow-md mb-1">🦴</div> // Hiện cục xương khi xin ăn
+          )}
+          {behavior === "RUN" && !showHeart && (
+            <div className="text-[10px] italic animate-pulse pr-4">💨</div>
           )}
         </div>
 
-        {/* SPRITE */}
         <div
           style={{
             width: "100%",
             height: "100%",
-            imageRendering: "pixelated",
-            backgroundImage: "url('/Dogs-Remastered-02.png')",
-            backgroundRepeat: "no-repeat",
-            backgroundSize: `${TOTAL_COLS * 100}% ${TOTAL_ROWS * 100}%`,
-            backgroundPositionY: getSpriteY(getCurrentSpriteRow()),
-            // @ts-ignore
-            "--end-pos": getEndPosition(),
-            animation: `play-sprite ${getAnimDuration()} steps(${getSteps()}) infinite`,
+            transform: `scaleX(${-direction})`,
           }}
-        />
+        >
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              imageRendering: "pixelated",
+              backgroundImage: `url('${currentDogImage}')`,
+              backgroundRepeat: "no-repeat",
+              backgroundSize: `${TOTAL_COLS * 100}% ${TOTAL_ROWS * 100}%`,
+              backgroundPositionY: getSpriteY(getCurrentSpriteRow()),
+              // @ts-ignore
+              "--end-pos": getEndPosition(),
+              animation: `play-sprite ${getAnimDuration()} steps(${getSteps()}) infinite`,
+            }}
+          />
+        </div>
       </motion.div>
 
       <style jsx global>{`
         @keyframes play-sprite {
           from {
-            background-position-x: 0%;
+            background-position-x: 0px;
           }
           to {
             background-position-x: var(--end-pos);
