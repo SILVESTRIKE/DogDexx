@@ -8,6 +8,7 @@ const allowedOrigins: string[] = [
   'http://localhost:3001', // Frontend dev
   'http://localhost:3000', // Backend dev
   "https://dogdexai.vercel.app",
+  "https://dogdexx.vercel.app",
 ];
 
 // Chỉ thêm các URL từ biến môi trường nếu chúng tồn tại
