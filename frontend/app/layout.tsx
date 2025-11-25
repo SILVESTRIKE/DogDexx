@@ -35,7 +35,6 @@ export const metadata: Metadata = {
   },
   title: "DogDex - Dog Breed Encyclopedia",
   description: "Discover and explore dog breeds from around the world",
-  generator: "v0.app",
 };
 
 export default function RootLayout({

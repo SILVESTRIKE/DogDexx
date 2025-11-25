@@ -318,11 +318,7 @@ export const userService = {
       logger.info(`[USER_SERVICE] sendOtp: Gửi email thành công đến ${email}.`);
       return { message: "OTP đã được gửi đến email của bạn" };
     } catch (error) {
-      // GHI LẠI LỖI CHI TIẾT ĐỂ BIẾT NGUYÊN NHÂN
-      console.error("[FATAL] Lỗi không thể gửi email xác thực:", error);
-
-      // NÉM LỖI RA NGOÀI ĐỂ CONTROLLER BẮT ĐƯỢC
-      // ĐIỀU NÀY SẼ NGĂN REQUEST BỊ TREO
+      logger.error("[FATAL] Lỗi không thể gửi email xác thực:", error);
       throw new Error(
         "Hệ thống không thể gửi email xác thực tại thời điểm này. Vui lòng thử lại sau."
       );

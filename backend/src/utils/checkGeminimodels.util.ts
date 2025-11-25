@@ -7,7 +7,7 @@ import {logger} from '../utils/logger.util.js';
 async function listAvailableModels() {
   const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
-    console.error("Lỗi: Biến môi trường GOOGLE_API_KEY chưa được thiết lập trong file .env");
+    logger.error("Lỗi: Biến môi trường GOOGLE_API_KEY chưa được thiết lập trong file .env");
     return;
   }
 
@@ -19,7 +19,7 @@ async function listAvailableModels() {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("Lỗi khi lấy danh sách model:", data.error.message);
+      logger.error("Lỗi khi lấy danh sách model:", data.error.message);
       return;
     }
 
@@ -32,7 +32,7 @@ async function listAvailableModels() {
     logger.info("Gợi ý: Hãy chọn một trong các model trên (ví dụ: 'models/gemini-1.0-pro') và cập nhật trong file geminiAI.service.ts của bạn.");
 
   } catch (error) {
-    console.error("Không thể thực hiện yêu cầu:", error);
+    logger.error("Không thể thực hiện yêu cầu:", error);
   }
 }
 

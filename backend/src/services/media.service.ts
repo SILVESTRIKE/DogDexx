@@ -105,10 +105,10 @@ export class MediaService {
       } catch (error: any) {
         // Nếu file đã tồn tại ở đích, ta vẫn tiếp tục và cập nhật DB
         if (error.http_code !== 422) { // 422: "Resource with public_id ... already exists"
-          console.error(`[Media Service] Failed to move Cloudinary file:`, error.message);
+          logger.error(`[Media Service] Failed to move Cloudinary file:`, error.message);
           throw error; // Ném lỗi nếu không phải lỗi "đã tồn tại"
         }
-        console.warn(`[Media Service] Destination '${newPublicId}' already exists. Proceeding to update DB record.`);
+        logger.warn(`[Media Service] Destination '${newPublicId}' already exists. Proceeding to update DB record.`);
       }
     }
 

@@ -76,7 +76,7 @@ export const avatarStorage = new CloudinaryStorage({
       return result;
 
     } catch (error) {
-      console.error('[avatarStorage] Lỗi bên trong hàm params:', error);
+      logger.error('[avatarStorage] Lỗi bên trong hàm params:', error);
       throw new Error('Lỗi khi xử lý thông số upload avatar.');
     }
   },

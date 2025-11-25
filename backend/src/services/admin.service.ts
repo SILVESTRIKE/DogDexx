@@ -325,7 +325,7 @@ export class AdminService {
       await cloudinary.uploader.destroy(public_id);
     } catch (error: any) {
       if (error.http_code !== 404)
-        console.error(
+        logger.error(
           `Không thể xóa file trên Cloudinary: ${media.mediaPath}`,
           error.message
         );
@@ -408,7 +408,7 @@ export class AdminService {
 
       return { directories, files };
     } catch (error: any) {
-      console.error(
+      logger.error(
         `[Admin Service] Error browsing Cloudinary path '${relativePath}':`,
         error
       );
@@ -559,7 +559,7 @@ export class AdminService {
 
       // Cloudinary API Call (Cần try-catch để tránh crash nếu Cloudinary lỗi)
       cloudinary.api.usage().catch((err) => {
-        console.error(
+        logger.error(
           "[AdminService] Failed to fetch Cloudinary usage:",
           err.message
         );

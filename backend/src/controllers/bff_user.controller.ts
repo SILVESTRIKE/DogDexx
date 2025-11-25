@@ -137,7 +137,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       user: newUser,
     });
   } catch (error) {
-    console.error('[BFF_CONTROLLER] Lỗi trong quá trình đăng ký:', error);
+    logger.error('[BFF_CONTROLLER] Lỗi trong quá trình đăng ký:', error);
     next(error);
   }
 };
