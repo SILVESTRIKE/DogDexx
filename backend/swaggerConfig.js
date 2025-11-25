@@ -9,17 +9,13 @@ const options = {
     },
     servers: [
       {
-        url: "http://localhost:3000",
+        url: "http://localhost:5000",
         description: "Development Server",
       },
     ],
     tags: [
-      { name: "Auth", description: "API xác thực và quản lý tài khoản" },
-      { name: "Medias", description: "API quản lý media (ảnh, video)" },
-      { name: "DogsWiki", description: "API quản lý thông tin các giống chó (wiki)" },
-      { name: "Directories", description: "API quản lý thư mục logic" },
-      { name: "Predictions", description: "API dự đoán, lưu lịch sử, stream, kiểm tra trạng thái" },
-      { name: "AI Proxy", description: "API chuyển tiếp trực tiếp đến AI Service (không lưu DB)" },
+      { name: "Analytics", description: "API liên quan đến phân tích và theo dõi người dùng" },
+      
       { name: "BFF-Prediction", description: "API tổng hợp cho chức năng dự đoán phía client" },
       { name: "BFF-Collection", description: "API tổng hợp cho chức năng bộ sưu tập (DogDex) phía client" },
       { name: "BFF-Content", description: "API tổng hợp cho các chức năng hiển thị nội dung phía client" },

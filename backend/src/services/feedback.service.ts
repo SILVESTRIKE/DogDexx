@@ -234,13 +234,23 @@ export const feedbackService = {
           const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
           const newAssetFolder = to_public_id.split('/').slice(0, -1).join('/'); // e.g., "dataset/approved/poodle"
 
+          const new_path_with_ext = `${to_public_id}${fileExtension}`;
+
           await cloudinary.uploader.explicit(renameResult.public_id, {
             type: 'upload',
             asset_folder: newAssetFolder
           });
           
-          feedback.file_path = `${to_public_id}${fileExtension}`;
+          feedback.file_path = new_path_with_ext;
           logger.info(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
+
+          // THÊM: Cập nhật đường dẫn trong PredictionHistory và Media gốc
+          const predictionId = (feedback.prediction_id as any)?._id;
+          if (predictionId) {
+            await PredictionHistoryModel.updateOne({ _id: predictionId }, { $set: { mediaPath: new_path_with_ext} });
+            await MediaModel.updateOne({ _id: (feedback.prediction_id as any).media }, { $set: { mediaPath: new_path_with_ext } });
+            logger.info(`[Feedback Service] Updated paths for PredictionHistory ${predictionId} and its Media.`);
+          }
         } catch (error) {
           logger.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
         }
@@ -312,7 +322,7 @@ export const feedbackService = {
     const predictionId = (updatedFeedback.prediction_id as any)._id;
     await PredictionHistoryModel.updateOne(
       { _id: predictionId },
-      { $set: { isCorrect: false } }
+      { $set: { isCorrect: updatedFeedback.isCorrect } }
     );
 
     // Gửi email cảm ơn nếu có thông tin người dùng
