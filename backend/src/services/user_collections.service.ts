@@ -8,7 +8,7 @@ export interface DogDexBreed {
   slug: string;
   breed: string;
   group?: string;
-  dogdexNumber?: number;
+  pokedexNumber?: number;
   origin?: string;
   mediaUrl?: string;
   rarity_level?: number;

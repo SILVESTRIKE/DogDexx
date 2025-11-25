@@ -1,4 +1,3 @@
-// src/middleware/upload.middleware.ts
 import multer from "multer";
 import { Request } from "express";
 // Import các storage engine từ file config
@@ -34,7 +33,7 @@ export const uploadSingle = multer({
 }).single("file");
 
 export const uploadMultiple = multer({
-  storage: multer.memoryStorage(), // <--- THAY ĐỔI: Dùng memoryStorage cho cả batch
+  storage: multer.memoryStorage(), 
   fileFilter: fileFilter,
   limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES },
 }).array("files", MAX_FILES);

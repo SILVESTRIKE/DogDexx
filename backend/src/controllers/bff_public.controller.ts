@@ -1,39 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { PlanService } from "../services/plan.service";
-import axios from "axios";
-import { logger } from "../utils/logger.util";
 import { emailService } from "../services/email.service";
 import { BadRequestError } from "../errors";
 import { leaderboardService } from "../services/leaderboard.service";
 import { transformMediaURLs } from "../utils/media.util";
-
-async function verifyRecaptcha(token: string): Promise<boolean> {
-  const secretKey = process.env.RECAPTCHA_SECRET_KEY;
-  if (!secretKey) {
-    logger.error("[reCAPTCHA] RECAPTCHA_SECRET_KEY is not set in .env file.");
-    if (process.env.NODE_ENV === "development") {
-      logger.warn(
-        "[reCAPTCHA] Skipping reCAPTCHA verification in development mode."
-      );
-      return true;
-    }
-    return false;
-  }
-
-  const verificationUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
-
-  try {
-    const response = await axios.post(verificationUrl);
-    const { success, "error-codes": errorCodes } = response.data;
-    if (!success) {
-      logger.warn(`[reCAPTCHA] Verification failed: ${errorCodes?.join(", ")}`);
-    }
-    return success;
-  } catch (error) {
-    logger.error(`[reCAPTCHA] Error verifying token: ${error}`);
-    return false;
-  }
-}
+import { verifyRecaptcha } from "../utils/recaptcha.util";
 
 export const bffPublicController = {
   getPublicPlans: async (req: Request, res: Response, next: NextFunction) => {

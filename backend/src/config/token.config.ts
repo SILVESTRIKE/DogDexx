@@ -4,7 +4,7 @@ const jwtRefreshExpirationSeconds = parseInt(process.env.JWT_REFRESH_EXPIRATION 
 export const tokenConfig = {
   guest: {
     initialTokens: 10,
-    expirationSeconds: 7 * 24 * 60 * 60, // 7 ngày
+    expirationSeconds: 24 * 60 * 60, // 1 ngày
   },
   costs: {
     imagePrediction: 2,

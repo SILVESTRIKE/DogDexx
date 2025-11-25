@@ -12,10 +12,16 @@ import { tokenConfig } from '../config/token.config';
 import { NextFunction } from 'express';
 import { RegisterSchema, UpdateProfileSchema } from '../types/zod/user.zod'; 
 import { logger } from '../utils/logger.util';
+import { verifyRecaptcha } from '../utils/recaptcha.util';
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { user, accessToken, refreshToken } = await authService.login(req.body.email, req.body.password);
+    const { email, password, captchaToken } = req.body;
+    if (!captchaToken) throw new BadRequestError("Captcha token is required.");
     
+    const isCaptchaValid = await verifyRecaptcha(captchaToken);
+    if (!isCaptchaValid) throw new BadRequestError("Invalid CAPTCHA. Please try again.");
+
+    const { user, accessToken, refreshToken } = await authService.login(email, password);
     // authService -> userService đã trả về user được làm giàu
     const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
     const collection = await collectionService.getUserCollection(new Types.ObjectId(user.id), lang);
@@ -111,6 +117,12 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       // Ném lỗi để middleware xử lý lỗi chung có thể bắt được
       throw new BadRequestError(errorMessage);
     }
+
+    const { captchaToken } = req.body;
+    if (!captchaToken) throw new BadRequestError("Captcha token is required.");
+    const isCaptchaValid = await verifyRecaptcha(captchaToken);
+    if (!isCaptchaValid) throw new BadRequestError("Invalid CAPTCHA. Please try again.");
+
     const userData = validationResult.data;
 
     logger.info('[BFF_CONTROLLER] Bắt đầu xử lý request đăng ký...');
@@ -251,6 +263,11 @@ export const deleteCurrentUser = async (req: Request, res: Response, next: NextF
     const userId = (req as any).user!._id.toString();
     await userService.deleteUser(userId);
     res.status(200).json({ message: "Tài khoản của bạn đã được xóa thành công." });
+    const { password } = req.body;
+
+    // Gọi service xác thực và xóa
+    await authService.deleteUserWithPasswordVerification(userId, password);
+    res.status(200).json({ message: "Tài khoản và tất cả dữ liệu liên quan đã được xóa thành công." });
   } catch (error) {
     next(error);
   }

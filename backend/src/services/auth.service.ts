@@ -286,4 +286,26 @@ export const authService = {
 
     return { message: "Mật khẩu đã được đặt lại thành công." };
   },
+
+  async deleteUserWithPasswordVerification(userId: string, passwordToCheck: string) {
+    if (!passwordToCheck) {
+      throw new BadRequestError("Vui lòng cung cấp mật khẩu để xác nhận xóa tài khoản.");
+    }
+
+    // Lấy user với mật khẩu
+    const userWithPassword = await UserModel.findById(userId).select('+password');
+
+    if (!userWithPassword || !userWithPassword.password) {
+      throw new NotFoundError("Không tìm thấy người dùng hoặc tài khoản không có mật khẩu.");
+    }
+
+    // So sánh mật khẩu
+    const isMatch = await bcrypt.compare(passwordToCheck, userWithPassword.password);
+    if (!isMatch) {
+      throw new NotAuthorizedError("Mật khẩu không chính xác.");
+    }
+
+    // Nếu mật khẩu khớp, tiến hành xóa mềm
+    await userService.deleteUser(userId);
+  },
 };

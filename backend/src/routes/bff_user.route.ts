@@ -1,5 +1,3 @@
-// src/routes/bff/user.routes.ts
-
 import { Router } from 'express';
 import { 
     register, 

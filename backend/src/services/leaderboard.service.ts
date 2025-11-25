@@ -8,6 +8,7 @@ export interface LeaderboardEntry {
   username: string;
   displayName: string;
   avatarPath?: string;
+  role?: string;
   country?: string;
   city?: string;
   totalCollected: number;
@@ -40,6 +41,9 @@ export const leaderboardService = {
     });
     pipeline.push({ $unwind: "$userInfo" });
     pipeline.push({ $match: { "userInfo.isDeleted": false } });
+    
+    // Lọc bỏ người dùng có vai trò 'admin' hoặc 'dev'
+    pipeline.push({ $match: { "userInfo.role": { $nin: ["admin", "dev"] } } });
 
     // Lọc theo Country/City
     if (scope === 'country' && value) {
@@ -58,6 +62,7 @@ export const leaderboardService = {
         firstName: "$userInfo.firstName",
         lastName: "$userInfo.lastName",
         avatarPath: "$userInfo.avatarPath",
+        role: "$userInfo.role",
         country: "$userInfo.country",
         city: "$userInfo.city",
         totalCollected: "$collectionSize"
@@ -71,6 +76,7 @@ export const leaderboardService = {
       username: item.username,
       displayName: (item.firstName && item.lastName) ? `${item.firstName} ${item.lastName}` : item.username,
       avatarPath: item.avatarPath,
+      role: item.role,
       country: item.country,
       city: item.city,
       totalCollected: item.totalCollected,

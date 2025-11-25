@@ -3,13 +3,8 @@ import { bffPredictionController } from "../controllers/bff_prediction.controlle
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
-// THAY ĐỔI: Import các middleware token mới
-import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware"; // Giữ lại để kiểm tra
+import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware";
 import { tokenConfig } from "../config/token.config";
-// XÓA: Các import middleware cũ không còn cần thiết
-// import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
-// import { setMediaType } from "../middlewares/setMediaType.middleware";
-// import { checkStreamUsageLimit } from "../middlewares/wsUsageLimiter.middleware";
 
 const router = Router();
 
@@ -157,6 +152,32 @@ router.post(
 
 /**
  * @swagger
+ * /bff/predict/stream/save:
+ *   post:
+ *     summary: "(BFF) Lưu kết quả từ stream video (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: |
+ *       Lưu một frame từ stream video (đã được xử lý và có bounding box) như một kết quả dự đoán mới.
+ *       Endpoint này được gọi từ client sau khi nhận kết quả từ websocket.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/StreamResultPayload'
+ *     responses:
+ *       201: { description: "Lưu kết quả thành công." }
+ *       400: { description: "Dữ liệu không hợp lệ." }
+ */
+router.post(
+    "/stream/save", 
+    optionalAuthMiddleware,
+    bffPredictionController.saveStreamResult
+);
+/**
+ * @swagger
  * /bff/predict/chat/{breedSlug}:
  *   post:
  *     summary: "(BFF) Trò chuyện với AI về một giống chó (Chi phí: 1 token)"
@@ -231,12 +252,46 @@ router.get(
     bffPredictionController.getChatHistory
 );
 
+/**
+ * @swagger
+ * /bff/predict/{breedSlug}/health-recommendations:
+ *   get:
+ *     summary: "(BFF) Lấy gợi ý sức khỏe cho một giống chó (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy các gợi ý về sức khỏe, chăm sóc dựa trên giống chó cụ thể.
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema: { type: string }
+ *         description: Slug của giống chó.
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách các gợi ý.
+ */
 router.get(
     "/:breedSlug/health-recommendations", 
     optionalAuthMiddleware,
     bffPredictionController.getHealthRecommendations
 );
 
+/**
+ * @swagger
+ * /bff/predict/{breedSlug}/recommended-products:
+ *   get:
+ *     summary: "(BFF) Lấy sản phẩm gợi ý cho một giống chó (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy danh sách các sản phẩm (thức ăn, đồ chơi, v.v.) phù hợp với giống chó cụ thể.
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema: { type: string }
+ *         description: Slug của giống chó.
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách các sản phẩm gợi ý.
+ */
 router.get(
     "/:breedSlug/recommended-products", 
     optionalAuthMiddleware,
@@ -362,5 +417,23 @@ router.get("/history", authMiddleware, bffPredictionController.getPredictionHist
  */
 router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
 
+/**
+ * @swagger
+ * /bff/predict/history/{id}:
+ *   delete:
+ *     summary: "(BFF) Xóa một lịch sử dự đoán (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Xóa một mục trong lịch sử dự đoán của người dùng. Yêu cầu xác thực.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Xóa thành công. }
+ */
+router.delete("/history/:id", authMiddleware, bffPredictionController.deletePredictionHistory);
 
 export default router;

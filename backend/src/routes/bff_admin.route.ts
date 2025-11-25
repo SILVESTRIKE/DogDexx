@@ -43,13 +43,146 @@ const router = Router();
 // Tất cả các route trong file này đều yêu cầu quyền admin
 router.use(authMiddleware, checkAllowedRoles(['admin']));
 
+/**
+ * @swagger
+ * /bff/admin/dashboard:
+ *   get:
+ *     summary: (BFF-Admin) Lấy dữ liệu tổng quan cho dashboard
+ *     tags: [BFF-Admin-Dashboard]
+ *     description: Trả về các số liệu thống kê chính cho trang dashboard của admin.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200: { description: Lấy dữ liệu thành công. }
+ */
 router.get('/dashboard', getDashboard);
+
+/**
+ * @swagger
+ * /bff/admin/feedback:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách feedback
+ *     tags: [BFF-Admin-Feedback]
+ *     description: Lấy danh sách phân trang các feedback từ người dùng.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *       - { in: query, name: status, schema: { type: string, enum: [pending, approved, rejected] } }
+ *     responses:
+ *       200: { description: Lấy danh sách feedback thành công. }
+ */
 router.get('/feedback', getFeedback);
+
+/**
+ * @swagger
+ * /bff/admin/feedback/{id}/approve:
+ *   post:
+ *     summary: (BFF-Admin) Chấp thuận một feedback
+ *     tags: [BFF-Admin-Feedback]
+ *     description: Đánh dấu một feedback là đã được chấp thuận.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Chấp thuận thành công. }
+ *       404: { description: Không tìm thấy feedback. }
+ */
 router.post('/feedback/:id/approve', approveFeedback);
+
+/**
+ * @swagger
+ * /bff/admin/feedback/{id}/reject:
+ *   post:
+ *     summary: (BFF-Admin) Từ chối một feedback
+ *     tags: [BFF-Admin-Feedback]
+ *     description: Đánh dấu một feedback là đã bị từ chối.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Từ chối thành công. }
+ *       404: { description: Không tìm thấy feedback. }
+ */
 router.post('/feedback/:id/reject', rejectFeedback);
+
+/**
+ * @swagger
+ * /bff/admin/users:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách người dùng
+ *     tags: [BFF-Admin-Users]
+ *     description: Lấy danh sách phân trang tất cả người dùng trong hệ thống.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *       - { in: query, name: search, schema: { type: string } }
+ *     responses:
+ *       200: { description: Lấy danh sách người dùng thành công. }
+ */
 router.get('/users', getUsers);
+
+/**
+ * @swagger
+ * /bff/admin/users:
+ *   post:
+ *     summary: (BFF-Admin) Tạo người dùng mới
+ *     tags: [BFF-Admin-Users]
+ *     description: Tạo một tài khoản người dùng mới.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/UserCreatePayload' }
+ *     responses:
+ *       201: { description: Tạo người dùng thành công. }
+ */
 router.post('/users', createUser);
+
+/**
+ * @swagger
+ * /bff/admin/users/{id}:
+ *   put:
+ *     summary: (BFF-Admin) Cập nhật người dùng
+ *     tags: [BFF-Admin-Users]
+ *     description: Cập nhật thông tin của một người dùng.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/UserUpdatePayload' }
+ *     responses:
+ *       200: { description: Cập nhật thành công. }
+ *       404: { description: Không tìm thấy người dùng. }
+ */
 router.put('/users/:id', updateUser);
+
+/**
+ * @swagger
+ * /bff/admin/users/{id}:
+ *   delete:
+ *     summary: (BFF-Admin) Xóa người dùng
+ *     tags: [BFF-Admin-Users]
+ *     description: Xóa một người dùng khỏi hệ thống.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: path, name: id, required: true, schema: { type: string } }
+ *     responses:
+ *       200: { description: Xóa thành công. }
+ *       404: { description: Không tìm thấy người dùng. }
+ */
 router.delete('/users/:id', deleteUser);
 router.get('/model/config', getModelConfig);
 router.put('/model/config', updateModelConfig);
@@ -57,7 +190,43 @@ router.get('/alerts', getAlerts);
 router.post('/models/upload', uploadModelFiles, uploadModel); // Giả sử uploadSingle là middleware phù hợp
 router.get('/usage', getUsageStats);
 router.get('/histories', getHistories);
+
+/**
+ * @swagger
+ * /bff/admin/histories/browse:
+ *   get:
+ *     summary: (BFF-Admin) Duyệt lịch sử dự đoán
+ *     tags: [BFF-Admin-Histories]
+ *     description: Lấy danh sách phân trang lịch sử dự đoán của toàn bộ người dùng.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *       - { in: query, name: userId, schema: { type: string }, description: "Lọc theo ID người dùng" }
+ *       - { in: query, name: modelUsed, schema: { type: string }, description: "Lọc theo model đã sử dụng" }
+ *     responses:
+ *       200: { description: Lấy danh sách lịch sử thành công. }
+ */
 router.get('/histories/browse', browseHistories);
+
+/**
+ * @swagger
+ * /bff/admin/media/browse:
+ *   get:
+ *     summary: (BFF-Admin) Duyệt media files
+ *     tags: [BFF-Admin-Media]
+ *     description: Lấy danh sách phân trang tất cả media files trong hệ thống.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *       - { in: query, name: userId, schema: { type: string }, description: "Lọc theo ID người dùng" }
+ *       - { in: query, name: type, schema: { type: string, enum: [image, video] }, description: "Lọc theo loại media" }
+ *     responses:
+ *       200: { description: Lấy danh sách media thành công. }
+ */
 router.get('/media/browse', browseMedia);
 
 /**
@@ -413,7 +582,38 @@ router.get('/reports/export', exportReport);
 router.get('/reports/preview', getReportPreview); // <--- Đăng ký route ở đây
 
 // --- CÁC ROUTE CÒN LẠI GIỮ NGUYÊN ---
+/**
+ * @swagger
+ * /bff/admin/subscriptions:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách các gói đăng ký
+ *     tags: [BFF-Admin-Subscriptions]
+ *     description: Lấy danh sách phân trang các gói đăng ký của người dùng.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *     responses:
+ *       200: { description: Lấy danh sách thành công. }
+ */
 router.get('/subscriptions', getSubscriptions);
+
+/**
+ * @swagger
+ * /bff/admin/transactions:
+ *   get:
+ *     summary: (BFF-Admin) Lấy danh sách giao dịch
+ *     tags: [BFF-Admin-Transactions]
+ *     description: Lấy danh sách phân trang các giao dịch thanh toán.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - { in: query, name: page, schema: { type: integer, default: 1 } }
+ *       - { in: query, name: limit, schema: { type: integer, default: 10 } }
+ *     responses:
+ *       200: { description: Lấy danh sách thành công. }
+ */
 router.get('/transactions', getTransactions);
 
 

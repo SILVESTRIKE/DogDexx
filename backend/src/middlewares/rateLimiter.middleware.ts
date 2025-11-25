@@ -16,7 +16,6 @@ export const apiLimiter = rateLimit({
     return user?.role === 'admin';
   },
 
-  // --- SỬA PHẦN NÀY ---
   handler: (req, res, next, options) => {
     // logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
 

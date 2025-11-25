@@ -1,79 +1,75 @@
-import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 import { logger } from "../utils/logger.util";
 dotenv.config();
 
-const transporter = nodemailer.createTransport({
-  host: process.env.EMAIL_HOST || "smtp.gmail.com",
-  port: parseInt(process.env.EMAIL_PORT || "587", 10),
-  secure: (process.env.EMAIL_PORT === '465'), // true for 465, false for other ports
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
-
+// Hàm gửi mail dùng API thay vì SMTP
 async function sendGenericEmail(
   to: string,
   subject: string,
-  text: string
+  content: string // Tham số này có thể là text hoặc html
 ): Promise<void> {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: to,
+  const apiKey = process.env.BREVO_API_KEY; // Nhớ cấu hình biến này trên Render
+  const senderEmail = process.env.EMAIL_FROM || "ctytest8@gmail.com";
+  
+  if (!apiKey) {
+    throw new Error("Thiếu cấu hình BREVO_API_KEY");
+  }
+
+  const url = "https://api.brevo.com/v3/smtp/email";
+  
+  // Brevo API Body
+  const body = {
+    sender: { name: "DOGDEX siu cấp vjp pro", email: senderEmail },
+    to: [{ email: to }],
     subject: subject,
-    text: text,
+    htmlContent: `<html><body>${content}</body></html>`, 
   };
 
   try {
-    logger.info("Gửi email từ:", process.env.EMAIL_USER);
-    await transporter.sendMail(mailOptions);
-    logger.info(mailOptions.text);
-    logger.info("Đã gửi mail đến:", to);
+    logger.info(`[EmailService] Đang gọi API gửi đến: ${to}`);
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "accept": "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      const err = await response.json();
+      logger.error(`[EmailService] API Lỗi: ${JSON.stringify(err)}`);
+      throw new Error("Lỗi gửi mail từ Brevo API");
+    }
+
+    logger.info("[EmailService] Gửi mail thành công qua API.");
   } catch (error) {
-    logger.error(`[EmailService] Lỗi gửi mail đến ${to}:`, error);
-    throw new Error("Không thể gửi email");
+    logger.error("[EmailService] Lỗi kết nối:", error);
+    throw error;
   }
 }
 
+// Giữ nguyên hàm này, chỉ thay đổi cách gọi bên trong
 interface ContactFormPayload {
   fromEmail: string;
   message: string;
 }
 
-/**
- * Gửi email từ form liên hệ của người dùng.
- * @param payload Dữ liệu từ form
- */
 async function sendContactFormEmail(payload: ContactFormPayload): Promise<void> {
   const { fromEmail, message } = payload;
-  const receiverEmail = process.env.EMAIL_USER;
+  const receiverEmail = process.env.EMAIL_FROM; 
 
-  // Thêm kiểm tra để đảm bảo biến môi trường đã được thiết lập
-  if (!receiverEmail) {
-    logger.error('[EmailService] CONTACT_FORM_RECEIVER_EMAIL is not set in the .env file. Cannot send contact form email.');
-    throw new Error('Server configuration error: Contact email recipient is not defined.');
-  }
+  if (!receiverEmail) return;
 
-  const mailOptions = {
-    from: `"${fromEmail}" <${process.env.EMAIL_USER}>`, // Hiển thị email người gửi trong tiêu đề mail
-    to: receiverEmail, // Email của bạn để nhận feedback
-    subject: `[DogBreedID] New Feedback from ${fromEmail}`,
-    html: `
-      <h2>New Feedback Received</h2>
-      <p><strong>From:</strong> <a href="mailto:${fromEmail}">${fromEmail}</a></p>
-      <p><strong>Message:</strong></p>
-      <pre style="background-color: #f4f4f4; padding: 15px; border-radius: 5px; white-space: pre-wrap; word-wrap: break-word;">${message}</pre>
-    `,
-  };
+  const htmlBody = `
+    <h3>Feedback mới</h3>
+    <p><strong>Từ:</strong> ${fromEmail}</p>
+    <p><strong>Nội dung:</strong> ${message}</p>
+  `;
 
-  try {
-    const info = await transporter.sendMail(mailOptions);
-    logger.info(`[EmailService] Contact form email sent: ${info.messageId}`);
-  } catch (error) {
-    logger.error(`[EmailService] Error sending contact form email:`, error);
-    throw new Error("Could not send contact email.");
-  }
+  await sendGenericEmail(receiverEmail, `Feedback từ ${fromEmail}`, htmlBody);
 }
 
 export const emailService = {

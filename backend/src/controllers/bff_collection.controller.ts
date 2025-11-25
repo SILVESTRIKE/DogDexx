@@ -16,7 +16,7 @@ export type DogDexBreed = {
   slug: string;
   breed: string;
   group?: string;
-  dogdexNumber?: number;
+  pokedexNumber?: number;
   origin?: string;
   mediaUrl?: string;
   rarity_level?: number;
@@ -98,7 +98,7 @@ export const getDogDex = async (req: Request, res: Response) => {
         slug: breed.slug,
         breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
         group: breed.group,
-        dogdexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
+        pokedexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
         origin: breed.origin,
         mediaUrl: breed.mediaUrl,
         rarity_level: breed.rarity_level,
@@ -181,7 +181,6 @@ export const getAchievements = async (req: Request, res: Response) => {
       ? req.query.lang as 'vi' | 'en'
       : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
-    // THÊM: Logic Caching với Redis
     const cacheKey = `${REDIS_KEYS.USER_ACHIEVEMENTS_PREFIX}${userId}:${lang}`;
     if (redisClient) {
       const cachedData = await redisClient.get(cacheKey);

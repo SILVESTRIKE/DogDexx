@@ -175,6 +175,13 @@ router.get('/achievements', authMiddleware, getAchievements);
  *     responses:
  *       200:
  *         description: Lấy thống kê thành công.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 totalCollected: { type: integer, example: 25 }
+ *                 totalBreeds: { type: integer, example: 120 }
  */
 router.get('/stats', authMiddleware, getStats);
 
