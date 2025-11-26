@@ -411,7 +411,7 @@ export default function Home() {
         </div>
 
         {/* CONTACT */}
-        <Card className="mt-20 md:mt-32 relative bg-gradient-to-b from-background/0 to-background/80 w-[100%] md:w-[70%] mx-auto border-0 shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
+        <Card className="mt-20 md:mt-32 relative bg-gradient-to-b from-background/0 to-background/80 w-[100%] md:w-[50%] mx-auto border-0 shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
           <div className="max-w-xl mx-auto">
             <div className="text-center mb-8 md:mb-12">
               <h2 className="text-2xl md:text-4xl font-bold mb-4">
