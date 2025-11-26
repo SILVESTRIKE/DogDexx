@@ -164,7 +164,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
   // Trả về thẻ có thể nhấp để điều hướng nếu đã sưu tầm,
   // ngược lại trả về thẻ hiển thị thông báo khi nhấp.
   return collected ? (
-    <Link href={`/dog/${dog.slug}`} className="block h-full">{cardContent}</Link>
+    <Link href={`/breed/${dog.slug}`} className="block h-full">{cardContent}</Link>
   ) : (
     <TooltipProvider>
       <Tooltip>

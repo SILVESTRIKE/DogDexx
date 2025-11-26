@@ -4,12 +4,9 @@ const transformPaths = (data: any, baseUrl: string): any => {
     if (data === null || typeof data !== 'object' || data instanceof Date) return data;
     if (Array.isArray(data)) return data.map(item => transformPaths(item, baseUrl));
 
-    // Sao chép đối tượng để tránh thay đổi đối tượng gốc
     const obj = typeof data.toObject === 'function' ? data.toObject() : { ...data };
 
-    // Hàm helper để tạo URL an toàn, tránh bị lặp dấu '/'
     const createUrl = (path: string) => {
-        // Đảm bảo path luôn bắt đầu bằng một dấu '/'
         const cleanPath = path.startsWith('/') ? path : `/${path}`;
         return `${baseUrl}${cleanPath.replace(/\\/g, "/")}`;
     }
@@ -34,7 +31,6 @@ const transformPaths = (data: any, baseUrl: string): any => {
         delete obj.processedMediaPath;
     }
 
-    // Lặp qua tất cả các key của object để xử lý các object/array lồng nhau
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             obj[key] = transformPaths(obj[key], baseUrl);
@@ -46,7 +42,6 @@ const transformPaths = (data: any, baseUrl: string): any => {
 
 export const transformMediaURLs = (req: Request, data: any): any => {
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    // Xử lý cả trường hợp data là object đơn lẻ hoặc một mảng các object
     if (Array.isArray(data)) {
         return data.map(item => transformPaths(item, baseUrl));
     }

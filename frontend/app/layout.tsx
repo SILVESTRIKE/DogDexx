@@ -49,7 +49,7 @@ export default function RootLayout({
       suppressHydrationWarning
     >
       <body
-        className="antialiased min-h-screen relative"
+        className="antialiased min-h-screen relative select-none"
         suppressHydrationWarning={true}
         style={{ "--navbar-height": "69px" } as React.CSSProperties}
       >

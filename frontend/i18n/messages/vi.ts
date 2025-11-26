@@ -117,6 +117,7 @@ export default {
       "Upload ảnh hoặc video để nhận diện giống chó và khám phá thông tin chi tiết về chúng",
     dragDropTitle: "Kéo thả, dán ảnh, hoặc nhấn để tải lên",
     dragDropDescription: "Hoặc chọn file từ thiết bị của bạn",
+    dragDropDescriptionMobile: "Kéo thả hoặc nhấn để tải lên từ thiết bị của bạn",
     selectImage: "Chọn ảnh",
     selectVideo: "Chọn video",
     supportedFormats: "Hỗ trợ: JPG, PNG, GIF, MP4, MOV (tối đa 50MB)",
@@ -144,8 +145,6 @@ export default {
       finishing: "Sắp xong rồi, đang tổng hợp kết quả...",
       success: "Hoàn tất! Đang chuyển hướng...",
     },
-    dragDropDescriptionMobile: "Kéo thả hoặc nhấn để tải lên từ thiết bị của bạn",
-
   },
   results: {
     title: "Kết quả nhận diện",

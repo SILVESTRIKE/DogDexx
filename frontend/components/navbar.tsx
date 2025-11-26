@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield, Coins, Settings, Menu, LogOut } from "lucide-react"
+import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -31,11 +31,9 @@ export function Navbar() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   
-  // FIX 1: Không reset ref array trong render body để tránh mất tham chiếu
   const itemsRef = useRef<(HTMLAnchorElement | null)[]>([])
   const navContainerRef = useRef<HTMLDivElement>(null)
   
-  // State lưu style của cục Pill
   const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ 
     opacity: 0, 
     width: 0, 
@@ -83,9 +81,7 @@ export function Navbar() {
     if (!mounted) return;
 
     const calculateIndicator = () => {
-      // Lọc danh sách link hiện có trên màn hình
       const visibleLinks = navLinks.filter(link => !link.auth || (link.auth && isAuthenticated));
-      
       const activeIndex = visibleLinks.findIndex(link => isLinkActive(link.href));
       const activeEl = itemsRef.current[activeIndex];
 
@@ -96,18 +92,14 @@ export function Navbar() {
         setIndicatorStyle({
           left: itemRect.left - containerRect.left,
           width: itemRect.width,
-          opacity: 1, // Đảm bảo luôn hiện khi tìm thấy active
+          opacity: 1, 
         });
       } else {
-        // Nếu không tìm thấy active link nào thì ẩn đi
         setIndicatorStyle(prev => ({ ...prev, opacity: 0 }));
       }
     };
 
-    // Trigger tính toán
     calculateIndicator();
-    
-    // Fallback: Đôi khi font load chậm làm sai width, tính lại sau 150ms
     const timeoutId = setTimeout(calculateIndicator, 150);
     window.addEventListener("resize", calculateIndicator);
 
@@ -127,12 +119,9 @@ export function Navbar() {
         <Link
           key={link.href}
           href={link.href}
-          // Gán ref mà không reset mảng
           ref={(el) => { itemsRef.current[index] = el }}
           className={cn(
             "relative transition-colors duration-300 px-5 py-2 rounded-full text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
-            // Active: Trắng (nổi trên cục Pill màu nâu)
-            // Inactive: Nâu nhạt -> Hover thành nâu đậm
             active 
               ? "text-white" 
               : "text-muted-foreground hover:text-primary"
@@ -144,30 +133,51 @@ export function Navbar() {
     })
   ), [navLinks, isAuthenticated, isLinkActive]);
 
-  const allMobileLinks = useMemo(() => (
-    navLinks
+  // --- MENU MOBILE ---
+  const allMobileLinks = useMemo(() => {
+    const links = navLinks
       .filter(link => !link.auth || isAuthenticated)
       .map(link => {
         const active = isLinkActive(link.href);
         return (
             <DropdownMenuItem key={`mobile-${link.href}`} asChild>
             <Link href={link.href} className={cn(
-                "cursor-pointer w-full font-medium",
+                "cursor-pointer w-full font-medium py-2",
                 active && "bg-primary/15 text-primary font-bold"
             )}>
                 {link.label}
             </Link>
             </DropdownMenuItem>
         )
-      })
-  ), [navLinks, isAuthenticated, isLinkActive]);
+      });
+
+    // Thêm nút Login/Register vào menu mobile nếu chưa đăng nhập
+    if (!isAuthenticated) {
+      links.push(
+        <DropdownMenuSeparator key="mobile-sep-auth" />,
+        <DropdownMenuItem key="mobile-login" onClick={() => handleAuthClick("login")} className="cursor-pointer text-primary font-semibold">
+          <LogIn className="h-4 w-4 mr-2" />
+          {t("nav.login")}
+        </DropdownMenuItem>,
+        <DropdownMenuItem key="mobile-register" onClick={() => handleAuthClick("register")} className="cursor-pointer font-semibold">
+          <UserPlus className="h-4 w-4 mr-2" />
+          {t("nav.register")}
+        </DropdownMenuItem>
+      );
+    }
+
+    return links;
+  }, [navLinks, isAuthenticated, isLinkActive, handleAuthClick, t]);
 
   const userMenuContent = useMemo(() => {    
-    // Phần hiển thị token, tách ra để tái sử dụng
+    // --- HIỂN THỊ TOKEN (Đã sửa để hiện trên Mobile) ---
+    // Bỏ 'hidden sm:flex', thay bằng 'flex' và chỉnh size chữ nhỏ lại trên mobile
     const tokenDisplay = user && typeof user.remainingTokens === 'number' ? (
-      <div className="hidden sm:flex items-center gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-3 py-1 text-sm font-medium text-foreground backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
-        <Coins className="h-3.5 w-3.5 text-yellow-600 dark:text-yellow-500" />
-        <span className="font-mono text-xs md:text-sm">{user.remainingTokens}/{user.tokenAllotment}</span>
+      <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-2 py-0.5 sm:px-3 sm:py-1 backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
+        <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-600 dark:text-yellow-500" />
+        <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
+            {user.remainingTokens}/{user.tokenAllotment}
+        </span>
       </div>
     ) : null;
 
@@ -175,7 +185,7 @@ export function Navbar() {
       return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 md:gap-3 cursor-pointer group">
+              <div className="flex items-center gap-2 md:gap-3 cursor-pointer group select-none">
                 {tokenDisplay}
                 <Button variant="ghost" className="flex items-center gap-2 rounded-full pl-1 pr-2 h-8 md:h-9 hover:bg-primary/10">
                   <Avatar className="h-7 w-7 md:h-8 md:w-8 border-2 border-white shadow-sm">
@@ -211,16 +221,21 @@ export function Navbar() {
       )
     }
     
+    // --- CHƯA ĐĂNG NHẬP ---
     return (
       <div className="flex items-center gap-2 md:gap-3">
-        {tokenDisplay} {/* <-- Hiển thị token cho cả khách */}
+        {tokenDisplay} {/* Token vẫn hiển thị cho khách nếu có logic đó */}
+        
+        {/* Desktop Buttons */}
         <div className="hidden md:flex items-center gap-2">
           <Button onClick={() => handleAuthClick("login")} variant="ghost" className="rounded-full h-9 font-semibold hover:bg-primary/10 hover:text-primary">{t("nav.login")}</Button>
           <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9 bg-primary text-white font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105">{t("nav.register")}</Button>
         </div>
+
+        {/* Mobile Button: Chỉ hiện Login nhỏ gọn để đỡ tốn diện tích, Register nằm trong Menu */}
         <div className="md:hidden flex items-center">
              {!user && (
-                <Button onClick={() => handleAuthClick("login")} size="sm" className="rounded-full h-8 text-xs px-4 bg-primary text-white shadow-md">
+                <Button onClick={() => handleAuthClick("login")} size="sm" variant="default" className="rounded-full h-8 text-xs px-3 bg-primary text-white shadow-sm">
                     {t("nav.login")}
                 </Button>
              )}
@@ -239,10 +254,10 @@ export function Navbar() {
                 : "bg-transparent border-transparent"
         )}
       >
-        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
           
           {/* 1. LOGO */}
-          <div className="flex items-center gap-8 flex-1">
+          <div className="flex items-center gap-8 flex-shrink-0">
             <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group">
               <div className="relative">
                  <img 
@@ -257,30 +272,30 @@ export function Navbar() {
                   />
               </div>
               
-              <span className="hidden md:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
+              <span className="hidden lg:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
                 {t("common.appName")}
               </span>
-              <span className="text-xs uppercase tracking-widest font-black md:hidden text-primary mt-1">
+              {/* Mobile Text Logo */}
+              <span className="text-base sm:text-lg uppercase tracking-widest font-black lg:hidden text-primary mt-1">
                 DogDex
               </span>
             </Link>
           </div>
 
           {/* 2. DESKTOP NAV PILL */}
-          <div className="hidden md:flex flex-1 justify-center">
+          <div className="hidden md:flex flex-1 justify-center px-4">
             <div 
                 ref={navContainerRef} 
-                className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm"
+                className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
             >
               {mounted ? (
                 <>
-                  {/* FIX 2: SỬ DỤNG bg-primary (Màu nâu) thay vì primary-foreground */}
                   <div 
                     className="absolute rounded-full h-[calc(100%-10px)] shadow-md shadow-primary/25 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
                     style={{
                         ...indicatorStyle,
                         top: '5px',
-                        backgroundColor: 'var(--primary)', // Force màu nâu bằng style inline để chắc chắn không bị ghi đè
+                        backgroundColor: 'var(--primary)',
                     }} 
                   />
                   {navLinksContent}
@@ -292,13 +307,13 @@ export function Navbar() {
           </div>
 
           {/* 3. RIGHT ACTIONS */}
-          <div className="flex items-center justify-end gap-2 md:gap-3 flex-1">
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
             {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted/20 rounded-full animate-pulse" />}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full h-9 w-9 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
-                  <Settings className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 md:h-9 md:w-9 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors">
+                  <Settings className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="sr-only">Settings</span>
                 </Button>
               </DropdownMenuTrigger>

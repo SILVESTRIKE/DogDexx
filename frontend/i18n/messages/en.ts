@@ -113,6 +113,7 @@ export default {
       "Upload an image or video to identify dog breeds and discover detailed information about them",
     dragDropTitle: "Drag & Drop, Paste an Image, or Click to Upload",
     dragDropDescription: "Or select a file from your device",
+    dragDropDescriptionMobile: "Drag & drop or tap to upload from your device",
     selectImage: "Select Image",
     selectVideo: "Select Video",
     supportedFormats: "Supported: JPG, PNG, GIF, MP4, MOV (max 50MB)",
