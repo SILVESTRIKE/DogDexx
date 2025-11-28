@@ -145,6 +145,18 @@ export default {
       finishing: "Sắp xong rồi, đang tổng hợp kết quả...",
       success: "Hoàn tất! Đang chuyển hướng...",
     },
+    fileTooLarge: "File quá lớn (Tối đa 50MB)",
+    tabs: {
+      upload: "Tải file lên",
+      url: "Dán URL",
+    },
+    urlInputTitle: "Nhập URL hình ảnh",
+    urlInputDesc: "Dán liên kết đến hình ảnh (JPG, PNG, WebP) để nhận diện giống chó.",
+    errors: {
+      emptyUrl: "Vui lòng nhập URL",
+    },
+    securityWarning: "Cảnh báo bảo mật",
+    securityWarningDesc: "Chỉ sử dụng URL từ các nguồn đáng tin cậy. Các liên kết độc hại có thể gây hại.",
   },
   results: {
     title: "Kết quả nhận diện",

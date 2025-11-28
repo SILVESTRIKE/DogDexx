@@ -37,8 +37,10 @@ import {
   Settings,
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
-import { useState, useEffect, useRef, use } from "react";
+import { useState, useEffect, useRef, use, useMemo } from "react";
 import Link from "next/link";
+import { Country } from 'country-state-city';
+import { LocationPicker } from "@/components/location-picker";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
@@ -61,6 +63,12 @@ function ProfileContent() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Country/City dropdown state
+  const [selectedCountryCode, setSelectedCountryCode] = useState("VN");
+  const [selectedCityName, setSelectedCityName] = useState("");
+
+  const allCountries = useMemo(() => Country.getAllCountries(), []);
 
   const [formData, setFormData] = useState({
     username: "",
@@ -85,8 +93,19 @@ function ProfileContent() {
         country: user.country || "",
         city: user.city || "",
       }));
+      
+      // Set country code from country name
+      if (user.country) {
+        const country = allCountries.find(c => c.name === user.country);
+        if (country) {
+          setSelectedCountryCode(country.isoCode);
+        }
+      }
+      if (user.city) {
+        setSelectedCityName(user.city);
+      }
     }
-  }, [user]);
+  }, [user, allCountries]);
 
   useEffect(() => {
     const upgradeStatus = searchParams.get("upgrade_status");
@@ -426,34 +445,25 @@ function ProfileContent() {
                     className="bg-white/5 border-white/10 focus:bg-background/50 h-11"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="city" className="text-sm font-medium">
-                    {t("profile.account.city")}
-                  </Label>
-                  <Input
-                    id="city"
-                    value={formData.city}
-                    onChange={(e) =>
-                      setFormData({ ...formData, city: e.target.value })
-                    }
-                    disabled={!isEditing}
-                    className="bg-white/5 border-white/10 focus:bg-background/50 h-11"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="country" className="text-sm font-medium">
-                    {t("profile.account.country")}
-                  </Label>
-                  <Input
-                    id="country"
-                    value={formData.country}
-                    onChange={(e) =>
-                      setFormData({ ...formData, country: e.target.value })
-                    }
-                    disabled={!isEditing}
-                    className="bg-white/5 border-white/10 focus:bg-background/50 h-11"
-                  />
-                </div>
+                <LocationPicker
+                  selectedCountryCode={selectedCountryCode}
+                  onCountryChange={(code, name) => {
+                    setSelectedCountryCode(code);
+                    setFormData(prev => ({ ...prev, country: name, city: "" }));
+                    setSelectedCityName("");
+                  }}
+                  selectedCityName={selectedCityName}
+                  onCityChange={(name) => {
+                    setSelectedCityName(name);
+                    setFormData(prev => ({ ...prev, city: name }));
+                  }}
+                  disabled={!isEditing}
+                  labels={{
+                    country: t("profile.account.country"),
+                    city: t("profile.account.city")
+                  }}
+                  selectClassName="flex h-11 w-full items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                />
               </div>
 
               {/* Password Change Section (Only visible when editing) */}

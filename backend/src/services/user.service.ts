@@ -15,7 +15,7 @@ import { MediaModel } from "../models/medias.model";
 import { PredictionHistoryModel } from "../models/prediction_history.model";
 import { FeedbackModel } from "../models/feedback.model";
 import { PlanModel } from "../models/plan.model";
-import {logger} from "../utils/logger.util"
+import { logger } from "../utils/logger.util"
 // Định nghĩa kiểu dữ liệu cho user đã được làm giàu
 export type EnrichedUser = UserDoc & { tokenAllotment: number };
 
@@ -119,7 +119,7 @@ export const userService = {
 
       // Kiểm tra Username mới có trùng với người KHÁC không
       if (existingUserByUsername && existingUserByUsername._id.toString() !== existingUserByEmail._id.toString()) {
-         throw new BadRequestError("Tên người dùng này đã được sử dụng bởi người khác.");
+        throw new BadRequestError("Tên người dùng này đã được sử dụng bởi người khác.");
       }
 
       // Hash mật khẩu mới
@@ -130,26 +130,26 @@ export const userService = {
       existingUserByEmail.password = hashedPassword;
       existingUserByEmail.firstName = data.firstName;
       existingUserByEmail.lastName = data.lastName;
-      
+
       // Cập nhật Country/City nếu có (nhờ sửa Zod/Model ở bước trước)
       if ((data as any).country) existingUserByEmail.country = (data as any).country;
       if ((data as any).city) existingUserByEmail.city = (data as any).city;
 
       // Xử lý Avatar mới (nếu có)
       if (avatarFile) {
-          // Đánh dấu avatar cũ là đã xóa (soft delete)
-          if (existingUserByEmail.avatarPath) {
-             await MediaModel.updateOne({ mediaPath: existingUserByEmail.avatarPath }, { isDeleted: true });
-          }
-          
-          const avatarMedia = new MediaModel({
-            name: `avatar-${existingUserByEmail.username}-${Date.now()}`,
-            mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
-            creator_id: existingUserByEmail._id,
-            type: 'image/avatar',
-          });
-          await avatarMedia.save();
-          existingUserByEmail.avatarPath = avatarMedia.mediaPath;
+        // Đánh dấu avatar cũ là đã xóa (soft delete)
+        if (existingUserByEmail.avatarPath) {
+          await MediaModel.updateOne({ mediaPath: existingUserByEmail.avatarPath }, { isDeleted: true });
+        }
+
+        const avatarMedia = new MediaModel({
+          name: `avatar-${existingUserByEmail.username}-${Date.now()}`,
+          mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
+          creator_id: existingUserByEmail._id,
+          type: 'image/avatar',
+        });
+        await avatarMedia.save();
+        existingUserByEmail.avatarPath = avatarMedia.mediaPath;
       }
 
       await existingUserByEmail.save();
@@ -168,7 +168,7 @@ export const userService = {
     }
 
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    
+
     const user = new UserModel({
       ...data,
       password: hashedPassword,
@@ -178,18 +178,18 @@ export const userService = {
 
     // Xử lý Avatar
     if (avatarFile) {
-        const avatarMedia = new MediaModel({
-          name: `avatar-${user.username}`,
-          mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
-          creator_id: user._id,
-          type: 'image/avatar',
-        });
-        await avatarMedia.save();
-        user.avatarPath = avatarMedia.mediaPath;
+      const avatarMedia = new MediaModel({
+        name: `avatar-${user.username}`,
+        mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
+        creator_id: user._id,
+        type: 'image/avatar',
+      });
+      await avatarMedia.save();
+      user.avatarPath = avatarMedia.mediaPath;
     }
-    
+
     await user.save();
-    
+
     // Tạo thư mục gốc
     const directory = new DirectoryModel({ name: user.username, creator_id: user._id });
     await directory.save();
@@ -198,7 +198,7 @@ export const userService = {
 
     // Gửi OTP
     await this.sendOtp(user.email);
-    
+
     const enrichedUser = await _enrich(user);
     delete (enrichedUser as any).password;
     return enrichedUser!;
@@ -252,12 +252,15 @@ export const userService = {
   ): Promise<EnrichedUser> {
     const user = await UserModel.findById(userId);
     if (!user) throw new NotFoundError("Không tìm thấy người dùng.");
+
+    // Soft delete old avatar if exists
     if (user.avatarPath) {
       await MediaModel.findOneAndUpdate(
         { mediaPath: user.avatarPath },
         { isDeleted: true }
       );
     }
+
     const newAvatarMedia = new MediaModel({
       name: `avatar-${user.username}-${Date.now()}`,
       mediaPath: avatarFile.path.replace(/\\/g, "/"),
@@ -265,9 +268,14 @@ export const userService = {
       type: "image/avatar",
     });
     await newAvatarMedia.save();
-    user.avatarPath = newAvatarMedia.mediaPath;
-    await user.save();
-    const updatedUser = await UserModel.findById(userId).select("-password");
+
+    // Use findOneAndUpdate to avoid triggering validation on other fields (like achievements)
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { avatarPath: newAvatarMedia.mediaPath },
+      { new: true } // Return the updated document
+    ).select("-password");
+
     if (!updatedUser)
       throw new NotFoundError(
         "Lỗi khi lấy thông tin người dùng sau khi cập nhật avatar."

@@ -150,6 +150,7 @@ export interface FeedbackPayload {
 }
 
 export interface Achievement {
+  id: string; // Achievement key/identifier
   title: string; // Đổi từ name
   description: string;
   icon: string;
@@ -268,12 +269,12 @@ export interface Subscription {
     name: string;
   };
   status:
-    | "active"
-    | "pending_approval"
-    | "canceled"
-    | "expired"
-    | "past_due"
-    | "unpaid";
+  | "active"
+  | "pending_approval"
+  | "canceled"
+  | "expired"
+  | "past_due"
+  | "unpaid";
   startDate: string;
   endDate: string | null;
   createdAt: string;

@@ -6,10 +6,12 @@ import axios from 'axios';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
-interface BatchItem {
+export interface BatchItem {
   id: string;
   userId: Types.ObjectId | undefined;
-  file: Express.Multer.File;
+  file?: Express.Multer.File;
+  buffer?: Buffer;
+  originalName?: string;
   mediaType: 'image' | 'video';
   onProgress?: (progress: number) => void;
   resolve: (result: any) => void;
@@ -59,7 +61,7 @@ export class BatchProcessor extends EventEmitter {
     if (!this.batches[batchKey]) {
       this.batches[batchKey] = [];
     }
-    
+
     this.batches[batchKey].push(item);
     this.progressMap.set(item.id, {
       status: 'queued',
@@ -69,11 +71,11 @@ export class BatchProcessor extends EventEmitter {
     // Nếu chỉ có 1 item trong batch và không có timer -> xử lý ngay
     if (this.batches[batchKey].length === 1 && !this.timers[batchKey]) {
       this.processBatch(batchKey);
-    } 
+    }
     // Nếu đã đủ batch size -> xử lý ngay
     else if (this.batches[batchKey].length >= this.maxBatchSize) {
       this.processBatch(batchKey);
-    } 
+    }
     // Nếu có nhiều item đang chờ và chưa có timer -> đặt timer
     else if (!this.timers[batchKey]) {
       this.timers[batchKey] = setTimeout(() => this.processBatch(batchKey), this.maxWaitTime);
@@ -101,11 +103,11 @@ export class BatchProcessor extends EventEmitter {
       // Xử lý video ngay nếu không có video nào đang xử lý
       if (this.processingVideos === 0) {
         this.processVideo(videoItem);
-      } 
+      }
       // Nếu có ít hơn maxVideoProcessing videos đang xử lý -> xử lý luôn
       else if (this.processingVideos < this.maxVideoProcessing) {
         this.processVideo(videoItem);
-      } 
+      }
       // Nếu đã đạt giới hạn -> đưa vào queue
       else {
         this.videoQueue.push(videoItem);
@@ -123,9 +125,17 @@ export class BatchProcessor extends EventEmitter {
 
     try {
       const formData = new FormData();
-      formData.append("file", fs.createReadStream(item.file.path), { 
-        filename: item.file.originalname 
-      });
+      if (item.buffer) {
+        formData.append("file", item.buffer, {
+          filename: item.originalName || 'video.mp4'
+        });
+      } else if (item.file) {
+        formData.append("file", fs.createReadStream(item.file.path), {
+          filename: item.file.originalname
+        });
+      } else {
+        throw new Error("No file or buffer provided");
+      }
 
       const response = await axios.post(
         `${AI_SERVICE_URL}/predict/video`,
@@ -176,9 +186,15 @@ export class BatchProcessor extends EventEmitter {
     try {
       const formData = new FormData();
       currentBatch.forEach(item => {
-        formData.append("files", fs.createReadStream(item.file.path), { 
-          filename: item.file.originalname 
-        });
+        if (item.buffer) {
+          formData.append("files", item.buffer, {
+            filename: item.originalName || 'image.jpg'
+          });
+        } else if (item.file) {
+          formData.append("files", fs.createReadStream(item.file.path), {
+            filename: item.file.originalname
+          });
+        }
       });
 
       currentBatch.forEach(item => {

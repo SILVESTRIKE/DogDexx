@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getDogDex, addBreed, getAchievements, getStats } from '../controllers/bff_collection.controller';
+import { getDogDex, addBreed, getAchievements, getAchievementStats, getStats } from '../controllers/bff_collection.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { optionalAuthMiddleware } from '../middlewares/optionalAuth.middleware';
 
@@ -161,6 +161,7 @@ router.post('/add/:slug', authMiddleware, addBreed);
  *       401:
  *         description: Chưa đăng nhập.
  */
+router.get('/achievements/stats', authMiddleware, getAchievementStats);
 router.get('/achievements', authMiddleware, getAchievements);
 
 /**

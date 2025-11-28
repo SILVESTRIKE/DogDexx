@@ -74,7 +74,7 @@ export const getDogDex = async (req: Request, res: Response) => {
           });
         }
       });
-      
+
       // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
       const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
       if (userId && isCollected === 'true') {
@@ -207,7 +207,7 @@ export const getAchievements = async (req: Request, res: Response) => {
     const unlockedMap = new Map(user.achievements.map(ua => [ua.key, ua.unlockedAt]));
     const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
     const nextAchievement = achievementsResult.find(a => !a.unlocked && a.condition.type === 'collection_count');
-    
+
     const responseData = {
       stats: {
         totalAchievements: achievementsResult.length,
@@ -218,10 +218,10 @@ export const getAchievements = async (req: Request, res: Response) => {
       // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
       nextAchievement: nextAchievement
         ? {
-            name: nextAchievement.name,
-            requirement: nextAchievement.condition.value,
-            progress: userCollections.length,
-          }
+          name: nextAchievement.name,
+          requirement: nextAchievement.condition.value,
+          progress: userCollections.length,
+        }
         : null,
       achievements: achievementsResult.map(ach => ({
         id: ach.key,
@@ -260,6 +260,53 @@ export const getStats = async (req: Request, res: Response) => {
     });
   } catch (error) {
     logger.error('Error in getStats:', error);
+    res.status(500).json({ message: 'Internal Server Error' });
+  }
+};
+export const getAchievementStats = async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!._id;
+    const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
+      ? req.query.lang as 'vi' | 'en'
+      : 'en';
+
+    const cacheKey = `${REDIS_KEYS.USER_ACHIEVEMENT_STATS_PREFIX}${userId}:${lang}`;
+    if (redisClient) {
+      const cachedData = await redisClient.get(cacheKey);
+      if (cachedData) {
+        logger.info(`[Achievement Stats] Cache HIT for user ${userId}, lang ${lang}.`);
+        return res.status(200).json(JSON.parse(cachedData));
+      }
+      logger.info(`[Achievement Stats] Cache MISS for user ${userId}, lang ${lang}.`);
+    }
+
+    const [user, userCollections, totalBreedsInSystem] = await Promise.all([
+      userService.getById(userId.toString()),
+      collectionService.getUserCollection(userId, lang),
+      wikiService.getTotalBreedsCount(lang),
+    ]);
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const achievementsResult = await achievementService.processUserAchievements(user, userCollections, lang);
+    const unlockedCount = achievementsResult.filter(a => a.unlocked).length;
+
+    const responseData = {
+      totalAchievements: achievementsResult.length,
+      totalBreeds: totalBreedsInSystem,
+      unlockedAchievements: unlockedCount,
+      totalCollected: userCollections.length,
+    };
+
+    if (redisClient) {
+      await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 });
+    }
+
+    res.status(200).json(responseData);
+  } catch (error) {
+    logger.error('Error in getAchievementStats:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
 };

@@ -65,13 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     []
   );
 
-  // SỬA ĐỔI QUAN TRỌNG: Tách logic kiểm tra session ra khỏi `refetchUser`
-  // Hàm này chỉ nên chạy MỘT LẦN khi ứng dụng khởi động.
   const checkAuthStatus = useCallback(async () => {
-    // Chỉ kiểm tra nếu có token trong localStorage. Nếu không có, chắc chắn là khách.
     if (!TokenManager.getAccessToken()) {
       try {
-        // Lấy thông tin session của khách
         const response = await apiClient.getSessionStatus();
         if (response.isGuest) {
           setUser({

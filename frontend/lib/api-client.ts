@@ -411,13 +411,26 @@ export class ApiClient {
   }
 
   async updateProfile(formData: FormData) {
-    return this.requestWithFormData<any>("/bff/user/profile", formData, true);
+    return this.request<any>(
+      "/bff/user/profile",
+      {
+        method: "PUT",
+        body: formData,
+      },
+      true
+    );
   }
 
   async updateAvatar(file: File) {
     const formData = new FormData();
     formData.append("avatar", file);
     return this.requestWithFormData<any>("/bff/user/avatar", formData, true);
+  }
+
+  async cancelSubscription() {
+    return this.request('/bff/user/cancel-subscription', {
+      method: 'POST',
+    });
   }
 
   // BFF-Collection endpoints
@@ -466,6 +479,22 @@ export class ApiClient {
 
     return this.request<any>(
       `/bff/collection/achievements?${queryParams.toString()}`,
+      {},
+      true
+    );
+  }
+
+  async getAchievementStats(lang: "vi" | "en") {
+    const queryParams = new URLSearchParams();
+    queryParams.append("lang", lang);
+
+    return this.request<{
+      totalAchievements: number;
+      totalBreeds: number;
+      unlockedAchievements: number;
+      totalCollected: number;
+    }>(
+      `/bff/collection/achievements/stats?${queryParams.toString()}`,
       {},
       true
     );
@@ -528,12 +557,25 @@ export class ApiClient {
     );
   }
 
+  async predictUrl(url: string) {
+    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+    const requiresAuth = !!TokenManager.getAccessToken();
+    return this.request<any>(
+      "/bff/predict/url",
+      {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      },
+      requiresAuth
+    );
+  }
+
   async predictBatch(files: File[]) {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
     return this.requestWithFormData<any>("/bff/predict/batch", formData, true); // Giữ lại true vì batch thường là tính năng cho user
   }
-  
+
 
   async submitPredictionFeedback(
     predictionId: string,
@@ -706,7 +748,7 @@ export class ApiClient {
     const token = TokenManager.getAccessToken();
     return this._createWebSocketConnection(token, "/bff/predict/stream");
   }
-  
+
   async saveStreamPrediction(payload: { processed_media_base64: string; detections: any[]; media_type: string }): Promise<{ id: string }> {
     return this.request<{ id: string }>(
       "/bff/predict/stream/save",
@@ -714,7 +756,7 @@ export class ApiClient {
         method: "POST",
         body: JSON.stringify(payload),
       },
-      false 
+      false
     );
   }
 

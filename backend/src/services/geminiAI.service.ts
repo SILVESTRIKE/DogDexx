@@ -3,9 +3,15 @@ import dotenv from "dotenv";
 import { redisClient } from "../utils/redis.util"; // Import Redis client
 import { tokenConfig } from "../config/token.config";
 import { REDIS_KEYS } from "../constants/redis.constants";
-import { Builder, By, until, WebDriver, Capabilities } from 'selenium-webdriver';
-import chrome from 'selenium-webdriver/chrome';
-import 'chromedriver'; 
+import {
+  Builder,
+  By,
+  until,
+  WebDriver,
+  Capabilities,
+} from "selenium-webdriver";
+import chrome from "selenium-webdriver/chrome";
+import "chromedriver";
 dotenv.config();
 
 // 1. Kiểm tra API Key ngay từ đầu để báo lỗi sớm
@@ -30,8 +36,12 @@ const SHOPEE_CAMPAIGN_ID = "128"; // ID chiến dịch của Shopee trên Access
 
 // 2. Khởi tạo model một lần duy nhất để tái sử dụng
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
-const healthModel = healthAI.getGenerativeModel({ model: "gemini-flash-latest" });
-const proRecModel = proRecAI.getGenerativeModel({ model: "gemini-flash-latest" });
+const healthModel = healthAI.getGenerativeModel({
+  model: "gemini-flash-latest",
+});
+const proRecModel = proRecAI.getGenerativeModel({
+  model: "gemini-flash-latest",
+});
 interface RedisChatSession {
   lang: "vi" | "en";
   history: { role: string; parts: { text: string }[] }[];
@@ -60,7 +70,7 @@ export async function getChatHistory(
   userId: string | undefined,
   guestIdentifier: string | undefined,
   breedSlug: string
-): Promise<RedisChatSession['history']> {
+): Promise<RedisChatSession["history"]> {
   const chatRedisKey = getChatRedisKey(userId, guestIdentifier, breedSlug);
   if (!redisClient) {
     return [];
@@ -72,8 +82,7 @@ export async function getChatHistory(
       const session: RedisChatSession = JSON.parse(sessionStr);
       // Bỏ qua 2 tin nhắn hệ thống đầu tiên (system prompt)
       return session.history.slice(1);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
   return [];
 }
@@ -93,7 +102,7 @@ async function addToRedisHistory(
     try {
       session = JSON.parse(sessionStr);
     } catch (e) {
-      session = null; // Vô hiệu hóa session nếu phân tích cú pháp thất bại
+      session = null;
     }
   }
 
@@ -101,7 +110,7 @@ async function addToRedisHistory(
     return;
   }
 
-  session.history.push({ role, parts: [{ text: content }] }); // Thêm tin nhắn mới
+  session.history.push({ role, parts: [{ text: content }] });
 
   // Giới hạn 10 lượt hỏi-đáp (20 tin nhắn) + 2 tin nhắn khởi tạo
   if (session.history.length > 22) {
@@ -112,7 +121,7 @@ async function addToRedisHistory(
   }
 
   await redisClient.set(key, JSON.stringify(session), {
-    EX: tokenConfig.guest.expirationSeconds, // Đặt thời gian hết hạn cho phiên chat
+    EX: tokenConfig.guest.expirationSeconds,
   });
 }
 
@@ -229,11 +238,9 @@ export async function getHealthRecommendations(
   try {
     const issuesString = healthIssues.join(", ");
 
-    // ====================== PROMPT NÂNG CẤP - HƯỚNG DẪN CHĂM SÓC TOÀN DIỆN ======================
     const prompt =
       lang === "en"
         ? `As a veterinary expert, create a comprehensive care guide for a ${breed} dog.
-
 The guide must include the following sections:
 - Nutrition and Diet
 - Daily Exercise Requirements
@@ -308,15 +315,17 @@ Ví dụ:
 - Biện pháp phòng ngừa 1.
 - Biện pháp phòng ngừa 2.
 `;
-    // ==========================================================================================
 
     const operation = () => healthModel.generateContent(prompt);
-    
-    // Sử dụng hàm withRetry để gọi API
-    const result = await withRetry(operation, 3, 1000, `HealthRec for ${breed}`);
-    
-    return result.response.text();
 
+    const result = await withRetry(
+      operation,
+      3,
+      1000,
+      `HealthRec for ${breed}`
+    );
+
+    return result.response.text();
   } catch (error) {
     const errorMessage =
       lang === "en"
@@ -325,162 +334,188 @@ Ví dụ:
     return errorMessage;
   }
 }
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 interface ShopeeProduct {
-    name: string;
-    imageUrl: string;
-    productUrl: string;
+  name: string;
+  imageUrl: string;
+  productUrl: string;
 }
-async function scrapeFirstShopeeProduct(keyword: string): Promise<ShopeeProduct | null> {
-    const encodedKeyword = encodeURIComponent(keyword);
-    const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
+async function scrapeFirstShopeeProduct(
+  keyword: string
+): Promise<ShopeeProduct | null> {
+  const encodedKeyword = encodeURIComponent(keyword);
+  const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
 
-    const options = new chrome.Options();
-    options.addArguments(
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-dev-shm-usage',
-        '--start-maximized',
-        '--disable-blink-features=AutomationControlled',
-        '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
+  const options = new chrome.Options();
+  options.addArguments(
+    "--headless=new",
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--start-maximized",
+    "--disable-blink-features=AutomationControlled",
+    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+  );
+  options.excludeSwitches("enable-automation");
+
+  let driver: WebDriver | null = null;
+
+  try {
+    driver = await new Builder()
+      .forBrowser("chrome")
+      .setChromeOptions(options)
+      .build();
+
+    await driver.executeScript(
+      "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
     );
-    options.excludeSwitches('enable-automation');
-    
-    let driver: WebDriver | null = null;
+
+    await driver.get(searchUrl);
 
     try {
-        driver = await new Builder()
-            .forBrowser('chrome')
-            .setChromeOptions(options)
-            .build();
+      const popupCloseButton = await driver.wait(
+        until.elementLocated(By.css("div.shopee-popup__close-btn")),
+        5000
+      );
+      await driver.executeScript("arguments[0].click();", popupCloseButton);
+      await sleep(1000);
+    } catch (error) {}
 
-        await driver.executeScript("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})");
+    // CẢI TIẾN 1: CUỘN XUỐNG TẬN CÙNG TRANG
+    await driver.executeScript(
+      "window.scrollTo(0, document.body.scrollHeight);"
+    );
+    await sleep(1000); // Chờ 1 giây để các sản phẩm bắt đầu hiện ra
+    await driver.executeScript("window.scrollTo(0, 0);"); // Cuộn lại lên đầu để đảm bảo sản phẩm đầu tiên hiển thị
+    await sleep(500);
 
-        await driver.get(searchUrl);
-        
-        try {
-            const popupCloseButton = await driver.wait(until.elementLocated(By.css('div.shopee-popup__close-btn')), 5000);
-            await driver.executeScript("arguments[0].click();", popupCloseButton);
-            await sleep(1000);
-        } catch (error) {
-        }
+    // CẢI TIẾN 2: CHỜ "VÙNG CHỨA SẢN PHẨM" TRƯỚC
+    const resultsContainerSelector = By.css(
+      "div.shopee-search-item-result__items"
+    );
 
-        // CẢI TIẾN 1: CUỘN XUỐNG TẬN CÙNG TRANG
-        await driver.executeScript('window.scrollTo(0, document.body.scrollHeight);');
-        await sleep(1000); // Chờ 1 giây để các sản phẩm bắt đầu hiện ra
-        await driver.executeScript('window.scrollTo(0, 0);'); // Cuộn lại lên đầu để đảm bảo sản phẩm đầu tiên hiển thị
-        await sleep(500);
+    // CẢI TIẾN 3: TĂNG TIMEOUT TỔNG THỂ LÊN 30 GIÂY
+    const resultsContainer = await driver.wait(
+      until.elementLocated(resultsContainerSelector),
+      30000
+    );
 
-        // CẢI TIẾN 2: CHỜ "VÙNG CHỨA SẢN PHẨM" TRƯỚC
-        const resultsContainerSelector = By.css('div.shopee-search-item-result__items');
-        
-        // CẢI TIẾN 3: TĂNG TIMEOUT TỔNG THỂ LÊN 30 GIÂY
-        const resultsContainer = await driver.wait(
-            until.elementLocated(resultsContainerSelector), 
-            30000 
-        );
+    // Bây giờ mới tìm sản phẩm đầu tiên BÊN TRONG vùng chứa đó
+    const productXPathSelector = ".//a[contains(@href, '-i.')]"; // Dùng ".//" để tìm bên trong element
+    const firstProductElement = await resultsContainer.findElement(
+      By.xpath(productXPathSelector)
+    );
 
-        // Bây giờ mới tìm sản phẩm đầu tiên BÊN TRONG vùng chứa đó
-        const productXPathSelector = ".//a[contains(@href, '-i.')]"; // Dùng ".//" để tìm bên trong element
-        const firstProductElement = await resultsContainer.findElement(By.xpath(productXPathSelector));
-        
-        const productUrl = await firstProductElement.getAttribute("href");
-        const name = (await firstProductElement.findElement(By.css('div[data-sqe="name"]')).getText()) || keyword;
-        const imageUrl = await firstProductElement.findElement(By.css('img.shopee-search-item-result__item-image-img')).getAttribute("src");
-        
-        return { name, imageUrl, productUrl };
+    const productUrl = await firstProductElement.getAttribute("href");
+    const name =
+      (await firstProductElement
+        .findElement(By.css('div[data-sqe="name"]'))
+        .getText()) || keyword;
+    const imageUrl = await firstProductElement
+      .findElement(By.css("img.shopee-search-item-result__item-image-img"))
+      .getAttribute("src");
 
-    } catch (error) {
-        if(driver) {
-            const image = await driver.takeScreenshot();
-            const safeKeyword = keyword.replace(/[\\/:*?"<>|]/g, "_").substring(0, 100);
-            const screenshotPath = `selenium_error_${safeKeyword}.png`;
-            require('fs').writeFileSync(screenshotPath, image, 'base64');
-        }
-        return null;
-    } finally {
-        if (driver) {
-            await driver.quit();
-        }
+    return { name, imageUrl, productUrl };
+  } catch (error) {
+    if (driver) {
+      const image = await driver.takeScreenshot();
+      const safeKeyword = keyword
+        .replace(/[\\/:*?"<>|]/g, "_")
+        .substring(0, 100);
+      const screenshotPath = `selenium_error_${safeKeyword}.png`;
+      require("fs").writeFileSync(screenshotPath, image, "base64");
     }
+    return null;
+  } finally {
+    if (driver) {
+      await driver.quit();
+    }
+  }
 }
 /**
  * [HÀM GIỮ LẠI] Tạo deeplink từ link sản phẩm gốc.
  * Hàm này vẫn cần thiết để chuyển đổi link gốc từ Top Products thành link affiliate.
  * Lưu ý: Tên biến accessToken đã đổi từ process.env.ACCESSTRADE_ACCESS_TOKEN thành process.env.ACCESSTRADE_API_KEY để nhất quán
  */
-async function createAffiliateLinkManually(destinationUrl: string): Promise<string | null> {
-    const affiliateId = process.env.ACCESSTRADE_API_KEY;
-    if (!affiliateId) {
-        return null;
-    }
+async function createAffiliateLinkManually(
+  destinationUrl: string
+): Promise<string | null> {
+  const affiliateId = process.env.ACCESSTRADE_API_KEY;
+  if (!affiliateId) {
+    return null;
+  }
 
-    const encodedDestinationUrl = encodeURIComponent(destinationUrl);
-    
-    // ĐÚNG CÔNG THỨC LINK CÔNG KHAI
-    const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
-    
-    return affiliateLink;
+  const encodedDestinationUrl = encodeURIComponent(destinationUrl);
+
+  // ĐÚNG CÔNG THỨC LINK CÔNG KHAI
+  const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
+
+  return affiliateLink;
 }
 
 export async function getRecommendedProducts(
-    breed: string,
-    lang: "vi" | "en" = "vi"
+  breed: string,
+  lang: "vi" | "en" = "vi"
 ): Promise<string> {
-    try {
-        // === BƯỚC 1: LẤY GỢI Ý TỪ GEMINI (Cập nhật để hỗ trợ đa ngôn ngữ) ===
-        const prompt = lang === 'en'
-            ? `Based on the characteristics of the ${breed} dog, suggest 6 essential product types. For each type, provide:
+  try {
+    // === BƯỚC 1: LẤY GỢI Ý TỪ GEMINI (Cập nhật để hỗ trợ đa ngôn ngữ) ===
+    const prompt =
+      lang === "en"
+        ? `Based on the characteristics of the ${breed} dog, suggest 6 essential product types. For each type, provide:
 1. "categoryName": A concise category name (e.g., "Smart Toys").
 2. "searchKeywords": The best search keywords for Shopee (a Vietnamese e-commerce site).
 3. "reason": A short sentence explaining WHY the ${breed} dog needs this type of product.
 Return as a valid JSON array.`
-            : `Dựa trên đặc điểm của chó ${breed}, đề xuất 6 loại sản phẩm thiết yếu. Với mỗi loại, hãy cung cấp:
+        : `Dựa trên đặc điểm của chó ${breed}, đề xuất 6 loại sản phẩm thiết yếu. Với mỗi loại, hãy cung cấp:
 1. "categoryName": Tên danh mục ngắn gọn (VD: "Đồ Chơi Thông Minh").
 2. "searchKeywords": Từ khóa tìm kiếm tốt nhất trên Shopee.
 3. "reason": Một câu ngắn giải thích TẠI SAO giống chó ${breed} cần loại sản phẩm này.
 Trả về dưới dạng một mảng JSON hợp lệ.`;
 
-        const resultFromAI = await proRecModel.generateContent(prompt);
-        const rawReply = resultFromAI.response.text();
-        
-        let ideas: { categoryName: string; searchKeywords: string; reason: string; }[] = [];
-        try {
-            const jsonString = rawReply.match(/\[[\s\S]*\]/)?.[0];
-            if (jsonString) {
-                ideas = JSON.parse(jsonString);
-            } else {
-                throw new Error("Không tìm thấy mảng JSON trong phản hồi của AI.");
-            }
-        } catch (e) {
-            return "[]";
-        }
+    const resultFromAI = await proRecModel.generateContent(prompt);
+    const rawReply = resultFromAI.response.text();
 
-        const finalRecommendations = [];
-
-        // === BƯỚC 2: DUYỆT VÀ TẠO LINK SHOPEE TRỰC TIẾP (KHÔNG AFFILIATE) ===
-        for (const idea of ideas) {
-            if (!idea.searchKeywords) {
-                continue;
-            }
-            
-            // Lấy từ khóa chính để tạo link
-            const mainKeyword = idea.searchKeywords.split(',')[0].trim();
-            
-            // Tạo URL tìm kiếm gốc, trực tiếp trên Shopee
-            const shopeeSearchUrl = `https://shopee.vn/search?keyword=${encodeURIComponent(mainKeyword)}`;
-            
-            // Đóng gói kết quả theo yêu cầu cuối cùng của bạn
-            finalRecommendations.push({
-                category: idea.categoryName,
-                reason: idea.reason,
-                shopeeUrl: shopeeSearchUrl // Trả về link Shopee gốc
-            });
-        }
-        
-        return JSON.stringify(finalRecommendations);
-
-    } catch (error) {
-        return "[]";
+    let ideas: {
+      categoryName: string;
+      searchKeywords: string;
+      reason: string;
+    }[] = [];
+    try {
+      const jsonString = rawReply.match(/\[[\s\S]*\]/)?.[0];
+      if (jsonString) {
+        ideas = JSON.parse(jsonString);
+      } else {
+        throw new Error("Không tìm thấy mảng JSON trong phản hồi của AI.");
+      }
+    } catch (e) {
+      return "[]";
     }
+
+    const finalRecommendations = [];
+
+    // === BƯỚC 2: DUYỆT VÀ TẠO LINK SHOPEE TRỰC TIẾP (KHÔNG AFFILIATE) ===
+    for (const idea of ideas) {
+      if (!idea.searchKeywords) {
+        continue;
+      }
+
+      // Lấy từ khóa chính để tạo link
+      const mainKeyword = idea.searchKeywords.split(",")[0].trim();
+
+      // Tạo URL tìm kiếm gốc, trực tiếp trên Shopee
+      const shopeeSearchUrl = `https://shopee.vn/search?keyword=${encodeURIComponent(
+        mainKeyword
+      )}`;
+
+      // Đóng gói kết quả theo yêu cầu cuối cùng của bạn
+      finalRecommendations.push({
+        category: idea.categoryName,
+        reason: idea.reason,
+        shopeeUrl: shopeeSearchUrl, // Trả về link Shopee gốc
+      });
+    }
+
+    return JSON.stringify(finalRecommendations);
+  } catch (error) {
+    return "[]";
+  }
 }

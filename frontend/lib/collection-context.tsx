@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, type ReactNode, useCallback } from "react"
 import { apiClient } from "./api-client"
 import { useAuth } from "./auth-context"
-import type { Achievement, CollectionSource } from "./types"
+import type { CollectionSource } from "./types"
 import { toast } from "sonner"
 import { useI18n } from "./i18n-context"
 
@@ -11,7 +11,6 @@ interface CollectionContextType {
   collectedDogs: Map<string, { collectedAt: string | null; source: CollectionSource | null; }>
   toggleCollected: (dogSlug: string) => Promise<void>
   isCollected: (dogSlug: string) => boolean
-  unlockedAchievements: Achievement[]
   collectionStats: {
     totalBreeds: number;
     collectedBreeds: number;
@@ -29,54 +28,44 @@ interface CollectionContextType {
 const CollectionContext = createContext<CollectionContextType | undefined>(undefined)
 
 export function CollectionProvider({ children }: { children: ReactNode }) {
-  const { user, isAuthenticated } = useAuth() // Dùng user và isAuthenticated từ auth context
+  const { user, isAuthenticated } = useAuth()
   const { locale } = useI18n()
   const [collectedDogs, setCollectedDogs] = useState<Map<string, { collectedAt: string | null; source: CollectionSource | null; }>>(new Map())
-  const [unlockedAchievements, setUnlockedAchievements] = useState<Achievement[]>([]) // Giữ lại để có thể dùng ở đâu đó khác
   const [collectionStats, setCollectionStats] = useState<CollectionContextType['collectionStats']>(null)
   const [achievementStats, setAchievementStats] = useState<CollectionContextType['achievementStats']>(null)
 
-  // Hàm tải dữ liệu có thể tái sử dụng
   const loadCollectionData = useCallback(async () => {
-    // SỬA LỖI: Chỉ tải dữ liệu bộ sưu tập khi người dùng đã được xác thực (đăng nhập)
     if (isAuthenticated && user) {
       try {
-        // Sử dụng Promise.all để tải song song
-        const [dogdexResponse, achievementsResponse] = await Promise.all([
+        // Load only stats for achievements, not full list
+        const [dogdexResponse, achievementStatsResponse] = await Promise.all([
           apiClient.getDogDex({ limit: 9999, isCollected: 'true', lang: locale }),
-          apiClient.getAchievements(locale)
+          apiClient.getAchievementStats(locale) // Changed from getAchievements
         ]);
 
-        // Xử lý DogDex
         const collectedMap = new Map<string, { collectedAt: string | null; source: CollectionSource | null; }>();
         dogdexResponse.breeds.forEach((b: any) => {
           collectedMap.set(b.slug, { collectedAt: b.collectedAt, source: b.source });
         });
         setCollectedDogs(collectedMap);
         setCollectionStats(dogdexResponse.stats);
-
-        // Xử lý Achievements
-        setUnlockedAchievements(achievementsResponse.achievements || []);
-        setAchievementStats(achievementsResponse.stats);
+        setAchievementStats(achievementStatsResponse);
 
       } catch (error) {
         console.error("Failed to load user collection:", error);
       }
-    } else { // Guest
-      // Guest logic can be simplified or removed if not needed
+    } else {
       setCollectedDogs(new Map());
       setCollectionStats(null);
       setAchievementStats(null);
     }
   }, [user, isAuthenticated, locale]);
 
-  // FIX: useEffect này sẽ tự động chạy lại khi user thay đổi (đăng nhập/đăng xuất) HOẶC khi ngôn ngữ (locale) thay đổi.
   useEffect(() => {
     loadCollectionData();
-  }, [loadCollectionData]); // loadCollectionData đã có đủ dependencies
+  }, [loadCollectionData]);
 
   const toggleCollected = async (dogSlug: string) => {
-    // Logic này về cơ bản đã đúng, chỉ cần đảm bảo nó cập nhật state một cách nhất quán
     const isCurrentlyCollected = collectedDogs.has(dogSlug);
 
     if (user) {
@@ -84,17 +73,15 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         if (!isCurrentlyCollected) {
           await apiClient.addToCollection(dogSlug);
           toast.success("Breed added to your collection!");
-          // Refresh data to get the latest state from the server
           await refreshCollection();
           setCollectionStats(prev => prev ? { ...prev, collectedBreeds: prev.collectedBreeds + 1 } : null);
         } else {
-          // Logic để xóa (khi API được implement)
           toast.warning("Removing from collection is not yet supported.");
         }
       } catch (error) {
         toast.error("Failed to update collection.");
       }
-    } else { // Guest user
+    } else {
       toast.info("Please log in to manage your collection.");
     }
   };
@@ -111,7 +98,6 @@ export function CollectionProvider({ children }: { children: ReactNode }) {
         collectedDogs,
         toggleCollected,
         isCollected,
-        unlockedAchievements,
         collectionStats,
         achievementStats,
         refreshCollection,

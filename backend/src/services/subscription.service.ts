@@ -251,12 +251,90 @@ export const subscriptionService = {
       });
 
       logger.info(`[MoMo IPN] Upgrade success for user ${user.id}.`);
-
     } else { // Failed
       transaction.status = 'failed';
       transaction.rawIpnResponse = JSON.stringify(ipnPayload);
       await transaction.save();
       logger.info(`[MoMo IPN] Payment failed for order ${orderId}.`);
     }
+  },
+
+  /**
+   * [CRON JOB] Kiểm tra và xử lý các gói đăng ký đã hết hạn.
+   * Logic:
+   * 1. Tìm các subscription có status = 'active' VÀ currentPeriodEnd < now.
+   * 2. Chuyển status -> 'expired'.
+   * 3. Reset user về gói Free.
+   */
+  async checkExpiredSubscriptions() {
+    logger.info("[SubscriptionCron] Checking for expired subscriptions...");
+    const now = new Date();
+
+    // Tìm các gói đã hết hạn
+    const expiredSubs = await SubscriptionModel.find({
+      status: 'active',
+      currentPeriodEnd: { $lt: now }
+    });
+
+    if (expiredSubs.length === 0) {
+      logger.info("[SubscriptionCron] No expired subscriptions found.");
+      return;
+    }
+
+    logger.info(`[SubscriptionCron] Found ${expiredSubs.length} expired subscriptions.`);
+
+    const freePlan = await PlanModel.findOne({ slug: 'free' });
+    if (!freePlan) {
+      logger.error("[SubscriptionCron] CRITICAL: Free plan not found!");
+      return;
+    }
+
+    for (const sub of expiredSubs) {
+      try {
+        // 1. Cập nhật trạng thái subscription
+        sub.status = 'expired';
+        await sub.save();
+
+        // 2. Downgrade user về gói Free
+        await UserModel.findByIdAndUpdate(sub.userId, {
+          $set: { 
+            plan: 'free', 
+            remainingTokens: freePlan.tokenAllotment,
+            subscriptionId: null // Xóa liên kết subscription
+          }
+        });
+
+        logger.info(`[SubscriptionCron] Expired subscription ${sub._id} for user ${sub.userId}. Downgraded to Free.`);
+      } catch (err) {
+        logger.error(`[SubscriptionCron] Error processing subscription ${sub._id}:`, err);
+      }
+    }
+  },
+
+  /**
+   * [User] Hủy gói đăng ký (Cancel at period end)
+   */
+  async cancelSubscription(userId: string) {
+    const sub = await SubscriptionModel.findOne({
+      userId: userId,
+      status: { $in: ['active', 'trialing'] }
+    });
+
+    if (!sub) {
+      throw new BadRequestError("Bạn không có gói đăng ký nào đang hoạt động.");
+    }
+
+    // Nếu đã đánh dấu hủy rồi thì báo lỗi hoặc trả về luôn
+    if (sub.cancelAtPeriodEnd) {
+      throw new BadRequestError("Gói đăng ký của bạn đã được lên lịch hủy vào cuối kỳ.");
+    }
+
+    sub.cancelAtPeriodEnd = true;
+    await sub.save();
+
+    return {
+      message: "Gói đăng ký của bạn sẽ bị hủy vào cuối chu kỳ thanh toán hiện tại.",
+      currentPeriodEnd: sub.currentPeriodEnd
+    };
   }
 };

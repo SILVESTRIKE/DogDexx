@@ -1,6 +1,6 @@
 // src/config/cloudinary.ts
 import { v2 as cloudinary } from 'cloudinary';
-import CloudinaryStorage = require('multer-storage-cloudinary');
+import { CloudinaryStorage } from 'multer-storage-cloudinary';
 import dotenv from 'dotenv';
 import { Request } from 'express';
 import path from 'path';
@@ -43,13 +43,13 @@ export const predictionStorage = new CloudinaryStorage({
       const week = `week-${getWeekOfMonth(now)}`;
       relativeFolderPath = path.join("uploads", "test", year, month, week);
     }
-    
+
     const dateString = `${String(now.getDate()).padStart(2, "0")}${String(now.getMonth() + 1).padStart(2, "0")}${now.getFullYear()}`;
     const randomChars = crypto.randomBytes(3).toString("hex").slice(0, 5);
     const filenameWithoutExt = `${dateString}_${randomChars}`;
 
     const publicId = `public/${relativeFolderPath.replace(/\\/g, "/")}/${filenameWithoutExt}`;
-    
+
     return {
       public_id: publicId,
       resource_type: 'auto',
@@ -64,7 +64,7 @@ export const avatarStorage = new CloudinaryStorage({
       // SỬA ĐỔI: Chỉ định thư mục, để Cloudinary tự tạo tên file.
       // Điều này giúp quản lý file trong Media Library dễ dàng hơn.
       const folderPath = 'public/uploads/avatars';
-      
+
       const result = {
         folder: folderPath,
         resource_type: 'image', // Avatar luôn là ảnh        
@@ -72,7 +72,7 @@ export const avatarStorage = new CloudinaryStorage({
       };
 
       logger.info('[avatarStorage] Chuẩn bị trả về object cho multer:', result);
-      
+
       return result;
 
     } catch (error) {

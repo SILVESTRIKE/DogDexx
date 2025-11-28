@@ -1,9 +1,10 @@
 import { Request } from 'express';
+import { Types } from 'mongoose';
 
 const CLOUD_NAME = process.env.CLOUD_NAME_CLOUDINARY;
 
 const transformPaths = (req: Request, data: any): any => {
-    if (data === null || typeof data !== 'object' || data instanceof Date) return data;
+    if (data === null || typeof data !== 'object' || data instanceof Date || data instanceof Types.ObjectId) return data;
     if (Array.isArray(data)) return data.map(item => transformPaths(req, item));
 
     const obj = typeof data.toObject === 'function' ? data.toObject() : { ...data };
@@ -11,7 +12,7 @@ const transformPaths = (req: Request, data: any): any => {
     const createFullUrl = (dbPath: string) => {
         if (!dbPath) return dbPath;
 
-        if (dbPath.startsWith('http://') || dbPath.startsWith('https://')) return dbPath;
+        if (dbPath.startsWith('http://') || dbPath.startsWith('https://') || dbPath.startsWith('data:')) return dbPath;
 
         if ((dbPath.startsWith('public/') || dbPath.startsWith('uploads/') || dbPath.startsWith('dataset/')) && CLOUD_NAME) {
             const resourceType = dbPath.includes('/videos/') ? 'video' : 'image';
@@ -20,7 +21,7 @@ const transformPaths = (req: Request, data: any): any => {
             const publicId = resourceType === 'image'
                 ? publicIdWithFolder.substring(0, publicIdWithFolder.lastIndexOf('.')) || publicIdWithFolder
                 : publicIdWithFolder;
-            
+
             return `https://res.cloudinary.com/${CLOUD_NAME}/${resourceType}/upload/${publicId}`;
         }
 

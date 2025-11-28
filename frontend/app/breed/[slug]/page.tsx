@@ -55,7 +55,14 @@ export default function DogDetailPage() {
   const { toggleCollected } = useCollection()
   const { t, locale } = useI18n()
   const params = useParams() as { slug: string }; // Lấy params bằng hook
-
+  const getScoreColor = (score: number) => {
+    if (score >= 5) return "bg-rose-600 shadow-rose-200 drop-shadow-md"; // Rất cao - Đỏ hồng rực
+    if (score === 4) return "bg-orange-500 shadow-orange-200 drop-shadow-md"; // Cao - Cam
+    if (score === 3) return "bg-amber-400 shadow-amber-200 drop-shadow-md"; // Trung bình - Vàng
+    if (score === 2) return "bg-emerald-400 shadow-emerald-200 drop-shadow-md"; // Thấp - Xanh ngọc
+    return "bg-sky-400 shadow-sky-200 drop-shadow-md"; // Rất thấp - Xanh dương nhạt
+  };
+  
   useEffect(() => {
     const fetchBreed = async () => {
       try {
@@ -154,46 +161,70 @@ export default function DogDetailPage() {
                   {t('dogDetails.quickStats')}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-5"> {/* Tăng khoảng cách chút cho thoáng */}
+                
+                {/* 1. Mức năng lượng - Màu Đỏ/Hồng (Rose) */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Activity className="h-4 w-4 text-chart-4" />
+                      <Activity className="h-4 w-4 text-rose-500" /> {/* Icon Rose */}
                       {t('results.energy')}
                     </span>
-                    <span className="text-sm font-bold">{dog.energy_level}/5</span>
+                    <span className="text-sm font-bold text-rose-600">{dog.energy_level}/5</span>
                   </div>
-                  <Progress value={(dog.energy_level ?? 0) * 20} className="h-2" indicatorClassName="bg-chart-4" />
+                  <Progress 
+                    value={(dog.energy_level ?? 0) * 20} 
+                    className="h-3 bg-rose-100" // Nền nhạt cùng tông
+                    indicatorClassName="bg-rose-500 shadow-rose-200 drop-shadow-md" // Thanh đậm cùng tông
+                  />
                 </div>
+
+                {/* 2. Khả năng huấn luyện - Màu Vàng (Amber) */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Brain className="h-4 w-4 text-amber-500" />
+                      <Brain className="h-4 w-4 text-amber-500" /> {/* Icon Amber */}
                       {t('results.trainability')}
                     </span>
-                    <span className="text-sm font-bold">{dog.trainability}/5</span>
+                    <span className="text-sm font-bold text-amber-600">{dog.trainability}/5</span>
                   </div>
-                  <Progress value={(dog.trainability ?? 0) * 20} className="h-2" indicatorClassName="bg-amber-500" />
+                  <Progress 
+                    value={(dog.trainability ?? 0) * 20} 
+                    className="h-3 bg-amber-100" 
+                    indicatorClassName="bg-amber-500 shadow-amber-200 drop-shadow-md" 
+                  />
                 </div>
+
+                {/* 3. Mức rụng lông - Màu Xanh dương (Blue/Sky) - Tượng trưng gió */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Wind className="h-4 w-4 text-gray-500" />
+                      <Wind className="h-4 w-4 text-blue-500" /> {/* Icon Blue */}
                       {t('results.shedding')}
                     </span>
-                    <span className="text-sm font-bold">{dog.shedding_level}/5</span>
+                    <span className="text-sm font-bold text-blue-600">{dog.shedding_level}/5</span>
                   </div>
-                  <Progress value={(dog.shedding_level ?? 0) * 20} className="h-2" indicatorClassName="bg-gray-500" />
+                  <Progress 
+                    value={(dog.shedding_level ?? 0) * 20} 
+                    className="h-3 bg-blue-100" 
+                    indicatorClassName="bg-blue-500 shadow-blue-200 drop-shadow-md" 
+                  />
                 </div>
+
+                {/* 4. Mức độ chăm sóc - Màu Xanh lá (Emerald) - Tượng trưng kỹ thuật */}
                 <div>
                   <div className="flex justify-between mb-2">
                     <span className="text-sm font-medium flex items-center gap-2">
-                      <Wrench className="h-4 w-4 text-chart-1" />
+                      <Wrench className="h-4 w-4 text-emerald-500" /> {/* Icon Emerald */}
                       {t('dogDetails.maintenance')}
                     </span>
-                    <span className="text-sm font-bold">{dog.maintenance_difficulty}/5</span>
+                    <span className="text-sm font-bold text-emerald-600">{dog.maintenance_difficulty}/5</span>
                   </div>
-                  <Progress value={(dog.maintenance_difficulty ?? 0) * 20} className="h-2" indicatorClassName="bg-chart-1" />
+                  <Progress 
+                    value={(dog.maintenance_difficulty ?? 0) * 20} 
+                    className="h-3 bg-emerald-100" 
+                    indicatorClassName="bg-emerald-500 shadow-emerald-200 drop-shadow-md" 
+                  />
                 </div>
               </CardContent>
             </Card>

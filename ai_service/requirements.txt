@@ -1,8 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cu126
 fastapi
 uvicorn[standard]
 ultralytics
 numpy
-# Dùng bản headless cho server để tránh lỗi dependency GUI
 opencv-python-headless
 pillow
 python-multipart
@@ -11,9 +11,8 @@ imageio[ffmpeg]
 pymongo
 huggingface_hub
 python-dotenv
-# Quan trọng: thư viện này dùng để tải ảnh từ URL (code của bạn có dùng)
 httpx
+onnxruntime
 torch
 torchvision
 torchaudio
-onnxruntime

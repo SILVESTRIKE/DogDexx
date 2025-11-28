@@ -382,11 +382,19 @@ export const getAdminReportPreview = async (payload: {
 }): Promise<ReportPreviewData> => {
   return adminApiClient.getAdminReportPreview(payload);
 };
-// --- THÊM MỚI: Report Management ---
 export const exportAdminReport = async (params: {
   startDate: string;
   endDate: string;
   format: "excel" | "word";
 }): Promise<Blob> => {
   return adminApiClient.exportAdminReport(params);
+};
+
+// --- Database Backup & Restore ---
+export const backupDatabase = async (): Promise<Blob> => {
+  return adminApiClient.backupDatabase();
+};
+
+export const restoreDatabase = async (file: File): Promise<{ message: string; filename: string }> => {
+  return adminApiClient.restoreDatabase(file);
 };

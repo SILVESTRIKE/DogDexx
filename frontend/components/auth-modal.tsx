@@ -11,7 +11,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Country, State } from 'country-state-city';
+import { Country } from 'country-state-city';
+import { LocationPicker } from "@/components/location-picker";
 // 1. IMPORT RECAPTCHA
 import { useGoogleReCaptcha } from "react-google-recaptcha-v3"; 
 
@@ -45,9 +46,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   const [selectedCityName, setSelectedCityName] = useState("")
 
   const allCountries = useMemo(() => Country.getAllCountries(), []);
-  const citiesOfCountry = useMemo(() => {
-    return State.getStatesOfCountry(selectedCountryCode) || [];
-  }, [selectedCountryCode]);
 
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -156,10 +154,10 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </DialogDescription>
         </DialogHeader>
 
-        {/* Form Content giữ nguyên như cũ */}
+        {/* Form Content */}
         {view === 'form' && (
           <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
-             {/* ... Nội dung form giữ nguyên ... */}
+             {/* ... Nội dung form ... */}
              {mode === "register" && (
               <>
                 <div className="grid grid-cols-2 gap-4">
@@ -183,41 +181,15 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Quốc gia</Label>
-                    <div className="relative">
-                      <select
-                        className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        value={selectedCountryCode}
-                        onChange={(e) => {
-                          setSelectedCountryCode(e.target.value);
-                          setSelectedCityName(""); 
-                        }}
-                      >
-                        {allCountries.map((c) => (
-                          <option key={c.isoCode} value={c.isoCode}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Thành phố</Label>
-                    <div className="relative">
-                      <select
-                         className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                         value={selectedCityName}
-                         onChange={(e) => setSelectedCityName(e.target.value)}
-                         disabled={citiesOfCountry.length === 0}
-                      >
-                        <option value="">-- Chọn TP --</option>
-                        {citiesOfCountry.map((state, index) => (
-                          <option key={`${state.name}-${index}`} value={state.name}>{state.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
+                <LocationPicker
+                  selectedCountryCode={selectedCountryCode}
+                  onCountryChange={(code, name) => {
+                    setSelectedCountryCode(code);
+                    setSelectedCityName("");
+                  }}
+                  selectedCityName={selectedCityName}
+                  onCityChange={setSelectedCityName}
+                />
               </>
             )}
 

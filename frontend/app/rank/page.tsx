@@ -7,6 +7,8 @@ import { useI18n } from '@/lib/i18n-context';
 import { MapPin, Search, Globe, Building2, Trophy, Crown, User } from 'lucide-react'; // Thêm icon User làm fallback dự phòng
 import { cn } from "@/lib/utils";
 
+import { LocationPicker } from '@/components/location-picker';
+
 // --- Hooks ---
 function useDebounce<T>(value: T, delay: number): T {
   const [debouncedValue, setDebouncedValue] = useState(value);
@@ -50,22 +52,38 @@ const UserAvatar = ({ src, alt, name }: { src?: string | null, alt: string, name
 export default function LeaderboardPage() {
   const { t } = useI18n();
   const [scope, setScope] = useState<'global' | 'country' | 'city'>('global');
-  const [filterValue, setFilterValue] = useState('');
+  
+  // Location state
+  const [selectedCountryCode, setSelectedCountryCode] = useState("VN");
+  const [selectedCountryName, setSelectedCountryName] = useState("Vietnam");
+  const [selectedCityName, setSelectedCityName] = useState("");
+
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const debouncedFilter = useDebounce(filterValue, 500);
-
   const fetchLeaderboard = async () => {
-    if ((scope === 'country' || scope === 'city') && !debouncedFilter) return;
+    let value = undefined;
+    if (scope === 'country') {
+        if (!selectedCountryName) {
+            setLeaderboard([]);
+            return;
+        }
+        value = selectedCountryName;
+    } else if (scope === 'city') {
+        if (!selectedCityName) {
+            setLeaderboard([]);
+            return;
+        }
+        value = selectedCityName;
+    }
 
     setLoading(true);
     setError(null);
     try {
       const res = await apiClient.getLeaderboard({
         type: scope,
-        value: scope === 'global' ? undefined : debouncedFilter,
+        value: value,
         limit: 50,
       });
       // Lọc bỏ người dùng có vai trò 'admin' hoặc 'dev'
@@ -84,7 +102,7 @@ export default function LeaderboardPage() {
 
   useEffect(() => {
     fetchLeaderboard();
-  }, [scope, debouncedFilter]);
+  }, [scope, selectedCountryName, selectedCityName]);
 
   const getRankStyle = (rank: number) => {
     switch (rank) {
@@ -160,7 +178,15 @@ export default function LeaderboardPage() {
                   ].map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => { setScope(tab.id as any); setFilterValue(''); }}
+                      onClick={() => { 
+                        setScope(tab.id as any); 
+                        // Reset selection when switching tabs if needed, or keep it?
+                        // If switching from City to Country, maybe keep Country?
+                        // For now, let's just keep the state as is, or reset if switching to Global.
+                        if (tab.id === 'global') {
+                            // No reset needed strictly as global ignores it, but good practice?
+                        }
+                      }}
                       className={cn(
                         "flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
                         scope === tab.id 
@@ -174,17 +200,23 @@ export default function LeaderboardPage() {
                   ))}
                 </div>
 
-                {/* Search Input */}
+                {/* Location Picker */}
                 {scope !== 'global' && (
-                  <div className="relative w-full md:w-72 animate-in fade-in slide-in-from-right-4 duration-300">
-                    <input
-                      type="text"
-                      placeholder={scope === 'country' ? t('rankPage.search.country') : t('rankPage.search.city')}
-                      value={filterValue}
-                      onChange={(e) => setFilterValue(e.target.value)}
-                      className="w-full pl-11 pr-4 py-2.5 rounded-xl bg-secondary/30 border-white/10 border focus:border-primary/50 focus:ring-primary/20 focus:bg-background/80 transition-all text-sm outline-none placeholder:text-muted-foreground/50"
+                  <div className="w-full md:w-auto animate-in fade-in slide-in-from-right-4 duration-300">
+                    <LocationPicker
+                      selectedCountryCode={selectedCountryCode}
+                      onCountryChange={(code, name) => {
+                        setSelectedCountryCode(code);
+                        setSelectedCountryName(name);
+                        setSelectedCityName("");
+                      }}
+                      selectedCityName={selectedCityName}
+                      onCityChange={(name) => setSelectedCityName(name)}
+                      showCity={scope === 'city'}
+                      className={scope === 'country' ? "grid-cols-1 w-full md:w-64" : "grid-cols-2 w-full md:w-96"}
+                      selectClassName="bg-secondary/30 border-white/10"
+                      labels={{ country: undefined, city: undefined }} 
                     />
-                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground/70 w-4 h-4" />
                   </div>
                 )}
               </div>
@@ -209,7 +241,7 @@ export default function LeaderboardPage() {
                     <Trophy className="w-10 h-10 opacity-30" />
                   </div>
                   <p className="font-semibold text-lg">{t('rankPage.empty.title')}</p>
-                  {scope !== 'global' && !filterValue && (
+                  {scope !== 'global' && (
                     <p className="text-sm mt-2 opacity-60 max-w-xs text-center">{t('rankPage.empty.description')}</p>
                   )}
                 </div>

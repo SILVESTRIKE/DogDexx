@@ -251,6 +251,41 @@ export const bffPredictionController = {
       next(error);
     }
   },
+
+  predictUrl: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const { url } = req.body;
+
+      if (!url) throw new BadRequestError("URL không được để trống.");
+
+      const predictionPromise = predictionService.makeUrlPrediction(
+        userId,
+        url,
+        req
+      );
+
+      const data = await handlePredictionAndEnrichment(
+        req,
+        predictionPromise,
+        PREDICTION_SOURCES.URL_INPUT,
+        userId?.toString()
+      );
+
+      // Tính phí token (ví dụ: giống image prediction)
+      await deductTokensForRequest(
+        req,
+        res,
+        tokenConfig.costs.imagePrediction,
+        "single"
+      );
+
+      res.status(200).json(data);
+    } catch (error) {
+      next(error);
+    }
+  },
   predictBatch: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).user as UserDoc | undefined;
@@ -503,7 +538,7 @@ export const bffPredictionController = {
       try {
         const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
         wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
-      } catch (error) {}
+      } catch (error) { }
       const transformedPrediction = transformMediaURLs(req, historyItem);
       const detections = transformedPrediction.predictions.map((p: any) => {
         const slug = p.class.toLowerCase().replace(/\s+/g, "-");
@@ -600,7 +635,7 @@ export const bffPredictionController = {
       process.env.AI_SERVICE_URL || "http://localhost:8000"
     ).replace(/^http/, "ws");
     const aiWs = new WebSocket(`${aiServiceUrl}/predict-stream`);
-    aiWs.on("open", () => {});
+    aiWs.on("open", () => { });
     aiWs.on("message", (data) => {
       logger.info(`[BFF-WS] AI -> BFF: Nhận kết quả từ AI Service.`);
       if (ws.readyState === WebSocket.OPEN) ws.send(data.toString());
@@ -759,7 +794,7 @@ export const bffPredictionController = {
         res.status(200).json({ products });
       } catch (e) {
         logger.error(
-          `[BFF Controller] Failed to parse recommended products JSON for breed __STRING_0_2__:`,
+          `[BFF Controller] Failed to parse recommended products JSON for breed ${breedSlug}:`,
           e
         );
         logger.error(
@@ -768,6 +803,20 @@ export const bffPredictionController = {
         res.status(200).json({ products: [] });
       }
     } catch (error) {
+      next(error);
+    }
+  },
+  getConfig: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+      const response = await fetch(`${aiServiceUrl}/config`);
+      if (!response.ok) {
+        throw new Error(`AI Service returned ${response.status}`);
+      }
+      const data = await response.json();
+      res.status(200).json(data);
+    } catch (error) {
+      logger.error("[BFF Controller] Failed to fetch config from AI Service:", error);
       next(error);
     }
   },

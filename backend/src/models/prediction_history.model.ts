@@ -22,7 +22,7 @@ export type PredictionHistoryDoc = Document & {
   media: MediaDoc;
   mediaPath: string; // Đường dẫn của file media gốc
   modelUsed: string;
-  source: 'image_upload' | 'video_upload' | 'stream_capture';
+  source: 'image_upload' | 'video_upload' | 'stream_capture' | 'url_input';
   predictions: IYoloPrediction[];
   processedMediaPath?: string; // Đường dẫn của file media đã được xử lý (có vẽ bounding box)
   isCorrect: boolean | null;
@@ -50,7 +50,7 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     modelUsed: { type: String, required: true },
     source: {
       type: String,
-      enum: ['image_upload', 'video_upload', 'stream_capture'],
+      enum: ['image_upload', 'video_upload', 'stream_capture', 'url_input'],
       required: true,
     },
     predictions: [

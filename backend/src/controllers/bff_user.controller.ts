@@ -10,14 +10,15 @@ import { REDIS_KEYS } from '../constants/redis.constants';
 import { redisClient } from '../utils/redis.util';
 import { tokenConfig } from '../config/token.config';
 import { NextFunction } from 'express';
-import { RegisterSchema, UpdateProfileSchema } from '../types/zod/user.zod'; 
+import { RegisterSchema, UpdateProfileSchema } from '../types/zod/user.zod';
 import { logger } from '../utils/logger.util';
 import { verifyRecaptcha } from '../utils/recaptcha.util';
+
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { email, password, captchaToken } = req.body;
     if (!captchaToken) throw new BadRequestError("Captcha token is required.");
-    
+
     const isCaptchaValid = await verifyRecaptcha(captchaToken);
     if (!isCaptchaValid) throw new BadRequestError("Invalid CAPTCHA. Please try again.");
 
@@ -94,11 +95,11 @@ export const getSessionStatus = async (req: Request, res: Response, next: NextFu
     let currentTokensStr = await redisClient.get(key);
     if (currentTokensStr === null) {
       await redisClient.set(key, tokenConfig.guest.initialTokens, {
-          EX: tokenConfig.guest.expirationSeconds,
+        EX: tokenConfig.guest.expirationSeconds,
       });
       currentTokensStr = tokenConfig.guest.initialTokens.toString();
     }
-    
+
     res.status(200).json({
       isGuest: true,
       remainingTokens: parseInt(currentTokensStr, 10),
@@ -145,19 +146,19 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const validationResult = UpdateProfileSchema.shape.body.safeParse(req.body);
-     if (!validationResult.success) {
+    if (!validationResult.success) {
       const errorMessage = validationResult.error.errors.map(e => e.message).join(', ');
       throw new BadRequestError(errorMessage);
     }
     const updateData = validationResult.data;
-      
+
     const userId = (req as any).user!._id.toString();
     const avatarFile = req.file;
 
     const updatedUser = await userService.updateUser(userId, updateData, avatarFile);
     res.status(200).json({
       message: "Cập nhật hồ sơ thành công.",
-      data: transformMediaURLs(req, updatedUser),
+      data: { user: transformMediaURLs(req, updatedUser) },
     });
   } catch (error) {
     next(error);
@@ -207,8 +208,8 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
     }
     const { accessToken, refreshToken } = await authService.refreshToken(oldRefreshToken);
     res.status(200).json({ accessToken, refreshToken });
-  } catch (error) { 
-    next(error); 
+  } catch (error) {
+    next(error);
   }
 };
 
@@ -225,16 +226,16 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
 
 
 export const handleMomoIpn = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      res.status(204).send();
+  try {
+    res.status(204).send();
 
-      await subscriptionService.handleMomoIpn(req.body);
+    await subscriptionService.handleMomoIpn(req.body);
 
-    } catch (error) {
-      next(error);
-    }
-
+  } catch (error) {
+    next(error);
   }
+
+}
 
 // --- BFF wrappers for forgot/reset password (forward to existing user controller)
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
@@ -256,7 +257,7 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
     next(error);
   }
 };
- 
+
 export const deleteCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     // Gọi trực tiếp service
@@ -268,6 +269,16 @@ export const deleteCurrentUser = async (req: Request, res: Response, next: NextF
     // Gọi service xác thực và xóa
     await authService.deleteUserWithPasswordVerification(userId, password);
     res.status(200).json({ message: "Tài khoản và tất cả dữ liệu liên quan đã được xóa thành công." });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const cancelSubscription = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = (req as any).user!._id.toString();
+    const result = await subscriptionService.cancelSubscription(userId);
+    res.status(200).json(result);
   } catch (error) {
     next(error);
   }

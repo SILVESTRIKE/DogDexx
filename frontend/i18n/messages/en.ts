@@ -141,6 +141,18 @@ export default {
       finishing: "Almost there, compiling results...",
       success: "Done! Redirecting...",
     },
+    fileTooLarge: "File too large (Max 50MB)",
+    tabs: {
+      upload: "Upload File",
+      url: "Paste URL",
+    },
+    urlInputTitle: "Enter Image URL",
+    urlInputDesc: "Paste a link to an image (JPG, PNG, WebP) to identify the dog breed.",
+    errors: {
+      emptyUrl: "Please enter a URL",
+    },
+    securityWarning: "Security Warning",
+    securityWarningDesc: "Only use URLs from trusted sources. Malicious links can be harmful.",
   },
   results: {
     title: "Detection Results",
@@ -368,7 +380,7 @@ export default {
       confirmDeleteButton: "I understand, delete my account",
       passwordRequired: "Password is required to confirm.",
       deleteAccountButton: "Delete Account",
-      
+
     },
   },
   feedback: {

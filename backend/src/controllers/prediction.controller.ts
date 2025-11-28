@@ -16,6 +16,7 @@ export const predictionController = {
     const mediaType = (req as any).mediaType as "image" | "video";
 
     // Handle batch prediction if multiple files are uploaded
+    /*
     if (Array.isArray(files) && files.length > 0) {
       if (mediaType === "video") {
         throw new BadRequestError("Batch processing không được hỗ trợ cho video.");
@@ -34,6 +35,7 @@ export const predictionController = {
         data: responseData,
       });
     }
+    */
 
     // Handle single file prediction
     if (!file) {
@@ -52,7 +54,7 @@ export const predictionController = {
 
   saveStreamResult: async (req: Request, res: Response) => {
     const userId = req.user?._id;
-    
+
     const result = await predictionService.saveStreamPrediction(userId, req.body, req);
     const populatedResult = await result.toObject();
     const responseData = populatedResult ? transformMediaURLs(req, populatedResult) : null;

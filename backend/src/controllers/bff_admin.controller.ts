@@ -6,6 +6,8 @@ import { AppError } from '../errors';
 import { sendFileToClient } from '../utils/file.util';
 import * as ExcelJS from 'exceljs';
 import { userController } from './user.controller';
+import { DatabaseService } from '../services/database.service';
+
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -525,10 +527,75 @@ export const exportReport = async (req: Request, res: Response, next: NextFuncti
       throw new AppError("Invalid format specified. Must be 'excel' or 'word'.");
     }
 
-    // Đảm bảo dữ liệu luôn là Buffer trước khi gửi
     const dataToSend = reportBuffer instanceof Buffer ? reportBuffer : Buffer.from(reportBuffer as ExcelJS.Buffer);
     sendFileToClient({ res, fileName, contentType, data: dataToSend });
   } catch (error) {
     next(error);
   }
 };
+
+// --- THÊM MỚI: CÁC CONTROLLER CHO DATABASE BACKUP & RESTORE ---
+
+const databaseService = new DatabaseService();
+
+/**
+ * [Admin] Tạo backup database và gửi file về client
+ */
+export const backupDatabase = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    logger.info('[Admin] Starting database backup...');
+    
+    const backupPath = await databaseService.createBackup();
+    const fileName = backupPath.split(/[/\\]/).pop() || 'backup.archive';
+    
+    // Đọc file backup và gửi về client
+    const fs = require('fs');
+    const fileBuffer = fs.readFileSync(backupPath);
+    
+    sendFileToClient({
+      res,
+      fileName,
+      contentType: 'application/gzip',
+      data: fileBuffer,
+    });
+    
+    logger.info(`[Admin] Database backup sent to client: ${fileName}`);
+    
+    // Cleanup old backups (keep last 10)
+    databaseService.cleanOldBackups(10).catch(err => {
+      logger.warn('Failed to clean old backups:', err);
+    });
+  } catch (error) {
+    logger.error('[Admin] Database backup failed:', error);
+    next(error);
+  }
+};
+
+/**
+ * [Admin] Khôi phục database từ file upload
+ */
+export const restoreDatabase = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+    
+    if (!file) {
+      throw new AppError('Backup file is required');
+    }
+    
+    logger.info(`[Admin] Starting database restore from: ${file.originalname}`);
+    
+    // Restore từ file đã upload
+    await databaseService.restoreFromBackup(file.path);
+    
+    logger.info('[Admin] Database restore completed successfully');
+    
+    res.status(200).json({
+      message: 'Database restored successfully',
+      filename: file.originalname,
+    });
+  } catch (error) {
+    logger.error('[Admin] Database restore failed:', error);
+    next(error);
+  }
+};
+

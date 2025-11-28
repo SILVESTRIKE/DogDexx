@@ -65,7 +65,6 @@ export function Navbar() {
     { href: "/live", label: t("nav.live"), auth: false },
     { href: "/dogdex", label: t("nav.dogdex"), auth: false },
     { href: "/history", label: t("nav.history"), auth: true },
-    { href: "/achievements", label: t("nav.achievements"), auth: true },
     { href: "/rank", label: t("nav.rank"), auth: false },
     { href: "/pricing", label: t("nav.pricing"), auth: true },
     { href: "/about", label: t("nav.about"), auth: false },
@@ -133,6 +132,19 @@ export function Navbar() {
     })
   ), [navLinks, isAuthenticated, isLinkActive]);
 
+  // --- TOKEN DISPLAY (Tách riêng để dùng ở Left Section) ---
+  const tokenDisplay = useMemo(() => {
+    if (!user || typeof user.remainingTokens !== 'number') return null;
+    return (
+      <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-2 py-0.5 sm:px-3 sm:py-1 backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
+        <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-600 dark:text-yellow-500" />
+        <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
+            {user.remainingTokens}/{user.tokenAllotment}
+        </span>
+      </div>
+    );
+  }, [user]);
+
   // --- MENU MOBILE ---
   const allMobileLinks = useMemo(() => {
     const links = navLinks
@@ -151,7 +163,6 @@ export function Navbar() {
         )
       });
 
-    // Thêm nút Login/Register vào menu mobile nếu chưa đăng nhập
     if (!isAuthenticated) {
       links.push(
         <DropdownMenuSeparator key="mobile-sep-auth" />,
@@ -169,24 +180,13 @@ export function Navbar() {
     return links;
   }, [navLinks, isAuthenticated, isLinkActive, handleAuthClick, t]);
 
+  // --- RIGHT MENU (Đã bỏ token display ở đây) ---
   const userMenuContent = useMemo(() => {    
-    // --- HIỂN THỊ TOKEN (Đã sửa để hiện trên Mobile) ---
-    // Bỏ 'hidden sm:flex', thay bằng 'flex' và chỉnh size chữ nhỏ lại trên mobile
-    const tokenDisplay = user && typeof user.remainingTokens === 'number' ? (
-      <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-2 py-0.5 sm:px-3 sm:py-1 backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
-        <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-600 dark:text-yellow-500" />
-        <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
-            {user.remainingTokens}/{user.tokenAllotment}
-        </span>
-      </div>
-    ) : null;
-
     if (isAuthenticated && user) {
       return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <div className="flex items-center gap-2 md:gap-3 cursor-pointer group select-none">
-                {tokenDisplay}
                 <Button variant="ghost" className="flex items-center gap-2 rounded-full pl-1 pr-2 h-8 md:h-9 hover:bg-primary/10">
                   <Avatar className="h-7 w-7 md:h-8 md:w-8 border-2 border-white shadow-sm">
                     <AvatarImage src={user.avatarUrl} alt={user.username} />
@@ -224,15 +224,13 @@ export function Navbar() {
     // --- CHƯA ĐĂNG NHẬP ---
     return (
       <div className="flex items-center gap-2 md:gap-3">
-        {tokenDisplay} {/* Token vẫn hiển thị cho khách nếu có logic đó */}
-        
         {/* Desktop Buttons */}
         <div className="hidden md:flex items-center gap-2">
           <Button onClick={() => handleAuthClick("login")} variant="ghost" className="rounded-full h-9 font-semibold hover:bg-primary/10 hover:text-primary">{t("nav.login")}</Button>
           <Button onClick={() => handleAuthClick("register")} className="rounded-full h-9 bg-primary text-white font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all hover:scale-105">{t("nav.register")}</Button>
         </div>
 
-        {/* Mobile Button: Chỉ hiện Login nhỏ gọn để đỡ tốn diện tích, Register nằm trong Menu */}
+        {/* Mobile Button */}
         <div className="md:hidden flex items-center">
              {!user && (
                 <Button onClick={() => handleAuthClick("login")} size="sm" variant="default" className="rounded-full h-8 text-xs px-3 bg-primary text-white shadow-sm">
@@ -254,11 +252,13 @@ export function Navbar() {
                 : "bg-transparent border-transparent"
         )}
       >
-        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between gap-2">
+        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between">
           
-          {/* 1. LOGO */}
-          <div className="flex items-center gap-8 flex-shrink-0">
-            <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group">
+          {/* ======================= */}
+          {/* 1. LEFT SECTION (Logo + Tokens) */}
+          {/* ======================= */}
+          <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1">
+            <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group flex-shrink-0">
               <div className="relative">
                  <img 
                     src="/LogoWebBlack.png" 
@@ -275,15 +275,16 @@ export function Navbar() {
               <span className="hidden lg:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
                 {t("common.appName")}
               </span>
-              {/* Mobile Text Logo */}
               <span className="text-base sm:text-lg uppercase tracking-widest font-black lg:hidden text-primary mt-1">
                 DogDex
               </span>
             </Link>
           </div>
 
-          {/* 2. DESKTOP NAV PILL */}
-          <div className="hidden md:flex flex-1 justify-center px-4">
+          {/* ======================= */}
+          {/* 2. CENTER SECTION (Nav Pill) */}
+          {/* ======================= */}
+          <div className="hidden md:flex justify-center flex-shrink-0">
             <div 
                 ref={navContainerRef} 
                 className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
@@ -306,8 +307,16 @@ export function Navbar() {
             </div>
           </div>
 
-          {/* 3. RIGHT ACTIONS */}
-          <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 flex-shrink-0">
+          {/* ======================= */}
+          {/* 3. RIGHT SECTION (User Menu & Settings) */}
+          {/* ======================= */}
+          <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 md:flex-1">
+            
+            {/* Hiển thị Token trên Mobile (nếu muốn) hoặc ẩn đi. Ở đây tôi để ẩn trên Desktop (vì đã có ở bên trái), hiện trên Mobile để user check */}
+            <div className="md:hidden">
+                {mounted && tokenDisplay}
+            </div>
+
             {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted/20 rounded-full animate-pulse" />}
 
             <DropdownMenu>
@@ -317,6 +326,10 @@ export function Navbar() {
                   <span className="sr-only">Settings</span>
                 </Button>
               </DropdownMenuTrigger>
+              {/* Token Display Moved Here */}
+            <div className="hidden md:block">
+                {mounted && tokenDisplay}
+            </div>
               <DropdownMenuContent align="end" className="w-56 bg-background/90 backdrop-blur-xl border-border shadow-lg">
                 <DropdownMenuLabel className="text-primary">{t('nav.light')}/{t('nav.dark')}</DropdownMenuLabel>
                 <div className="px-2 py-1"><ThemeToggle /></div>

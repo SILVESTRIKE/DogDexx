@@ -412,7 +412,6 @@ export class AdminService {
         `[Admin Service] Error browsing Cloudinary path '${relativePath}':`,
         error
       );
-      // Xử lý lỗi từ Cloudinary, ví dụ thư mục không tồn tại
       if (error.http_code === 404) {
         throw new NotFoundError(
           `Directory not found on Cloudinary: ${relativePath}`
@@ -422,26 +421,18 @@ export class AdminService {
     }
   }
 
-  /**
-   * [Admin] Nén và trả về toàn bộ thư mục dataset.
-   * SỬA ĐỔI: Thay vì nén file local, hàm này trả về URL để tải file zip từ Cloudinary.
-   */
   async generateDatasetArchiveUrl(): Promise<string> {
     logger.info(
       '[Admin Service] Generating Cloudinary archive URL for "dataset" folder...'
     );
-    // Tạo URL có chữ ký để tải về thư mục 'dataset' dưới dạng file zip
-    // URL này sẽ hết hạn sau 1 giờ (3600 giây)
+
     const url = cloudinary.utils.download_folder("dataset", {
       expires_at: Math.floor(Date.now() / 1000) + 3600, // Unix timestamp cho 1 giờ sau
     });
     logger.info("[Admin Service] Generated signed URL for dataset archive.");
     return url;
   }
-  /**
-   * Lấy danh sách người dùng và làm giàu dữ liệu.
-   */
-  // ... (các hàm còn lại không thay đổi)
+
   public async getEnrichedUsers(
     options: { page?: number; limit?: number; search?: string } = {}
   ): Promise<{ pagination: any; users: any[] }> {

@@ -5,7 +5,13 @@ import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware";
 import { tokenConfig } from "../config/token.config";
-
+import validate from "../middlewares/validateRequest.middleware";
+import {
+    PredictUrlSchema,
+    FeedbackSchema,
+    StreamResultSchema,
+    ChatSchema,
+} from "../types/zod/prediction.zod";
 const router = Router();
 
 /**
@@ -48,7 +54,7 @@ const router = Router();
  *
  */
 router.post(
-    "/image", 
+    "/image",
     optionalAuthMiddleware,
     uploadSingle,
     checkTokenLimit(tokenConfig.costs.imagePrediction, 'single'),
@@ -94,7 +100,7 @@ router.post(
  *
  */
 router.post(
-    "/video", 
+    "/video",
     optionalAuthMiddleware,
     uploadSingle,
     checkTokenLimit(tokenConfig.costs.videoPrediction, 'single'),
@@ -141,11 +147,12 @@ router.post(
  *         description: Payment Required - Không đủ token để xử lý toàn bộ batch.
  *       500:
  *         description: Lỗi máy chủ nội bộ.
+ *
  */
 router.post(
-    "/batch", 
+    "/batch",
     authMiddleware, // Batch prediction yêu cầu đăng nhập
-    uploadMultiple, 
+    uploadMultiple,
     checkTokenLimit(tokenConfig.costs.imagePrediction, 'batch'),
     bffPredictionController.predictBatch
 );
@@ -170,10 +177,12 @@ router.post(
  *     responses:
  *       201: { description: "Lưu kết quả thành công." }
  *       400: { description: "Dữ liệu không hợp lệ." }
+ *
  */
 router.post(
-    "/stream/save", 
+    "/stream/save",
     optionalAuthMiddleware,
+    validate(StreamResultSchema),
     bffPredictionController.saveStreamResult
 );
 /**
@@ -220,8 +229,9 @@ router.post(
  *         description: Too Many Requests - Người dùng thử (guest) đã hết token.
  */
 router.post(
-    "/chat/:breedSlug", 
+    "/chat/:breedSlug",
     optionalAuthMiddleware,
+    validate(ChatSchema),
     checkTokenLimit(tokenConfig.costs.chatMessage),
     bffPredictionController.chatWithGemini
 );
@@ -270,7 +280,7 @@ router.get(
  *         description: Trả về danh sách các gợi ý.
  */
 router.get(
-    "/:breedSlug/health-recommendations", 
+    "/:breedSlug/health-recommendations",
     optionalAuthMiddleware,
     bffPredictionController.getHealthRecommendations
 );
@@ -293,7 +303,7 @@ router.get(
  *         description: Trả về danh sách các sản phẩm gợi ý.
  */
 router.get(
-    "/:breedSlug/recommended-products", 
+    "/:breedSlug/recommended-products",
     optionalAuthMiddleware,
     bffPredictionController.getRecommendedProducts
 );
@@ -342,7 +352,7 @@ router.get(
  *       400:
  *         description: Dữ liệu gửi lên không hợp lệ.
  */
-router.post("/:id/feedback", authMiddleware, bffPredictionController.submitFeedback);
+router.post("/:id/feedback", authMiddleware, validate(FeedbackSchema), bffPredictionController.submitFeedback);
 
 /**
  * @swagger
@@ -435,5 +445,63 @@ router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
  *       200: { description: Xóa thành công. }
  */
 router.delete("/history/:id", authMiddleware, bffPredictionController.deletePredictionHistory);
+
+/**
+ * @swagger
+ * /bff/predict/url:
+ *   post:
+ *     summary: "(BFF) Dự đoán từ URL ảnh (Chi phí: 2 token)"
+ *     tags: [BFF-Prediction]
+ *     description: |
+ *       Gửi một URL ảnh để nhận diện giống chó.
+ *       Endpoint này sử dụng `optionalAuthMiddleware`.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: URL của ảnh cần dự đoán.
+ *     responses:
+ *       200:
+ *         description: Dự đoán thành công.
+ *       400:
+ *         description: Bad Request - URL không hợp lệ.
+ *       402:
+ *         description: Payment Required.
+ *       500:
+ *         description: Lỗi máy chủ.
+ */
+router.post(
+    "/url",
+    optionalAuthMiddleware,
+    validate(PredictUrlSchema),
+    checkTokenLimit(tokenConfig.costs.imagePrediction, 'single'),
+    bffPredictionController.predictUrl
+);
+
+/**
+ * @swagger
+ * /bff/predict/config:
+ *   get:
+ *     summary: "(BFF) Lấy cấu hình AI Service (Public)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy thông tin cấu hình hiện tại từ AI Service (ngưỡng confidence, model, v.v.).
+ *     responses:
+ *       200:
+ *         description: Thành công.
+ *       500:
+ *         description: Lỗi kết nối AI Service.
+ */
+router.get(
+    "/config",
+    optionalAuthMiddleware,
+    bffPredictionController.getConfig
+);
 
 export default router;

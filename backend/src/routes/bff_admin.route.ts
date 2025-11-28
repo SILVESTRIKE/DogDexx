@@ -35,6 +35,8 @@ import {
   downloadDataset,
   exportReport,
   getReportPreview,
+  backupDatabase,
+  restoreDatabase,
 } from '../controllers/bff_admin.controller';
 import { uploadSingle, uploadModelFiles } from '../middlewares/upload.middleware';
 
@@ -615,6 +617,55 @@ router.get('/subscriptions', getSubscriptions);
  *       200: { description: Lấy danh sách thành công. }
  */
 router.get('/transactions', getTransactions);
+
+// --- THÊM MỚI: CÁC ENDPOINT CHO DATABASE BACKUP & RESTORE ---
+
+/**
+ * @swagger
+ * /bff/admin/database/backup:
+ *   post:
+ *     summary: (BFF-Admin) Tạo database backup
+ *     tags: [BFF-Admin-Database]
+ *     description: Tạo bản sao lưu của toàn bộ database và tải về.
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Tải file backup thành công.
+ *         content:
+ *           application/gzip:
+ *             schema:
+ *               type: string
+ *               format: binary
+ */
+router.post('/database/backup', backupDatabase);
+
+/**
+ * @swagger
+ * /bff/admin/database/restore:
+ *   post:
+ *     summary: (BFF-Admin) Khôi phục database từ backup file
+ *     tags: [BFF-Admin-Database]
+ *     description: Tải lên file backup và khôi phục database. CẢNH BÁO Thao tác này sẽ ghi đè toàn bộ dữ liệu hiện tại.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         multipart/form-data:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               file:
+ *                 type: string
+ *                 format: binary
+ *     responses:
+ *       200:
+ *         description: Khôi phục thành công.
+ *       400:
+ *         description: File không hợp lệ.
+ */
+router.post('/database/restore', uploadSingle, restoreDatabase);
 
 
 export default router;

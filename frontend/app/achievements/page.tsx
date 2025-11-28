@@ -97,7 +97,7 @@ function AchievementsContent() {
         
         {/* HEADER SECTION */}
         <div className="text-center mb-10 md:mb-14">
-          <div className="inline-flex items-center justify-center p-3 mb-4 rounded-full bg-primary/10 text-primary animate-in zoom-in duration-500">
+          <div className="inline-flex items-center justify-center p-3 mb-4 rounded-full bg-primary/10 text-amber-500 animate-in zoom-in duration-500">
              <Trophy className="h-10 w-10" />
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold mb-4 tracking-tight text-balance">
@@ -164,7 +164,7 @@ function AchievementsContent() {
              
              <Card className="relative border-2 border-primary/50 bg-gradient-to-br from-background via-background to-secondary/20 overflow-hidden">
                 <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-primary">
+                  <CardTitle className="flex items-center gap-2 text-chart-2">
                     <ArrowUpCircle className="h-5 w-5" />
                     {t('achievements.nextAchievement')}
                   </CardTitle>

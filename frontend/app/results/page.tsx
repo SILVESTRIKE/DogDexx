@@ -209,6 +209,17 @@ function ResultsContent() {
   const selectedDisplayName = selectedBreedInfo.breed;
   const selectedConfidence = Math.round(selectedDetection.confidence * 100);
   const isDog = selectedBreedInfo.group !== "Object / Other";
+  const uniqueDetections = allDetections.reduce((acc, current, index) => {
+    const existingIndex = acc.findIndex(item => item.detection.detectedBreed === current.detectedBreed);
+    if (existingIndex === -1) {
+      acc.push({ detection: current, index });
+    } else {
+      if (current.confidence > acc[existingIndex].detection.confidence) {
+        acc[existingIndex] = { detection: current, index };
+      }
+    }
+    return acc;
+  }, [] as { detection: Detection, index: number }[]);
 
   return (
     <main className="min-h-screen bg-background">
@@ -309,7 +320,7 @@ function ResultsContent() {
           {/* --- THANH CHỌN ĐỐI TƯỢNG (DROPDOWN) --- */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl font-bold">{t("results.detailsTitle")}</h2>
-            {allDetections.length > 1 && (
+                        {uniqueDetections.length > 1 && (
               <Select
                 onValueChange={handleSelectionChange}
                 value={`${selectedDetection?.detectedBreed}-${allDetections.indexOf(selectedDetection!)}`}
@@ -318,7 +329,7 @@ function ResultsContent() {
                   <SelectValue placeholder={t("results.selectBreedPlaceholder")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {allDetections.map((det, index) => (
+                  {uniqueDetections.map(({ detection: det, index }) => (
                     <SelectItem 
                       key={`${det.detectedBreed}-${index}`}
                       value={`${det.detectedBreed}-${index}`}

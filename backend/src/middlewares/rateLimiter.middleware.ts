@@ -2,31 +2,22 @@ import { Request } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 phút
+  windowMs: 15 * 60 * 1000,
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
 
   keyGenerator: (req: Request): string => {
-    return req.fingerprint?.hash || (ipKeyGenerator as unknown as (req: Request) => string)(req);
+    return (req.fingerprint?.hash ||(ipKeyGenerator as unknown as (req: Request) => string)(req));
   },
 
-  skip: (req: Request): boolean => {
-    const user = (req as any).user;
-    return user?.role === 'admin';
+  skip: (req: Request): boolean => {const user = (req as any).user;
+    return user?.role === "admin";
   },
 
-  handler: (req, res, next, options) => {
-    // logger.warn(`Rate limit exceeded for IP: ${req.ip}`);
-
-    res.status(options.statusCode || 429).json({
+  handler: (req, res, next, options) => {res.status(options.statusCode || 429).json({
       success: false,
-      errors: [
-        { 
-          message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.",
-          field: "rate_limit"
-        }
-      ]
+      errors: [{message:"Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.",field: "rate_limit",},],
     });
   },
 });

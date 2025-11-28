@@ -110,11 +110,11 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
           </div>
           {collected ? (
             <>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary" className={`text-xs ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
+              <div className="flex flex-nowrap gap-1.5 overflow-hidden">
+                <Badge variant="secondary" className={`text-xs whitespace-nowrap shrink-0 ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
                   <Dog className="h-3 w-3 mr-1" /> {dog.group}
                 </Badge>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs whitespace-nowrap truncate">
                   {dog.origin}
                 </Badge>
               </div>
@@ -143,11 +143,11 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
             </>
           ) : (
             <>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary" className="text-xs">
+              <div className="flex flex-nowrap gap-1.5 overflow-hidden">
+                <Badge variant="secondary" className={`text-xs whitespace-nowrap shrink-0 ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
                   <Dog className="h-3 w-3 mr-1" /> {dog.group}
                 </Badge>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs whitespace-nowrap truncate">
                   {dog.origin}
                 </Badge>
               </div>

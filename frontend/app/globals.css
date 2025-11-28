@@ -9,8 +9,8 @@
 
 :root {
   /* --- Light mode --- */
-  --background: #fffbf2; 
-  --foreground: #432818; 
+  --background: #fffbf2;
+  --foreground: #432818;
   --card: #ffffff;
   --card-foreground: #432818;
   --popover: #ffffff;
@@ -21,7 +21,7 @@
   --secondary-foreground: #432818;
   --muted: #f5f0e6;
   --muted-foreground: #8d7b68;
-  --accent: #fff7ed; 
+  --accent: #fff7ed;
   --accent-foreground: rgb(160, 82, 45);
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
@@ -30,11 +30,23 @@
   --ring: rgba(160, 82, 45, 0.5);
   --radius: 1rem;
   --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+
+  /* --- CÁC MÀU MỚI CHO DOG DEX (Light Mode) --- */
+  /* Rose - Năng lượng (Đậm hơn để rõ trên nền sáng) */
+  --chart-1: #e11d48;
+  /* Amber - Huấn luyện */
+  --chart-2: #d97706;
+  /* Blue - Rụng lông */
+  --chart-3: #2563eb;
+  /* Emerald - Chăm sóc/Sức khỏe */
+  --chart-4: #059669;
+  /* Violet - Màu phụ trợ */
+  --chart-5: #7c3aed;
 }
 
 .dark {
   /* Dark mode */
-  --background: #020617; 
+  --background: #020617;
   --foreground: #f8fafc;
   --card: #0f172a;
   --card-foreground: #f8fafc;
@@ -52,8 +64,20 @@
   --destructive-foreground: #ffffff;
   --border: #1e293b;
   --input: #1e293b;
-  --ring: rgb(45, 143, 247);
+  --ring: rgb(194, 101, 210);
   --success: #22c55e;
+
+  /* --- CÁC MÀU MỚI CHO DOG DEX (Dark Mode) --- */
+  /* Rose - Năng lượng (Sáng hơn để nổi trên nền tối) */
+  --chart-1: #f43f5e;
+  /* Amber - Huấn luyện */
+  --chart-2: #fbbf24;
+  /* Blue - Rụng lông */
+  --chart-3: #60a5fa;
+  /* Emerald - Chăm sóc/Sức khỏe */
+  --chart-4: #34d399;
+  /* Violet - Màu phụ trợ */
+  --chart-5: #a78bfa;
 }
 
 @theme inline {
@@ -77,16 +101,31 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  /* Đăng ký các biến Chart vào theme để sử dụng class (ví dụ: text-chart-1) */
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
   --radius-lg: var(--radius);
   --radius-md: calc(var(--radius) - 2px);
   --radius-sm: calc(var(--radius) - 4px);
-  
+
   --animate-float: float 6s ease-in-out infinite;
   --animate-pulse-slow: pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  
+
   @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-20px); }
+
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+
+    50% {
+      transform: translateY(-20px);
+    }
   }
 }
 
@@ -94,17 +133,16 @@
   * {
     @apply border-border outline-ring/50;
   }
-  
+
   body {
     @apply bg-background text-foreground antialiased relative;
-    
-    background-image: radial-gradient(at 50% 0%, color-mix(in srgb, var(--primary), transparent 90%) 0px, transparent 50%);
 
+    background-image: radial-gradient(at 50% 0%, color-mix(in srgb, var(--primary), transparent 90%) 0px, transparent 50%);
 
     cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 60 60'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z' fill='%23ffffff' stroke='%23000000' stroke-width='2' transform='rotate(45 30 30)'/%3E%3C/svg%3E") 16 16, auto;
   }
 
-  /* LỚP HỌA TIẾT CỤC XƯƠNG (MASK BACKGROUND) - GIỮ NGUYÊN */
+  /* LỚP HỌA TIẾT CỤC XƯƠNG (MASK BACKGROUND) */
   body::before {
     content: "";
     position: fixed;
@@ -112,15 +150,15 @@
     left: 0;
     width: 100%;
     height: 100%;
-    z-index: -1; 
+    z-index: -1;
     pointer-events: none;
     background-color: var(--foreground);
-    
+
     /* SVG pattern */
     -webkit-mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='black' stroke-width='2' transform='rotate(-45 30 30)'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
     mask-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg stroke='black' stroke-width='2' transform='rotate(-45 30 30)'%3E%3Cpath d='M35 28h-10c-0.5-2-2-3.5-4-3.5-2.2 0-4 1.8-4 4 0 1 .5 1.5 1 2-.5 .5-1 1-1 2 0 2.2 1.8 4 4 4 2 0 3.5-1.5 4-3.5h10c0.5 2 2 3.5 4 3.5 2.2 0 4-1.8 4-4 0-1-.5-1.5-1-2 .5-.5 1-1 1-2 0-2.2-1.8-4-4-4-2 0-3.5 1.5-4 3.5z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-    
-    opacity: 0.05; 
+
+    opacity: 0.05;
   }
 }
 
@@ -134,25 +172,33 @@
   background-color: transparent;
   width: 0;
 }
+
 ::-webkit-scrollbar-thumb {
   background-color: transparent;
   width: 0;
 }
 
-/* Đảm bảo link cũng hiện con chuột xương */
-a, button, [role="button"] {
-  cursor: inherit; 
+a,
+button,
+[role="button"] {
+  cursor: inherit;
 }
 
 @keyframes dog-run {
-  0% { background-position: 0% }
-  100% { background-position: 100% }
+  0% {
+    background-position: 0%
+  }
+
+  100% {
+    background-position: 100%
+  }
 }
 
 @keyframes clip-intro {
   0% {
     clip-path: circle(0% at 50% 50%);
   }
+
   100% {
     clip-path: circle(150% at 50% 50%);
   }
@@ -163,6 +209,7 @@ a, button, [role="button"] {
     transform: translateY(100%);
     opacity: 0;
   }
+
   to {
     transform: translateY(0);
     opacity: 1;

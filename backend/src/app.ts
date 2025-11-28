@@ -71,7 +71,7 @@ app.use('/bff/collection', bffCollectionRoutes);
 app.use('/bff/content', bffContentRoutes);
 app.use('/bff/admin', bffAdminRoutes);
 app.use('/bff/public', bffPublicRoutes);
- 
+
 // 3. Core API Routes
 app.use(analyticsRoutes);
 // app.use(authRoutes);
