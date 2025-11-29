@@ -1,10 +1,11 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger.util';
 
 dotenv.config();
 
 const allowedOrigins: string[] = [
-  'http://localhost:3001', 
+  'http://localhost:3001',
   'http://localhost:3000',
   "https://dogdexai.vercel.app",
   "https://dogdexx.vercel.app",
@@ -27,6 +28,7 @@ export const corsMiddleware = cors({
       callback(null, true);
       return;
     }
+    logger.info("Origin đang gọi tới:", origin);
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
