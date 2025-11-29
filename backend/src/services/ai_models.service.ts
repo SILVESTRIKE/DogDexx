@@ -8,6 +8,7 @@ import { ConflictError } from "../errors";
 import { uploadFile } from '@huggingface/hub';
 import { AppError } from '../errors';
 import { logger } from "../utils/logger.util";
+import { PredictionHistoryModel } from "../models/prediction_history.model";
 export class AIModelService {
   /**
    * (Admin) Tạo một bản ghi model mới trong CSDL.
@@ -40,8 +41,25 @@ export class AIModelService {
   /**
    * (Admin) Lấy danh sách tất cả các model trong hệ thống.
    */
-  static async findAll(): Promise<AIModelDoc[]> {
-    return AIModel.find().sort({ createdAt: -1 });
+  static async findAll(): Promise<any[]> {
+    const models = await AIModel.find().sort({ createdAt: -1 }).lean();
+
+    const stats = await PredictionHistoryModel.aggregate([
+      {
+        $group: {
+          _id: "$modelUsed",
+          avgProcessingTime: { $avg: "$processingTime" }
+        }
+      }
+    ]);
+
+    const statsMap = new Map(stats.map(s => [s._id, s.avgProcessingTime]));
+
+    return models.map(model => ({
+      ...model,
+      id: model._id.toString(),
+      averageProcessingTime: Math.round(statsMap.get(model.name) || 0)
+    }));
   }
 
   /**

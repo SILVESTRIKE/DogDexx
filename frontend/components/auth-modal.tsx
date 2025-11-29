@@ -108,6 +108,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             lastName,
             country: countryName, 
             city: selectedCityName, 
+            phoneNumber,
             captchaToken: token
           })
           
@@ -181,6 +182,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   selectedCityName={selectedCityName}
                   onCityChange={setSelectedCityName}
                 />
+                
+                <div className="space-y-2">
+                  <Label>{t("auth.phoneNumber")}</Label>
+                  <Input type="text" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required placeholder="0123456789" />
+                </div>
               </>
             )}
 
@@ -188,10 +194,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
               <Label>{t("auth.email")}</Label>
               <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="email@example.com" />
             </div>
-            <div className="space-y-2">
-              <Label>{t("auth.phoneNumber")}</Label>
-              <Input type="text" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required placeholder="0123456789" />
-            </div>
+            
             <div className="space-y-2">
               <Label>{t("auth.password")}</Label>
               <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />

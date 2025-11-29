@@ -2,8 +2,8 @@ import multer from "multer";
 import { Request } from "express";
 // Import các storage engine từ file config
 // THAY ĐỔI: Chỉ import avatarStorage, predictionStorage sẽ được thay thế bằng memoryStorage
-import { avatarStorage } from "../config/cloudinary.config";
- 
+// import { avatarStorage } from "../config/cloudinary.config";
+
 // --- Các bộ lọc file (giữ nguyên) ---
 const fileFilter = (req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   if (file.mimetype.startsWith("image/") || file.mimetype.startsWith("video/")) {
@@ -33,13 +33,13 @@ export const uploadSingle = multer({
 }).single("file");
 
 export const uploadMultiple = multer({
-  storage: multer.memoryStorage(), 
+  storage: multer.memoryStorage(),
   fileFilter: fileFilter,
   limits: { fileSize: MAX_FILE_SIZE, files: MAX_FILES },
 }).array("files", MAX_FILES);
 
 export const uploadAvatar = multer({
-  storage: avatarStorage, // <--- THAY ĐỔI
+  storage: multer.memoryStorage(), // <--- THAY ĐỔI
   fileFilter: avatarFileFilter,
   limits: { fileSize: 5 * 1024 * 1024 },
 }).single("avatar");

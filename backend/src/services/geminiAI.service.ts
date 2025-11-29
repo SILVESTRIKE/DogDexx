@@ -3,15 +3,15 @@ import dotenv from "dotenv";
 import { redisClient } from "../utils/redis.util"; // Import Redis client
 import { tokenConfig } from "../config/token.config";
 import { REDIS_KEYS } from "../constants/redis.constants";
-import {
-  Builder,
-  By,
-  until,
-  WebDriver,
-  Capabilities,
-} from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome";
-import "chromedriver";
+// import {
+//   Builder,
+//   By,
+//   until,
+//   WebDriver,
+//   Capabilities,
+// } from "selenium-webdriver";
+// import chrome from "selenium-webdriver/chrome";
+// import "chromedriver";
 dotenv.config();
 
 // 1. Kiểm tra API Key ngay từ đầu để báo lỗi sớm
@@ -331,107 +331,107 @@ interface ShopeeProduct {
   imageUrl: string;
   productUrl: string;
 }
-async function scrapeFirstShopeeProduct(
-  keyword: string
-): Promise<ShopeeProduct | null> {
-  const encodedKeyword = encodeURIComponent(keyword);
-  const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
+// async function scrapeFirstShopeeProduct(
+//   keyword: string
+// ): Promise<ShopeeProduct | null> {
+//   const encodedKeyword = encodeURIComponent(keyword);
+//   const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
 
-  const options = new chrome.Options();
-  options.addArguments(
-    "--headless=new",
-    "--no-sandbox",
-    "--disable-dev-shm-usage",
-    "--start-maximized",
-    "--disable-blink-features=AutomationControlled",
-    "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-  );
-  options.excludeSwitches("enable-automation");
+//   const options = new chrome.Options();
+//   options.addArguments(
+//     "--headless=new",
+//     "--no-sandbox",
+//     "--disable-dev-shm-usage",
+//     "--start-maximized",
+//     "--disable-blink-features=AutomationControlled",
+//     "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+//   );
+//   options.excludeSwitches("enable-automation");
 
-  let driver: WebDriver | null = null;
+//   let driver: WebDriver | null = null;
 
-  try {
-    driver = await new Builder()
-      .forBrowser("chrome")
-      .setChromeOptions(options)
-      .build();
+//   try {
+//     driver = await new Builder()
+//       .forBrowser("chrome")
+//       .setChromeOptions(options)
+//       .build();
 
-    await driver.executeScript(
-      "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-    );
+//     await driver.executeScript(
+//       "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
+//     );
 
-    await driver.get(searchUrl);
+//     await driver.get(searchUrl);
 
-    try {
-      const popupCloseButton = await driver.wait(
-        until.elementLocated(By.css("div.shopee-popup__close-btn")),
-        5000
-      );
-      await driver.executeScript("arguments[0].click();", popupCloseButton);
-      await sleep(1000);
-    } catch (error) { }
+//     try {
+//       const popupCloseButton = await driver.wait(
+//         until.elementLocated(By.css("div.shopee-popup__close-btn")),
+//         5000
+//       );
+//       await driver.executeScript("arguments[0].click();", popupCloseButton);
+//       await sleep(1000);
+//     } catch (error) { }
 
-    await driver.executeScript(
-      "window.scrollTo(0, document.body.scrollHeight);"
-    );
-    await sleep(1000);
-    await driver.executeScript("window.scrollTo(0, 0);");
-    await sleep(500);
+//     await driver.executeScript(
+//       "window.scrollTo(0, document.body.scrollHeight);"
+//     );
+//     await sleep(1000);
+//     await driver.executeScript("window.scrollTo(0, 0);");
+//     await sleep(500);
 
-    const resultsContainerSelector = By.css(
-      "div.shopee-search-item-result__items"
-    );
+//     const resultsContainerSelector = By.css(
+//       "div.shopee-search-item-result__items"
+//     );
 
-    const resultsContainer = await driver.wait(
-      until.elementLocated(resultsContainerSelector),
-      30000
-    );
+//     const resultsContainer = await driver.wait(
+//       until.elementLocated(resultsContainerSelector),
+//       30000
+//     );
 
-    const productXPathSelector = ".//a[contains(@href, '-i.')]";
-    const firstProductElement = await resultsContainer.findElement(
-      By.xpath(productXPathSelector)
-    );
+//     const productXPathSelector = ".//a[contains(@href, '-i.')]";
+//     const firstProductElement = await resultsContainer.findElement(
+//       By.xpath(productXPathSelector)
+//     );
 
-    const productUrl = await firstProductElement.getAttribute("href");
-    const name =
-      (await firstProductElement
-        .findElement(By.css('div[data-sqe="name"]'))
-        .getText()) || keyword;
-    const imageUrl = await firstProductElement
-      .findElement(By.css("img.shopee-search-item-result__item-image-img"))
-      .getAttribute("src");
+//     const productUrl = await firstProductElement.getAttribute("href");
+//     const name =
+//       (await firstProductElement
+//         .findElement(By.css('div[data-sqe="name"]'))
+//         .getText()) || keyword;
+//     const imageUrl = await firstProductElement
+//       .findElement(By.css("img.shopee-search-item-result__item-image-img"))
+//       .getAttribute("src");
 
-    return { name, imageUrl, productUrl };
-  } catch (error) {
-    if (driver) {
-      const image = await driver.takeScreenshot();
-      const safeKeyword = keyword
-        .replace(/[\\/:*?"<>|]/g, "_")
-        .substring(0, 100);
-      const screenshotPath = `selenium_error_${safeKeyword}.png`;
-      require("fs").writeFileSync(screenshotPath, image, "base64");
-    }
-    return null;
-  } finally {
-    if (driver) {
-      await driver.quit();
-    }
-  }
-}
-async function createAffiliateLinkManually(
-  destinationUrl: string
-): Promise<string | null> {
-  const affiliateId = process.env.ACCESSTRADE_API_KEY;
-  if (!affiliateId) {
-    return null;
-  }
+//     return { name, imageUrl, productUrl };
+//   } catch (error) {
+//     if (driver) {
+//       const image = await driver.takeScreenshot();
+//       const safeKeyword = keyword
+//         .replace(/[\\/:*?"<>|]/g, "_")
+//         .substring(0, 100);
+//       const screenshotPath = `selenium_error_${safeKeyword}.png`;
+//       require("fs").writeFileSync(screenshotPath, image, "base64");
+//     }
+//     return null;
+//   } finally {
+//     if (driver) {
+//       await driver.quit();
+//     }
+//   }
+// }
+// async function createAffiliateLinkManually(
+//   destinationUrl: string
+// ): Promise<string | null> {
+//   const affiliateId = process.env.ACCESSTRADE_API_KEY;
+//   if (!affiliateId) {
+//     return null;
+//   }
 
-  const encodedDestinationUrl = encodeURIComponent(destinationUrl);
+//   const encodedDestinationUrl = encodeURIComponent(destinationUrl);
 
-  const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
+//   const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
 
-  return affiliateLink;
-}
+//   return affiliateLink;
+// }
 
 export async function getRecommendedProducts(
   breed: string,

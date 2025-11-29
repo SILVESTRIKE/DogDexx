@@ -16,7 +16,13 @@ const email = z
   .min(1, "Email không được để trống.")
   .email("Định dạng email không hợp lệ.");
 
-const password = z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự.");
+const password = z
+  .string()
+  .min(8, "Mật khẩu phải có ít nhất 8 ký tự.")
+  .regex(/[A-Z]/, "Mật khẩu phải chứa ít nhất một chữ hoa.")
+  .regex(/[a-z]/, "Mật khẩu phải chứa ít nhất một chữ thường.")
+  .regex(/[0-9]/, "Mật khẩu phải chứa ít nhất một số.")
+  .regex(/[^A-Za-z0-9]/, "Mật khẩu phải chứa ít nhất một ký tự đặc biệt.");
 
 const username = z
   .string()
@@ -43,7 +49,7 @@ export const RegisterSchema = z.object({
       lastName: z.string().optional(),
       country: z.string().optional(),
       city: z.string().optional(),
-      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional(),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ"),
       captchaToken: z.string().optional(),
     })
     .strict(),

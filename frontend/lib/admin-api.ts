@@ -192,6 +192,7 @@ export interface AIModel {
   creator_id: string;
   createdAt: string;
   updatedAt: string;
+  averageProcessingTime?: number;
 }
 
 export const getAIModels = async (): Promise<AIModel[]> => {

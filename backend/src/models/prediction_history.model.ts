@@ -18,6 +18,7 @@ export type PredictionHistoryDoc = Document & {
   source: 'image_upload' | 'video_upload' | 'stream_capture' | 'url_input';
   predictions: IYoloPrediction[];
   processedMediaPath?: string;
+  processingTime?: number;
   isCorrect: boolean | null;
   isDeleted: boolean;
   createdAt: Date;
@@ -57,6 +58,7 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
       },
     ],
     processedMediaPath: { type: String, required: false },
+    processingTime: { type: Number, required: false },
     isCorrect: { type: Boolean, default: null },
     isDeleted: { type: Boolean, default: false, index: true, select: false },
   },

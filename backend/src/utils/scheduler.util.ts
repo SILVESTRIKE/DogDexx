@@ -4,7 +4,7 @@ import { AnalyticsAggregatorService } from "../services/analytics_summary.servic
 import { subscriptionService } from "../services/subscription.service";
 
 export const startSchedulers = () => {
-  // Chạy vào 00:00 Chủ Nhật hàng tuần
+  // Chạy vào 00:00 Chủ Nhật hàng tuần để reset token
   cron.schedule(
     "0 0 * * 0",
     () => {
@@ -12,11 +12,12 @@ export const startSchedulers = () => {
     },
     {
       scheduled: true,
-      timezone: "Asia/Ho_Chi_Minh", 
+      timezone: "Asia/Ho_Chi_Minh",
     }
   );
+  // Chạy vào 01:00 ngày 1 hàng tháng để tổng hợp dữ liệu
   cron.schedule(
-    "0 1 1 * *", // 01:00 ngày 1 hàng tháng
+    "0 1 1 * *",
     () => {
       AnalyticsAggregatorService.runMonthlyRollup();
     },
@@ -28,7 +29,7 @@ export const startSchedulers = () => {
 
   // [MỚI] Chạy vào 00:00 hàng ngày để kiểm tra gói hết hạn
   cron.schedule(
-    "0 0 * * *", 
+    "0 0 * * *",
     () => {
       subscriptionService.checkExpiredSubscriptions();
     },

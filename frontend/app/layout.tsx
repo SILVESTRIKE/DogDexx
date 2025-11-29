@@ -1,5 +1,6 @@
 import type React from "react";
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -74,6 +75,7 @@ export default function RootLayout({
               
               {/* DECORATION */}
               <WalkingDog />
+              <Analytics />
             </AppProviders>
           </RecaptchaProvider>
         </ThemeProvider>

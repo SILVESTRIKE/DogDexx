@@ -2,6 +2,27 @@ import { Request } from 'express';
 import { Types } from 'mongoose';
 
 const CLOUD_NAME = process.env.CLOUD_NAME_CLOUDINARY;
+import { cloudinary } from '../config/cloudinary.config';
+import { UploadApiResponse } from 'cloudinary';
+
+export const uploadToCloudinary = (buffer: Buffer, folder: string, resource_type: 'image' | 'video' = 'image'): Promise<UploadApiResponse> => {
+    return new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+            {
+                folder: folder,
+                resource_type: resource_type,
+            },
+            (error, result) => {
+                if (result) {
+                    resolve(result);
+                } else {
+                    reject(error);
+                }
+            }
+        );
+        stream.end(buffer);
+    });
+};
 
 const transformPaths = (req: Request, data: any): any => {
     if (data === null || typeof data !== 'object' || data instanceof Date || data instanceof Types.ObjectId) return data;

@@ -16,6 +16,7 @@ import { PredictionHistoryModel } from "../models/prediction_history.model";
 import { FeedbackModel } from "../models/feedback.model";
 import { PlanModel } from "../models/plan.model";
 import { logger } from "../utils/logger.util"
+import { uploadToCloudinary } from "../utils/media.util";
 // Định nghĩa kiểu dữ liệu cho user đã được làm giàu
 export type EnrichedUser = UserDoc & { tokenAllotment: number };
 
@@ -140,9 +141,17 @@ export const userService = {
           await MediaModel.updateOne({ mediaPath: existingUserByEmail.avatarPath }, { isDeleted: true });
         }
 
+        let mediaPath = '';
+        if (avatarFile.buffer) {
+          const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+          mediaPath = `${result.public_id}.${result.format}`;
+        } else {
+          mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+        }
+
         const avatarMedia = new MediaModel({
           name: `avatar-${existingUserByEmail.username}-${Date.now()}`,
-          mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
+          mediaPath: mediaPath,
           creator_id: existingUserByEmail._id,
           type: 'image/avatar',
         });
@@ -175,9 +184,17 @@ export const userService = {
     });
 
     if (avatarFile) {
+      let mediaPath = '';
+      if (avatarFile.buffer) {
+        const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+        mediaPath = `${result.public_id}.${result.format}`;
+      } else {
+        mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+      }
+
       const avatarMedia = new MediaModel({
         name: `avatar-${user.username}`,
-        mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
+        mediaPath: mediaPath,
         creator_id: user._id,
         type: 'image/avatar',
       });
@@ -213,10 +230,16 @@ export const userService = {
           { isDeleted: true }
         );
       }
-      (data as Partial<UserDoc>).avatarPath = avatarFile.path.replace(
-        /\\/g,
-        "/"
-      );
+
+      let mediaPath = '';
+      if (avatarFile.buffer) {
+        const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+        mediaPath = `${result.public_id}.${result.format}`;
+      } else {
+        mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+      }
+
+      (data as Partial<UserDoc>).avatarPath = mediaPath;
     }
 
     if ((data as Partial<UserDoc>).password) {
@@ -254,9 +277,17 @@ export const userService = {
       );
     }
 
+    let mediaPath = '';
+    if (avatarFile.buffer) {
+      const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+      mediaPath = `${result.public_id}.${result.format}`;
+    } else {
+      mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+    }
+
     const newAvatarMedia = new MediaModel({
       name: `avatar-${user.username}-${Date.now()}`,
-      mediaPath: avatarFile.path.replace(/\\/g, "/"),
+      mediaPath: mediaPath,
       creator_id: user._id,
       type: "image/avatar",
     });

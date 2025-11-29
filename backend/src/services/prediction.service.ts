@@ -321,6 +321,7 @@ export const predictionService = {
     req: Request
   ): Promise<PredictionHistoryDoc> => {
     if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+    const startTime = Date.now();
 
     let directory_id: Types.ObjectId | undefined;
     if (userId) {
@@ -387,6 +388,7 @@ export const predictionService = {
       await newMedia.save();
 
       // 5. Lưu Prediction History
+      const processingTime = Date.now() - startTime;
       const newPrediction = await PredictionHistoryModel.create({
         user: userId,
         media: newMedia._id,
@@ -395,13 +397,15 @@ export const predictionService = {
         processedMediaPath: processedPath,
         modelUsed: modelName,
         source: `${type}_upload` as any,
+        processingTime
       });
 
       // 6. Track Analytics
       analyticsService.trackEvent({
         eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
         req,
-        eventData: { mediaType: type, filename: file.originalname }
+        eventData: { mediaType: type, filename: file.originalname },
+        processingTime
       });
 
       // 7. Populate và trả về
@@ -428,6 +432,7 @@ export const predictionService = {
     if (!payload || !payload.processed_media_base64 || !payload.detections) {
       throw new BadRequestError("Dữ liệu kết quả stream không hợp lệ.");
     }
+    const startTime = Date.now();
 
     const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
     const modelName = activeModel ? activeModel.name : 'unknown_model';
@@ -452,9 +457,11 @@ export const predictionService = {
       type: 'image',
     });
 
+    const processingTime = Date.now() - startTime;
     analyticsService.trackEvent({
       eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
-      req
+      req,
+      processingTime
     });
 
     const newPrediction = await PredictionHistoryModel.create({
@@ -465,6 +472,7 @@ export const predictionService = {
       processedMediaPath: processedMediaPathForDb,
       modelUsed: modelName,
       source: PREDICTION_SOURCES.STREAM_CAPTURE,
+      processingTime
     });
 
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
@@ -475,6 +483,7 @@ export const predictionService = {
     url: string,
     req: Request
   ): Promise<PredictionHistoryDoc> => {
+    const startTime = Date.now();
     // 1. Resolve Real URL (Handle Data URI / Google Redirects)
     try {
       if (url.startsWith('data:image')) {
@@ -533,6 +542,7 @@ export const predictionService = {
       });
       await newMedia.save();
 
+      const processingTime = Date.now() - startTime;
       const newPrediction = await PredictionHistoryModel.create({
         user: userId,
         media: newMedia._id,
@@ -541,12 +551,14 @@ export const predictionService = {
         processedMediaPath: processedMediaPathForDb,
         modelUsed: modelName,
         source: PREDICTION_SOURCES.URL_INPUT,
+        processingTime
       });
 
       analyticsService.trackEvent({
         eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
         req,
-        eventData: { type: 'url', url }
+        eventData: { type: 'url', url },
+        processingTime
       });
 
       return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);

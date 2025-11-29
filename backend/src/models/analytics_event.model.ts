@@ -9,6 +9,7 @@ export interface AnalyticsEventDoc extends Document {
   userAgent?: string;
   date: Date;
   count: number;
+  totalProcessingTime: number;
   eventData?: mongoose.Schema.Types.Mixed;
   isDeleted: boolean;
   createdAt: Date;
@@ -28,6 +29,8 @@ const analyticsEventSchema = new Schema(
     date: { type: Date, required: true },
     // THAY ĐỔI: Đổi tên trường thành 'count'
     count: { type: Number, default: 1 },
+    // THAY ĐỔI: Thêm trường tổng thời gian xử lý (ms)
+    totalProcessingTime: { type: Number, default: 0 },
     fingerprint: { type: String },
     ip: { type: String },
     userAgent: { type: String },
