@@ -1,8 +1,6 @@
 # DogDex AI - Ứng dụng nhận dạng giống chó thông minh
 
-![DogDex AI Banner](https://via.placeholder.com/1200x300?text=DogDex+AI+Banner)
-
-> **Đề tài Khóa Luận Tốt Nghiệp:** Tìm hiểu thuật toán Object Detection và xây dựng ứng dụng xác định giống chó nuôi.
+> **Đề tài Khóa Luận Tốt Nghiệp:** Tìm hiểu thuật toán Object Detection và xây minhminhdựng ứng dụng xác định giống chó nuôi.
 >
 > **Mã đề tài:** KLCN_TH030 | **GVHD:** ThS. Trần Đình Toàn
 
