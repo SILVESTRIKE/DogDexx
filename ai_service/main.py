@@ -161,9 +161,11 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# [LOGIC CŨ] Khởi tạo Config Global (Sẽ chạy 2 lần khi reload=True, giữ nguyên theo yêu cầu)
-config = Config()
-
+config = None
+def startup_event():
+    global config
+    print("--- SERVER STARTING: Loading AI Models... ---")
+    config = Config()
 # ==============================================================================
 # 2. LOGIC XỬ LÝ (CPU BOUND)
 # ==============================================================================
@@ -233,13 +235,25 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
 
     final_results = []
     
-    # 2. Duyệt từng vật thể
+    # Tách ra làm 2 nhóm: Chó và Không phải chó
+    dog_objs = []
+    other_objs = []
+
     for obj in base_objects:
+        # Kiểm tra điều kiện là chó
         is_dog = (obj['class_id'] == COCO_DOG_CLASS_ID) or (len(detector.names) == 1)
-        
         if is_dog:
+            dog_objs.append(obj)
+        else:
+            other_objs.append(obj)
+    
+    # TRƯỜNG HỢP 1: Có chó trong ảnh
+    if len(dog_objs) > 0:
+        # Chỉ xử lý và trả về danh sách chó (bỏ qua other_objs)
+        for obj in dog_objs:
             crop = get_padded_crop(img, obj["box"])
             if crop.size > 0:
+                # Chạy qua model classify
                 cls_res = config.classify_model(crop, conf=config.IMAGE_CONF, verbose=False)
                 cls_dets = process_results(cls_res, config.classify_model)
                 
@@ -250,10 +264,14 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
                 else:
                     obj["class"] = "Unknown Dog"
                     final_results.append(obj)
-        else:
-            final_results.append(obj)
-            
-    # Áp dụng NMS với IOU config
+            else:
+                final_results.append(obj)
+
+    # TRƯỜNG HỢP 2: Không có chó nào
+    else:
+        # Trả về các vật thể khác (không qua classifier)
+        final_results = other_objs
+
     final_results = apply_nms(final_results, iou_threshold=config.IOU)
 
     annotated_img = draw_annotations(img, final_results)
