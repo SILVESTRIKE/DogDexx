@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { Types } from "mongoose";
 
-/**
- * Schema để validate một chuỗi có phải là MongoDB ObjectId hợp lệ không.
- * Đây là schema quan trọng nhất, sẽ được dùng trong toàn bộ dự án.
- */
 export const objectIdSchema = z.string().refine(
   (val) => {
     return Types.ObjectId.isValid(val);
@@ -47,13 +43,15 @@ export const RegisterSchema = z.object({
       lastName: z.string().optional(),
       country: z.string().optional(),
       city: z.string().optional(),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional(),
+      captchaToken: z.string().optional(),
     })
-    .strict(), 
+    .strict(),
 });
 export type RegisterType = z.infer<typeof RegisterSchema.shape.body>;
 
 export const LoginSchema = z.object({
-  body: z.object({ email, password }).strict(),
+  body: z.object({ email, password, captchaToken: z.string().optional() }).strict(),
 });
 export type LoginType = z.infer<typeof LoginSchema.shape.body>;
 
@@ -87,23 +85,19 @@ export const UpdateProfileSchema = z.object({
     .object({
       firstName: z.string().optional(),
       lastName: z.string().optional(),
-      country: z.string().optional(), // THÊM MỚI
-      city: z.string().optional(), // THÊM MỚI
+      country: z.string().optional(),
+      city: z.string().optional(),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional(),
     })
     .strict(),
 });
 export type UpdateProfileType = z.infer<typeof UpdateProfileSchema.shape.body>;
 
-// --- PARAMS & QUERY SCHEMAS ---
 export const IdParamsSchema = z.object({
   params: z.object({ id: objectIdSchema }),
 });
 export type IdParamsType = z.infer<typeof IdParamsSchema.shape.params>;
 
-/**
- * Dùng để validate query string khi lấy danh sách người dùng, ví dụ:
- * GET /api/users?page=1&limit=10&role=admin&search=john
- */
 export const GetUsersQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().optional().default(1),

@@ -16,7 +16,6 @@ import { REDIS_KEYS } from "../constants/redis.constants";
 import { logger } from "../utils/logger.util";
 import { tokenConfig } from "../config/token.config";
 
-// Helper tạo JTI ngẫu nhiên
 const generateJti = () => crypto.randomBytes(16).toString("hex");
 
 const generateTokens = (user: EnrichedUser | UserDoc, jti: string) => {
@@ -24,11 +23,11 @@ const generateTokens = (user: EnrichedUser | UserDoc, jti: string) => {
     { id: user.id, role: user.role, plan: user.plan },
     tokenConfig.access.secret,
     {
-      expiresIn: tokenConfig.access.expirationSeconds, 
+      expiresIn: tokenConfig.access.expirationSeconds,
     }
   );
   const refreshToken = jwt.sign(
-    { id: user.id, jti }, // Quan trọng: Phải có jti trong payload
+    { id: user.id, jti },
     tokenConfig.refresh.secret,
     {
       expiresIn: tokenConfig.refresh.expirationSeconds,
@@ -37,19 +36,18 @@ const generateTokens = (user: EnrichedUser | UserDoc, jti: string) => {
   return { accessToken, refreshToken };
 };
 
-// ... (Giữ nguyên các hàm saveOtp, sendOtpEmail) ...
 async function saveOtp(email: string, otp: string, type: OtpType) {
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
-    await OtpModel.create({ email, otp, type, expiresAt });
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+  await OtpModel.create({ email, otp, type, expiresAt });
 }
-  
+
 async function sendOtpEmail(email: string, otp: string, subject: string, text: string) {
-    try {
-      await emailService.sendEmail(email, subject, text.replace("{{otp}}", otp));
-    } catch (error) {
-      logger.error("Lỗi gửi mail:", error);
-      throw new Error("Không thể gửi email");
-    }
+  try {
+    await emailService.sendEmail(email, subject, text.replace("{{otp}}", otp));
+  } catch (error) {
+    logger.error("Lỗi gửi mail:", error);
+    throw new Error("Không thể gửi email");
+  }
 }
 
 export const authService = {
@@ -95,21 +93,12 @@ export const authService = {
       throw new NotFoundError("Lỗi hệ thống: Không lấy được thông tin người dùng.");
     }
 
-    // --- SỬA ĐỔI QUAN TRỌNG TẠI ĐÂY ---
-    // 1. Tạo JTI mới
     const jti = generateJti();
-
-    // 2. Truyền JTI vào hàm tạo token
     const { accessToken, refreshToken } = generateTokens(enrichedUser, jti);
 
-    // 3. Lưu JTI vào Redis theo Key của UserID (Set structure)
     if (redisClient) {
       const key = `${REDIS_KEYS.REFRESH_TOKEN_PREFIX}${enrichedUser.id}`;
-      
-      // Thêm JTI vào danh sách hợp lệ của user
       await redisClient.sAdd(key, jti);
-      
-      // Cập nhật thời gian hết hạn cho cả Key (bằng thời gian refresh token)
       await redisClient.expire(key, tokenConfig.refresh.expirationSeconds);
     }
 
@@ -121,18 +110,15 @@ export const authService = {
     if (!redisClient) return;
 
     try {
-      // Giải mã token để lấy UserID và JTI
       const decoded = jwt.verify(refreshToken, tokenConfig.refresh.secret) as {
         id: string;
         jti: string;
       };
 
-      // Xóa JTI cụ thể khỏi Redis Set của user đó
       const key = `${REDIS_KEYS.REFRESH_TOKEN_PREFIX}${decoded.id}`;
       await redisClient.sRem(key, decoded.jti);
-      
+
     } catch (error) {
-      // Nếu token lỗi hoặc hết hạn thì coi như đã logout thành công
       logger.warn("Logout with invalid/expired token ignored.");
     }
   },
@@ -160,39 +146,31 @@ export const authService = {
     const { id: userId, jti: oldJti } = decoded;
     const key = `${REDIS_KEYS.REFRESH_TOKEN_PREFIX}${userId}`;
 
-    // Kiểm tra xem JTI cũ có trong Redis không
     const isTokenValid = await redisClient.sIsMember(key, oldJti);
 
     if (!isTokenValid) {
-      // Token reuse detection: Nếu token hợp lệ (signature) nhưng không có trong Redis,
-      // có thể nó đã bị dùng rồi -> Xóa toàn bộ phiên của user để bảo mật.
       await redisClient.del(key);
       throw new NotAuthorizedError(
         "Phiên đăng nhập không hợp lệ (Token Reuse). Vui lòng đăng nhập lại."
       );
     }
 
-    // Xóa JTI cũ (Token Rotation: Token cũ chết ngay khi dùng)
     await redisClient.sRem(key, oldJti);
 
     const user = await userService.getById(userId);
     if (!user) throw new NotAuthorizedError("Người dùng không tồn tại.");
-
-    // Tạo cặp token mới với JTI mới
     const newJti = generateJti();
     const { accessToken, refreshToken: newRefreshToken } = generateTokens(
       user,
       newJti
     );
 
-    // Lưu JTI mới vào Redis
     await redisClient.sAdd(key, newJti);
     await redisClient.expire(key, tokenConfig.refresh.expirationSeconds);
 
     return { accessToken, refreshToken: newRefreshToken };
   },
 
-  // ... (Giữ nguyên các hàm resendVerificationOtp, verifyEmail, forgotPassword, resetPassword) ...
   async resendVerificationOtp(email: string) {
     const user = await userService.getByEmail(email);
     if (!user) {
@@ -277,8 +255,7 @@ export const authService = {
     await userDoc.save();
 
     await OtpModel.deleteMany({ email, type: OtpType.PASSWORD_RESET });
-    
-    // Xóa tất cả phiên đăng nhập khi đổi mật khẩu
+
     if (redisClient) {
       const key = `${REDIS_KEYS.REFRESH_TOKEN_PREFIX}${userDoc._id}`;
       await redisClient.del(key);
@@ -292,20 +269,17 @@ export const authService = {
       throw new BadRequestError("Vui lòng cung cấp mật khẩu để xác nhận xóa tài khoản.");
     }
 
-    // Lấy user với mật khẩu
     const userWithPassword = await UserModel.findById(userId).select('+password');
 
     if (!userWithPassword || !userWithPassword.password) {
       throw new NotFoundError("Không tìm thấy người dùng hoặc tài khoản không có mật khẩu.");
     }
 
-    // So sánh mật khẩu
     const isMatch = await bcrypt.compare(passwordToCheck, userWithPassword.password);
     if (!isMatch) {
       throw new NotAuthorizedError("Mật khẩu không chính xác.");
     }
 
-    // Nếu mật khẩu khớp, tiến hành xóa mềm
     await userService.deleteUser(userId);
   },
 };
