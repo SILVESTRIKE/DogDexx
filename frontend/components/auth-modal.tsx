@@ -155,11 +155,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>{t("auth.firstName")}</Label>
-                    <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Nguyen" />
+                    <Input value={firstName} onChange={e => { setFirstName(e.target.value); setError(""); }} placeholder="Nguyen" />
                   </div>
                   <div className="space-y-2">
                     <Label>{t("auth.lastName")}</Label>
-                    <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Van A" />
+                    <Input value={lastName} onChange={e => { setLastName(e.target.value); setError(""); }} placeholder="Van A" />
                   </div>
                 </div>
                 
@@ -167,7 +167,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   <Label>Username</Label>
                   <Input 
                     value={username} 
-                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))} 
+                    onChange={e => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); setError(""); }} 
                     required 
                     placeholder="username_123"
                   />
@@ -185,19 +185,19 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                 
                 <div className="space-y-2">
                   <Label>{t("auth.phoneNumber")}</Label>
-                  <Input type="text" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required placeholder="0123456789" />
+                  <Input type="text" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setError(""); }} required placeholder="0123456789" />
                 </div>
               </>
             )}
 
             <div className="space-y-2">
               <Label>{t("auth.email")}</Label>
-              <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="email@example.com" />
+              <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} required placeholder="email@example.com" />
             </div>
             
             <div className="space-y-2">
               <Label>{t("auth.password")}</Label>
-              <Input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="******" />
+              <Input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} required placeholder="******" />
             </div>
 
             {mode === 'login' && (

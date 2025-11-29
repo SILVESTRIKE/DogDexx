@@ -1,8 +1,16 @@
 import winston from 'winston';
+// import path from 'path';
+// import fs from 'fs';
 
 const { combine, timestamp, printf, colorize, align } = winston.format;
 
 const environment = process.env.NODE_ENV || 'development';
+
+// // Ensure logs directory exists
+// const logDir = 'logs';
+// if (!fs.existsSync(logDir)) {
+//   fs.mkdirSync(logDir);
+// }
 
 const logFormat = printf(({ level, message, timestamp, stack }) => {
   const logMessage = stack || message;
@@ -20,6 +28,8 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.Console(),
+    // new winston.transports.File({ filename: path.join('logs', 'error.log'), level: 'error' }),
+    // new winston.transports.File({ filename: path.join('logs', 'app.log') }),
   ],
   exitOnError: false,
 });
