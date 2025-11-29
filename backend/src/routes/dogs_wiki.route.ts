@@ -93,7 +93,6 @@ router.get('/api/wiki', wikiController.getAll);
 router.get('/api/wiki/:slug', wikiController.getBySlug);
 
 // === ADMIN ENDPOINTS (Yêu cầu đăng nhập và có vai trò 'admin') ===
-// Thêm một giống chó mới
 /**
  * @swagger
  * /api/wiki:

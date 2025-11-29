@@ -97,7 +97,7 @@ export function BreedChatBox({
     bottom: 0,
   });
 
-  // CẬP NHẬT: Lấy số token còn lại từ context
+
   const remainingTokens = user?.remainingTokens ?? 0;
 
   const pointerDownInfo = useRef<{ x: number; y: number; time: number } | null>(
@@ -117,10 +117,10 @@ export function BreedChatBox({
         });
       }
     };
-    updateConstraints(); // Cập nhật lần đầu
+    updateConstraints();
     window.addEventListener("resize", updateConstraints);
     return () => window.removeEventListener("resize", updateConstraints);
-  }, [isMounted, snapEdge]); // Cập nhật lại khi kích thước button thay đổi (do snapEdge)
+  }, [isMounted, snapEdge]);
 
   // TẢI LỊCH SỬ CHAT KHI MỞ COMPONENT
   useEffect(() => {
@@ -188,7 +188,7 @@ export function BreedChatBox({
         messageContent,
         locale
       );
-      // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
+
       if (isAuthenticated) {
         await refetchUser();
       }
@@ -276,7 +276,7 @@ export function BreedChatBox({
       Math.min(newY, window.innerHeight - buttonHeight)
     );
 
-    // Cập nhật lại newX và newY sau khi đã giới hạn
+
     newX = constrainedX;
     newY = constrainedY;
 
@@ -292,14 +292,14 @@ export function BreedChatBox({
         <motion.div
           ref={buttonRef}
           drag
-          dragElastic={0} // 🟢 SỬA LỖI: Ngăn không cho kéo ra ngoài giới hạn
-          dragMomentum={false} // Giúp dừng lại ngay khi thả chuột
-          dragConstraints={constraints} // Sử dụng state constraints linh hoạt
+          dragElastic={0}
+          dragMomentum={false}
+          dragConstraints={constraints}
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
           onDrag={handleDrag}
           onDragEnd={handleDragEnd}
-          initial={false} // 🟢 SỬA LỖI: Ngăn hiệu ứng animation ban đầu
+          initial={false}
           animate={{ x: pos.x, y: pos.y }}
           transition={{ type: "spring", stiffness: 500, damping: 35 }}
           style={{
@@ -452,7 +452,6 @@ export function BreedChatBox({
                         </div>
                       </div>
                     )}
-                    {/* 🟢 SỬA LOGIC: ẨN GỢI Ý NGAY KHI ĐANG LOADING */}
                     {messages.length <= 1 && !isLoading && (
                       <div className="pt-4 border-t">
                         <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1.5 justify-center">

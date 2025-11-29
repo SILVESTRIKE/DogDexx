@@ -15,12 +15,10 @@ export const momoService = {
 
   async createPaymentRequest(amount: number, orderInfo: string, orderId: string, requestId: string): Promise<any> {
     return new Promise((resolve, reject) => {
-      // Thêm các tham số MoMo sẽ trả về vào redirectUrl để frontend có thể xử lý
-      // MoMo sẽ tự động nối các tham số như: partnerCode, orderId, requestId, amount, orderInfo, orderType, transId, resultCode, message, payType, responseTime, extraData
-      const redirectUrl = `${FRONTEND_URL}/profile?upgrade_status=true`; // Giữ URL đơn giản, MoMo sẽ tự thêm tham số
-      const ipnUrl = `${BACKEND_URL}/bff/user/momo-ipn`; // URL để MoMo gọi lại server của bạn
+      const redirectUrl = `${FRONTEND_URL}/profile?upgrade_status=true`;
+      const ipnUrl = `${BACKEND_URL}/bff/user/momo-ipn`;
       const requestType = "captureWallet";
-      const extraData = ""; // Base64 encoded JSON object, if needed
+      const extraData = "";
 
       const rawSignature = `accessKey=${accessKey}&amount=${amount}&extraData=${extraData}&ipnUrl=${ipnUrl}&orderId=${orderId}&orderInfo=${orderInfo}&partnerCode=${partnerCode}&redirectUrl=${redirectUrl}&requestId=${requestId}&requestType=${requestType}`;
 
@@ -63,7 +61,6 @@ export const momoService = {
         res.on('end', () => {
           try {
             const response = JSON.parse(body);
-            // SỬA LỖI: Chuyển đổi object thành chuỗi JSON để đảm bảo log hiển thị đầy đủ
             logger.info(`[MoMo] Full response from createPaymentRequest for orderId ${orderId}: ${JSON.stringify(response, null, 2)}`);
             if (response.resultCode === 0) {
               logger.info(`[MoMo] Payment request created successfully for orderId: ${orderId}`);

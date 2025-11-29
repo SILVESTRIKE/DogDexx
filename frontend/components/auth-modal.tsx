@@ -39,6 +39,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   const [username, setUsername] = useState("")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
   const [otp, setOtp] = useState("")
   
   // --- LOCATION STATES ---
@@ -60,7 +61,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
 
     try {
       if (view === "form") {
-        // 3. KIỂM TRA & LẤY TOKEN RECAPTCHA
         if (!executeRecaptcha) {
           console.error("ReCAPTCHA chưa sẵn sàng.");
           toast.error("Hệ thống bảo mật chưa sẵn sàng, vui lòng reload trang.");
@@ -68,7 +68,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           return;
         }
 
-        // Tạo token (action tương ứng với mode)
         const token = await executeRecaptcha(mode === "login" ? "login" : "register");
 
         if (!token) {
@@ -78,8 +77,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         }
 
         if (mode === "login") {
-          // 4. TRUYỀN TOKEN VÀO HÀM LOGIN
-          // (Lưu ý: AuthContext của bạn phải nhận tham số thứ 3 là token)
           await login(email, password, token) 
           
           toast.success(t('auth.loginTitle') + " thành công!")
@@ -94,7 +91,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             router.refresh()
           }
         } else { 
-          // === REGISTER LOGIC ===
           if (!username.trim()) {
             setError(t("auth.errorUsernameRequired"))
             setIsLoading(false)
@@ -104,7 +100,6 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           const countryData = allCountries.find(c => c.isoCode === selectedCountryCode);
           const countryName = countryData ? countryData.name : "Vietnam";
 
-          // 5. TRUYỀN TOKEN VÀO OBJECT REGISTER
           const response = await register({
             email,
             password,
@@ -113,16 +108,13 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             lastName,
             country: countryName, 
             city: selectedCityName, 
-            captchaToken: token // <--- Thêm dòng này
+            captchaToken: token
           })
           
           setMessage(response.message || "Mã OTP đã được gửi tới email của bạn.")
           setView("otp") 
         }
       } else { 
-        // === OTP LOGIC ===
-        // OTP thường không cần ReCAPTCHA v3 nếu flow trước đó đã check, 
-        // nhưng nếu API yêu cầu thì bạn cũng phải gọi executeRecaptcha ở đây.
         await verifyOtp(email, otp)
         setMessage(t('auth.otpSuccess'))
         toast.success("Xác thực thành công! Vui lòng đăng nhập.")
@@ -157,16 +149,15 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         {/* Form Content */}
         {view === 'form' && (
           <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
-             {/* ... Nội dung form ... */}
              {mode === "register" && (
               <>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Họ</Label>
+                    <Label>{t("auth.firstName")}</Label>
                     <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="Nguyen" />
                   </div>
                   <div className="space-y-2">
-                    <Label>Tên</Label>
+                    <Label>{t("auth.lastName")}</Label>
                     <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Van A" />
                   </div>
                 </div>
@@ -196,6 +187,10 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             <div className="space-y-2">
               <Label>{t("auth.email")}</Label>
               <Input type="email" value={email} onChange={e => setEmail(e.target.value)} required placeholder="email@example.com" />
+            </div>
+            <div className="space-y-2">
+              <Label>{t("auth.phoneNumber")}</Label>
+              <Input type="text" value={phoneNumber} onChange={e => setPhoneNumber(e.target.value)} required placeholder="0123456789" />
             </div>
             <div className="space-y-2">
               <Label>{t("auth.password")}</Label>

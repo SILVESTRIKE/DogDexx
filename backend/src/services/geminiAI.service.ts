@@ -80,13 +80,11 @@ export async function getChatHistory(
   if (sessionStr) {
     try {
       const session: RedisChatSession = JSON.parse(sessionStr);
-      // Bỏ qua 2 tin nhắn hệ thống đầu tiên (system prompt)
       return session.history.slice(1);
-    } catch (e) {}
+    } catch (e) { }
   }
   return [];
 }
-// Hàm thêm tin nhắn vào lịch sử chat trong Redis
 async function addToRedisHistory(
   key: string,
   role: "user" | "model",
@@ -112,9 +110,7 @@ async function addToRedisHistory(
 
   session.history.push({ role, parts: [{ text: content }] });
 
-  // Giới hạn 10 lượt hỏi-đáp (20 tin nhắn) + 2 tin nhắn khởi tạo
   if (session.history.length > 22) {
-    // Giữ lại 2 tin nhắn đầu (system prompt + welcome) và 20 tin nhắn gần nhất
     const systemMessages = session.history.slice(0, 2);
     const recentMessages = session.history.slice(-20);
     session.history = [...systemMessages, ...recentMessages];
@@ -129,8 +125,8 @@ export async function askGemini(
   breed: string,
   userMessage: string,
   lang: "vi" | "en" = "vi",
-  userId: string | undefined, // MỚI: ID người dùng đã đăng nhập
-  guestIdentifier: string | undefined // MỚI: Định danh khách
+  userId: string | undefined,
+  guestIdentifier: string | undefined
 ): Promise<{ reply: string; initialMessage?: string }> {
   try {
     const chatRedisKey = getChatRedisKey(userId, guestIdentifier, breed);
@@ -166,12 +162,11 @@ Yêu cầu:
         try {
           session = JSON.parse(sessionStr);
         } catch (e) {
-          session = null; // Vô hiệu hóa session nếu phân tích cú pháp thất bại
+          session = null;
         }
       }
     }
 
-    // Nếu chưa có session hoặc ngôn ngữ đã thay đổi, tạo session mới
     if (!session || session.lang !== lang) {
       const newHistory = [
         { role: "user", parts: [{ text: systemPromptText }] },
@@ -180,26 +175,23 @@ Yêu cầu:
       session = { lang, history: newHistory };
       if (redisClient) {
         await redisClient.set(chatRedisKey, JSON.stringify(session), {
-          EX: tokenConfig.guest.expirationSeconds, // Đặt thời gian hết hạn cho phiên chat
+          EX: tokenConfig.guest.expirationSeconds,
         });
       }
     }
 
-    // 3. Dùng model đã được khởi tạo sẵn
     const chat = model.startChat({
-      history: session.history, // Sử dụng lịch sử từ Redis
+      history: session.history,
     });
 
     const result = await chat.sendMessage(userMessage);
     const reply = result.response.text();
 
-    // CẬP NHẬT: Thêm tin nhắn mới vào lịch sử trước khi gửi về
     await addToRedisHistory(chatRedisKey, "user", userMessage);
     await addToRedisHistory(chatRedisKey, "model", reply);
 
     return { reply, initialMessage };
   } catch (error) {
-    // Trả về một tin nhắn lỗi thân thiện với người dùng
     const errorMessage =
       lang === "en"
         ? "I'm having a little trouble thinking right now. Please try again in a moment."
@@ -209,7 +201,6 @@ Yêu cầu:
   }
 }
 
-// Helper function for retrying promises with exponential backoff
 async function withRetry<T>(
   fn: () => Promise<T>,
   retries = 3,
@@ -222,7 +213,7 @@ async function withRetry<T>(
       return await fn();
     } catch (error) {
       lastError = error;
-      const delay = initialDelay * Math.pow(2, i); // Exponential backoff
+      const delay = initialDelay * Math.pow(2, i);
       if (i < retries - 1) {
         await sleep(delay);
       }
@@ -378,29 +369,25 @@ async function scrapeFirstShopeeProduct(
       );
       await driver.executeScript("arguments[0].click();", popupCloseButton);
       await sleep(1000);
-    } catch (error) {}
+    } catch (error) { }
 
-    // CẢI TIẾN 1: CUỘN XUỐNG TẬN CÙNG TRANG
     await driver.executeScript(
       "window.scrollTo(0, document.body.scrollHeight);"
     );
-    await sleep(1000); // Chờ 1 giây để các sản phẩm bắt đầu hiện ra
-    await driver.executeScript("window.scrollTo(0, 0);"); // Cuộn lại lên đầu để đảm bảo sản phẩm đầu tiên hiển thị
+    await sleep(1000);
+    await driver.executeScript("window.scrollTo(0, 0);");
     await sleep(500);
 
-    // CẢI TIẾN 2: CHỜ "VÙNG CHỨA SẢN PHẨM" TRƯỚC
     const resultsContainerSelector = By.css(
       "div.shopee-search-item-result__items"
     );
 
-    // CẢI TIẾN 3: TĂNG TIMEOUT TỔNG THỂ LÊN 30 GIÂY
     const resultsContainer = await driver.wait(
       until.elementLocated(resultsContainerSelector),
       30000
     );
 
-    // Bây giờ mới tìm sản phẩm đầu tiên BÊN TRONG vùng chứa đó
-    const productXPathSelector = ".//a[contains(@href, '-i.')]"; // Dùng ".//" để tìm bên trong element
+    const productXPathSelector = ".//a[contains(@href, '-i.')]";
     const firstProductElement = await resultsContainer.findElement(
       By.xpath(productXPathSelector)
     );
@@ -431,11 +418,6 @@ async function scrapeFirstShopeeProduct(
     }
   }
 }
-/**
- * [HÀM GIỮ LẠI] Tạo deeplink từ link sản phẩm gốc.
- * Hàm này vẫn cần thiết để chuyển đổi link gốc từ Top Products thành link affiliate.
- * Lưu ý: Tên biến accessToken đã đổi từ process.env.ACCESSTRADE_ACCESS_TOKEN thành process.env.ACCESSTRADE_API_KEY để nhất quán
- */
 async function createAffiliateLinkManually(
   destinationUrl: string
 ): Promise<string | null> {
@@ -446,7 +428,6 @@ async function createAffiliateLinkManually(
 
   const encodedDestinationUrl = encodeURIComponent(destinationUrl);
 
-  // ĐÚNG CÔNG THỨC LINK CÔNG KHAI
   const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
 
   return affiliateLink;
@@ -457,7 +438,6 @@ export async function getRecommendedProducts(
   lang: "vi" | "en" = "vi"
 ): Promise<string> {
   try {
-    // === BƯỚC 1: LẤY GỢI Ý TỪ GEMINI (Cập nhật để hỗ trợ đa ngôn ngữ) ===
     const prompt =
       lang === "en"
         ? `Based on the characteristics of the ${breed} dog, suggest 6 essential product types. For each type, provide:
@@ -492,25 +472,21 @@ Trả về dưới dạng một mảng JSON hợp lệ.`;
 
     const finalRecommendations = [];
 
-    // === BƯỚC 2: DUYỆT VÀ TẠO LINK SHOPEE TRỰC TIẾP (KHÔNG AFFILIATE) ===
     for (const idea of ideas) {
       if (!idea.searchKeywords) {
         continue;
       }
 
-      // Lấy từ khóa chính để tạo link
       const mainKeyword = idea.searchKeywords.split(",")[0].trim();
 
-      // Tạo URL tìm kiếm gốc, trực tiếp trên Shopee
       const shopeeSearchUrl = `https://shopee.vn/search?keyword=${encodeURIComponent(
         mainKeyword
       )}`;
 
-      // Đóng gói kết quả theo yêu cầu cuối cùng của bạn
       finalRecommendations.push({
         category: idea.categoryName,
         reason: idea.reason,
-        shopeeUrl: shopeeSearchUrl, // Trả về link Shopee gốc
+        shopeeUrl: shopeeSearchUrl,
       });
     }
 

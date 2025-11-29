@@ -13,16 +13,14 @@ import { NotFoundError } from "../errors";
 import { BrowseResult, DirectoryItem } from "../types/zod/admin.zod";
 import path from "path";
 import { AnalyticsEventName } from "../constants/analytics.constants";
-// THÊM IMPORT
 import { AppError } from "../errors";
 import { PlanModel } from "../models/plan.model";
-import { cloudinary } from "../config/cloudinary.config"; // <-- THÊM IMPORT CLOUDINARY
+import { cloudinary } from "../config/cloudinary.config";
 import { logger } from "../utils/logger.util";
 export class AdminService {
   /**
    * Tổng hợp dữ liệu cho trang Dashboard của Admin.
    */
-  //... (getDashboardData không thay đổi)
   public async getDashboardData() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -128,7 +126,6 @@ export class AdminService {
   /**
    * Duyệt hệ thống file ảo để quản lý media.
    */
-  // ... (browseDirectory không thay đổi)
   async browseDirectory(path: string, query: any): Promise<BrowseResult> {
     const parts = path.split("/").filter(Boolean);
     const { startDate, endDate } = query;
@@ -264,27 +261,20 @@ export class AdminService {
   /**
    * Duyệt hệ thống file media ảo cho trang quản lý media.
    */
-  // ... (browseMediaByLogic không thay đổi)
   async browseMediaByLogic(
     path: string
   ): Promise<{ directories: DirectoryItem[]; media: MediaDoc[] }> {
-    // Nếu path rỗng hoặc null, ta đang ở thư mục gốc.
-    // Trong MongoDB, ta truy vấn các document không có trường parent_id hoặc parent_id là null.
     const directoryId = path ? path : null;
 
     logger.info(
-      `[CORE_SERVICE] Duyệt thư mục thật với parent_id/directory_id: ${
-        directoryId === null ? '"null" (root)' : `"${directoryId}"`
+      `[CORE_SERVICE] Duyệt thư mục thật với parent_id/directory_id: ${directoryId === null ? '"null" (root)' : `"${directoryId}"`
       }`
     );
 
-    // 1. Tìm kiếm song song các thư mục con và các file media con
     const [subDirectories, mediaFiles] = await Promise.all([
-      // Tìm các thư mục có parent_id là directoryId hiện tại
       DirectoryModel.find({ parent_id: directoryId, isDeleted: false })
         .sort({ name: 1 })
         .lean(),
-      // Tìm các file media có directory_id là directoryId hiện tại
       MediaModel.find({ directory_id: directoryId, isDeleted: false }).sort({
         createdAt: -1,
       }),
@@ -294,28 +284,23 @@ export class AdminService {
       `[CORE_SERVICE] Kết quả từ CSDL: tìm thấy ${subDirectories.length} thư mục con, ${mediaFiles.length} media files.`
     );
 
-    // 2. Chuyển đổi kết quả thư mục sang định dạng DirectoryItem mà frontend cần
     const directoryItems: DirectoryItem[] = subDirectories.map((dir) => ({
-      // SỬA LỖI QUAN TRỌNG: Lấy _id của chính thư mục đó, KHÔNG phải creator_id
       id: dir._id.toString(),
       name: dir.name,
       type: "folder",
     }));
 
-    // 3. Trả về cả thư mục con và file media
     return { directories: directoryItems, media: mediaFiles };
   }
 
   /**
    * [Admin] Xóa vĩnh viễn một media file và các bản ghi liên quan.
    */
-  // ... (deleteMedia không thay đổi)
   async deleteMedia(mediaId: string): Promise<{ message: string }> {
     const media = await MediaModel.findById(mediaId);
     if (!media) throw new NotFoundError("Không tìm thấy media.");
 
     try {
-      // Giả định mediaPath là public_id của Cloudinary (ví dụ: public/uploads/images/abc.jpg)
       const public_id =
         media.mediaPath.substring(0, media.mediaPath.lastIndexOf(".")) ||
         media.mediaPath;
@@ -347,18 +332,15 @@ export class AdminService {
 
   /**
    * [Admin] Duyệt hệ thống file dataset trên Cloudinary.
-   * THAY THẾ HOÀN TOÀN LOGIC CŨ DÙNG `fs`
    */
   async browseDatasetDirectory(
     relativePath: string
   ): Promise<{ directories: DirectoryItem[]; files: any[] }> {
     try {
-      // Chuẩn hóa đường dẫn: loại bỏ dấu / ở đầu nếu có
       const folderPath = relativePath.startsWith("/")
         ? relativePath.substring(1)
         : relativePath;
 
-      // Gọi API Cloudinary để lấy thư mục con và file
       const [folderResult, resourcesResult] = await Promise.all([
         cloudinary.api.sub_folders(folderPath),
         cloudinary.api.resources({
@@ -368,7 +350,6 @@ export class AdminService {
         }),
       ]);
 
-      // Map kết quả thư mục
       const directories: DirectoryItem[] = folderResult.folders.map(
         (folder: { name: string; path: string }) => ({
           id: folder.path,
@@ -377,10 +358,8 @@ export class AdminService {
         })
       );
 
-      // Map kết quả file, chỉ lấy các file trực tiếp trong thư mục hiện tại
       const files = resourcesResult.resources
         .filter((resource: { public_id: string }) => {
-          // Lọc để đảm bảo file nằm trực tiếp trong thư mục, không phải trong thư mục con của nó
           const pathWithoutPrefix = resource.public_id.substring(
             folderPath.length ? folderPath.length + 1 : 0
           );
@@ -426,7 +405,7 @@ export class AdminService {
       '[Admin Service] Generating Cloudinary archive URL for "dataset" folder...'
     );
 
-    const url = cloudinary.utils.download_folder("dataset", {
+    const url = cloudinary.utils.download_folder("dataset/approved", {
       expires_at: Math.floor(Date.now() / 1000) + 3600, // Unix timestamp cho 1 giờ sau
     });
     logger.info("[Admin Service] Generated signed URL for dataset archive.");
@@ -480,7 +459,6 @@ export class AdminService {
 
     const enrichedUsers = await Promise.all(enrichedUsersPromises);
 
-    // THAY ĐỔI: Lấy thông tin các gói cước để hiển thị
     const plans = await PlanModel.find({ isDeleted: false });
     const plansMap = new Map(plans.map((p) => [p.slug, p.name]));
 
@@ -531,9 +509,7 @@ export class AdminService {
   public async getUsageStats() {
     const sevenDaysAgo = new Date(new Date().setDate(new Date().getDate() - 7));
 
-    // 1. Chạy song song: Lấy dữ liệu DB và gọi API Cloudinary
     const [users, plans, analyticsEvents, cloudinaryUsage] = await Promise.all([
-      // DB Queries
       UserModel.find({ isDeleted: false })
         .select("username email plan remainingTokens createdAt")
         .lean(),
@@ -548,7 +524,6 @@ export class AdminService {
         date: { $gte: sevenDaysAgo },
       }).lean(),
 
-      // Cloudinary API Call (Cần try-catch để tránh crash nếu Cloudinary lỗi)
       cloudinary.api.usage().catch((err) => {
         logger.error(
           "[AdminService] Failed to fetch Cloudinary usage:",
@@ -558,7 +533,6 @@ export class AdminService {
       }),
     ]);
 
-    // --- Xử lý dữ liệu Users & Tokens (Giữ nguyên logic cũ) ---
     const plansMap = new Map(plans.map((p) => [p.slug, p]));
 
     const usageData = users.map((user) => {
@@ -574,7 +548,6 @@ export class AdminService {
       };
     });
 
-    // Biểu đồ Tokens
     const tokensByDay = new Map<string, number>();
     for (let i = 0; i < 7; i++) {
       const d = new Date();
@@ -591,7 +564,6 @@ export class AdminService {
       .map(([date, tokens]) => ({ date, tokens }))
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Biểu đồ Plans
     const usersByPlan = usageData.reduce((acc, user) => {
       acc[user.plan] = (acc[user.plan] || 0) + 1;
       return acc;
@@ -601,50 +573,47 @@ export class AdminService {
       count,
     }));
 
-    // --- Xử lý dữ liệu Cloudinary (Mới) ---
-        let storageStats = null;
+    let storageStats = null;
     if (cloudinaryUsage) {
-        storageStats = {
-            // Lấy thông tin Credits (Quan trọng nhất cho gói Free)
-            credits: {
-                usage: cloudinaryUsage.credits?.usage || 0,
-                limit: cloudinaryUsage.credits?.limit || 0, // Gói Free sẽ hiện 25 ở đây
-                usage_percent: cloudinaryUsage.credits?.used_percent || 0
-            },
-            // Lấy thông tin Transformations (Số lần xử lý ảnh)
-            transformations: {
-                usage: cloudinaryUsage.transformations?.usage || 0,
-                limit: cloudinaryUsage.transformations?.limit || 0,
-                usage_percent: cloudinaryUsage.transformations?.used_percent || 0
-            },
-            storage: {
-                used_bytes: cloudinaryUsage.storage?.usage || 0,
-                limit_bytes: cloudinaryUsage.storage?.limit || 0, 
-                usage_percent: cloudinaryUsage.storage?.limit > 0 
-                    ? (cloudinaryUsage.storage.usage / cloudinaryUsage.storage.limit) * 100 
-                    : 0
-            },
-            bandwidth: {
-                used_bytes: cloudinaryUsage.bandwidth?.usage || 0,
-                limit_bytes: cloudinaryUsage.bandwidth?.limit || 0,
-                usage_percent: cloudinaryUsage.bandwidth?.limit > 0 
-                    ? (cloudinaryUsage.bandwidth.usage / cloudinaryUsage.bandwidth.limit) * 100 
-                    : 0
-            },
-            objects: {
-                total_files: cloudinaryUsage.objects?.usage || 0,
-                limit: cloudinaryUsage.objects?.limit || 0
-            },
-            plan: cloudinaryUsage.plan || 'Unknown',
-            last_updated: cloudinaryUsage.last_updated 
-        };
+      storageStats = {
+        credits: {
+          usage: cloudinaryUsage.credits?.usage || 0,
+          limit: cloudinaryUsage.credits?.limit || 0,
+          usage_percent: cloudinaryUsage.credits?.used_percent || 0
+        },
+        transformations: {
+          usage: cloudinaryUsage.transformations?.usage || 0,
+          limit: cloudinaryUsage.transformations?.limit || 0,
+          usage_percent: cloudinaryUsage.transformations?.used_percent || 0
+        },
+        storage: {
+          used_bytes: cloudinaryUsage.storage?.usage || 0,
+          limit_bytes: cloudinaryUsage.storage?.limit || 0,
+          usage_percent: cloudinaryUsage.storage?.limit > 0
+            ? (cloudinaryUsage.storage.usage / cloudinaryUsage.storage.limit) * 100
+            : 0
+        },
+        bandwidth: {
+          used_bytes: cloudinaryUsage.bandwidth?.usage || 0,
+          limit_bytes: cloudinaryUsage.bandwidth?.limit || 0,
+          usage_percent: cloudinaryUsage.bandwidth?.limit > 0
+            ? (cloudinaryUsage.bandwidth.usage / cloudinaryUsage.bandwidth.limit) * 100
+            : 0
+        },
+        objects: {
+          total_files: cloudinaryUsage.objects?.usage || 0,
+          limit: cloudinaryUsage.objects?.limit || 0
+        },
+        plan: cloudinaryUsage.plan || 'Unknown',
+        last_updated: cloudinaryUsage.last_updated
+      };
     }
-    
+
     return {
       usageData,
       tokensChartData,
       plansChartData,
-      storageStats, 
+      storageStats,
     };
   }
 }

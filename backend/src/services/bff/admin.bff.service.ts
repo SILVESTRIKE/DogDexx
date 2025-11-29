@@ -124,7 +124,7 @@ export class AdminBffService {
 
     // TRƯỜNG HỢP 2: Đang yêu cầu nội dung của một thư mục thật (hoặc thư mục gốc)
     const realDirectoryId = path;
-    
+
     // --- LOGGING: Vào nhánh "Thư mục thật" ---
     logger.info(`[BFF_SERVICE] -> Nhánh THƯ MỤC THẬT. ID: "${realDirectoryId}"`);
 
@@ -132,7 +132,7 @@ export class AdminBffService {
 
     // --- LOGGING: Kết quả nhận được từ Core Service ---
     logger.info(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
-    
+
     const virtualDirectories: DirectoryItem[] = [];
     const hasImages = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('image'));
     const hasVideos = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('video'));
@@ -142,7 +142,7 @@ export class AdminBffService {
 
     if (hasImages) {
       virtualDirectories.push({
-        id: `${path ? path + '/' : ''}images`, 
+        id: `${path ? path + '/' : ''}images`,
         name: 'images',
         type: 'folder',
       });
@@ -280,7 +280,7 @@ export class AdminBffService {
     return subscriptionService.getAllSubscriptions(options);
   }
 
-  // --- THÊM MỚI: AI Model Management ---
+
   public async getAIModels() {
     const models = await AIModelService.findAll();
     return {
@@ -302,7 +302,7 @@ export class AdminBffService {
     // Gọi hàm getReportData (giờ đã là public) để lấy JSON
     return this.reportService.getReportData(range);
   }
-  // --- THÊM MỚI: Report Management ---
+
   public async generateExcelReport(range: ReportDateRange): Promise<ExcelJS.Buffer> {
     return this.reportService.generateExcelReport(range);
   }

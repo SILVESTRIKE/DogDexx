@@ -157,14 +157,12 @@ export default function UsagePage() {
       {/* --- SECTION 1: CLOUDINARY STATS (NEW) --- */}
       {storageStats && (
         <>
-          {/* Hàng 1: Thẻ Credits (Quan trọng nhất) */}
           <div className="grid md:grid-cols-4 gap-4 mb-4">
              <Card className="md:col-span-4 border-orange-200 dark:border-orange-900 bg-orange-50/30 dark:bg-orange-950/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base font-medium flex items-center gap-2 text-orange-700 dark:text-orange-400">
                     <CreditCard className="h-5 w-5" />
                     {t("admin.usage.cloudinaryCredits", { plan: storageStats.plan })}
-                    {/* Tooltip giải thích */}
                     <span className="ml-auto text-xs font-normal text-muted-foreground hidden md:inline-block">
                       {t("admin.usage.creditInfo")}
                     </span>
@@ -193,10 +191,7 @@ export default function UsagePage() {
              </Card>
           </div>
 
-          {/* Hàng 2: Chi tiết Storage, Bandwidth, Transformations */}
           <div className="grid md:grid-cols-3 gap-4">
-            
-            {/* Transformations Card (MỚI) */}
             <Card className="border-pink-200 dark:border-pink-900 bg-pink-50/30 dark:bg-pink-950/20">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 text-pink-700 dark:text-pink-400">
@@ -209,7 +204,6 @@ export default function UsagePage() {
                 <p className="text-xs text-muted-foreground mt-1 mb-2">
                    {t("admin.usage.transformationsDesc")}
                 </p>
-                {/* Chỉ hiện thanh progress nếu có limit riêng (thường là 0 ở gói Free vì nó tính vào Credit) */}
                 {storageStats.transformations.limit > 0 && (
                     <div className="w-full bg-pink-100 dark:bg-pink-900 rounded-full h-1.5">
                         <div className="bg-pink-500 h-1.5 rounded-full" style={{ width: `${storageStats.transformations.usage_percent}%` }}></div>
@@ -218,7 +212,6 @@ export default function UsagePage() {
               </CardContent>
             </Card>
 
-            {/* Storage Card (Sửa lại hiển thị Limit) */}
             <Card className="border-blue-200 dark:border-blue-900 bg-blue-50/30 dark:bg-blue-950/20">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-400">
@@ -236,7 +229,6 @@ export default function UsagePage() {
               </CardContent>
             </Card>
 
-            {/* Bandwidth Card (Sửa lại hiển thị Limit) */}
             <Card className="border-green-200 dark:border-green-900 bg-green-50/30 dark:bg-green-950/20">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-400">

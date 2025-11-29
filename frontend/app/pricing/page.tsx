@@ -67,21 +67,17 @@ export default function PricingPage() {
   }, [t]);
 
   const handleUpgrade = async (planSlug: string) => {
-    // Nếu người dùng chưa đăng nhập, mở modal đăng nhập
     if (!user || !user.email) {
       setAuthModalMode("login");
       setAuthModalOpen(true);
       return;
     }
 
-    // Kiểm tra xem plan được click có phải là plan hiện tại của user không
     const isCurrentPlan = user.plan === planSlug;
 
-    // Nếu là plan hiện tại (nút "Bắt đầu"), điều hướng về trang chủ
     if (isCurrentPlan) {
       router.push("/");
     } else {
-      // Nếu là plan khác (nút "Nâng cấp"), điều hướng đến trang checkout
       router.push(`/checkout?plan=${planSlug}&period=${billingPeriod}`);
     }
   };
@@ -147,9 +143,6 @@ export default function PricingPage() {
                     : plan.priceYearly;
 
                 const isLowerTier = !!user && thisPlanPrice < currentUserPrice;
-
-                // Logic disable: Chỉ disable khi gói đó là gói thấp hơn.
-                // Nút "Bắt đầu" (của gói hiện tại) sẽ không bao giờ bị disable.
                 const isDisabled = isLowerTier;
 
                 return (
@@ -198,13 +191,8 @@ export default function PricingPage() {
                       </p>
                     </div>
 
-                    {/* --- SỬA NÚT BẤM --- */}
                     <Button
                       onClick={() => handleUpgrade(plan.slug)}
-                      // Logic màu sắc nút:
-                      // 1. Gói đang dùng (isEffectiveCurrent) -> "default" (Màu tím/Primary) để nổi bật nút Bắt đầu
-                      // 2. Gói thấp hơn (isLowerTier) -> "ghost" (Mờ)
-                      // 3. Gói nâng cấp -> "default" (Màu tím) hoặc "outline" tùy bạn chọn
                       variant={
                         isEffectiveCurrent
                           ? "default"
@@ -213,7 +201,6 @@ export default function PricingPage() {
                           : "default"
                       }
                       className={`mb-6 w-full ${
-                        // Nếu là gói thấp hơn thì thêm style cho biết bị vô hiệu hóa
                         isLowerTier
                           ? "bg-muted/50 text-muted-foreground hover:bg-muted/50 cursor-not-allowed"
                           : ""
@@ -221,13 +208,10 @@ export default function PricingPage() {
                       disabled={isDisabled}
                     >
                       {(() => {
-                        // 1. Gói đang dùng (Bất kể Free hay Pro) -> Hiện "Bắt đầu"
                         if (isEffectiveCurrent) return t("pricing.getStarted");
 
-                        // 2. Gói thấp hơn -> Hiện "Gói thấp hơn"
                         if (isLowerTier) return "Gói thấp hơn";
 
-                        // 3. Còn lại -> "Nâng cấp"
                         return t("pricing.upgrade");
                       })()}
                     </Button>

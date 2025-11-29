@@ -162,6 +162,7 @@ app.add_middleware(
 )
 
 config = None
+@app.on_event("startup")
 def startup_event():
     global config
     print("--- SERVER STARTING: Loading AI Models... ---")
@@ -230,7 +231,7 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
 
     # 1. Dùng Detect Model
     detector = config.detect_model if config.detect_model else config.classify_model
-    detect_res = detector(img, conf=0.15, verbose=False) 
+    detect_res = detector(img, conf=0.15, iou=config.IOU, verbose=False) 
     base_objects = process_results(detect_res, detector)
 
     final_results = []
@@ -254,7 +255,7 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
             crop = get_padded_crop(img, obj["box"])
             if crop.size > 0:
                 # Chạy qua model classify
-                cls_res = config.classify_model(crop, conf=config.IMAGE_CONF, verbose=False)
+                cls_res = config.classify_model(crop, conf=config.IMAGE_CONF, iou=config.IOU, verbose=False)
                 cls_dets = process_results(cls_res, config.classify_model)
                 
                 if cls_dets:
@@ -322,7 +323,7 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
                         if t_id not in breed_cache:
                             crop = get_padded_crop(frame, box)
                             if crop.size > 0:
-                                c_res = config.classify_model(crop, conf=0.4, verbose=False)
+                                c_res = config.classify_model(crop, conf=config.VIDEO_CONF, iou=config.IOU, verbose=False)
                                 c_dets = process_results(c_res, config.classify_model)
                                 if c_dets:
                                     best = max(c_dets, key=lambda x: x["confidence"])

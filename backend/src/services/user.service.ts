@@ -131,13 +131,11 @@ export const userService = {
       existingUserByEmail.firstName = data.firstName;
       existingUserByEmail.lastName = data.lastName;
 
-      // Cập nhật Country/City nếu có (nhờ sửa Zod/Model ở bước trước)
       if ((data as any).country) existingUserByEmail.country = (data as any).country;
       if ((data as any).city) existingUserByEmail.city = (data as any).city;
+      if ((data as any).phoneNumber) existingUserByEmail.phoneNumber = (data as any).phoneNumber;
 
-      // Xử lý Avatar mới (nếu có)
       if (avatarFile) {
-        // Đánh dấu avatar cũ là đã xóa (soft delete)
         if (existingUserByEmail.avatarPath) {
           await MediaModel.updateOne({ mediaPath: existingUserByEmail.avatarPath }, { isDeleted: true });
         }
@@ -176,7 +174,6 @@ export const userService = {
       remainingTokens: freePlan.tokenAllotment,
     });
 
-    // Xử lý Avatar
     if (avatarFile) {
       const avatarMedia = new MediaModel({
         name: `avatar-${user.username}`,
@@ -190,13 +187,10 @@ export const userService = {
 
     await user.save();
 
-    // Tạo thư mục gốc
     const directory = new DirectoryModel({ name: user.username, creator_id: user._id });
     await directory.save();
     user.directory_id = directory._id as any;
     await user.save();
-
-    // Gửi OTP
     await this.sendOtp(user.email);
 
     const enrichedUser = await _enrich(user);
@@ -253,7 +247,6 @@ export const userService = {
     const user = await UserModel.findById(userId);
     if (!user) throw new NotFoundError("Không tìm thấy người dùng.");
 
-    // Soft delete old avatar if exists
     if (user.avatarPath) {
       await MediaModel.findOneAndUpdate(
         { mediaPath: user.avatarPath },
@@ -269,11 +262,10 @@ export const userService = {
     });
     await newAvatarMedia.save();
 
-    // Use findOneAndUpdate to avoid triggering validation on other fields (like achievements)
     const updatedUser = await UserModel.findByIdAndUpdate(
       userId,
       { avatarPath: newAvatarMedia.mediaPath },
-      { new: true } // Return the updated document
+      { new: true }
     ).select("-password");
 
     if (!updatedUser)
@@ -288,7 +280,6 @@ export const userService = {
 
     const user = await UserModel.findOne({ email });
     if (!user) {
-      // Dù khó xảy ra ở luồng đăng ký, vẫn nên có để an toàn
       throw new NotFoundError("Không tìm thấy người dùng để gửi OTP");
     }
     if (user.verify) {
@@ -300,12 +291,11 @@ export const userService = {
     );
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Xóa OTP cũ và tạo OTP mới
     await OtpModel.deleteMany({
       email: email,
       type: OtpType.EMAIL_VERIFICATION,
     });
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const otpPayload = {
       email,
       otp: otpCode,
@@ -316,7 +306,6 @@ export const userService = {
 
     logger.info(`[USER_SERVICE] sendOtp: Đã lưu OTP. Chuẩn bị gửi email...`);
 
-    // === PHẦN SỬA LỖI QUAN TRỌNG NHẤT ===
     try {
       await emailService.sendEmail(
         user.email,
@@ -337,10 +326,8 @@ export const userService = {
     const user = await UserModel.findOne({ _id: id, isDeleted: false });
     if (!user) throw new ConflictError("Không tìm thấy người dùng để xóa.");
 
-    // Soft-delete the user
     await UserModel.updateOne({ _id: id }, { $set: { isDeleted: true } });
 
-    // Soft-delete related resources to avoid orphaned documents
     await Promise.all([
       MediaModel.updateMany(
         { creator_id: user._id },
@@ -360,7 +347,6 @@ export const userService = {
       ),
     ]);
 
-    // Delete OTP records for this user's email (cleanup)
     if (user.email) {
       await OtpModel.deleteMany({ email: user.email });
     }
@@ -384,7 +370,6 @@ export const userService = {
     updateData: Partial<Pick<UserDoc, "username" | "email" | "role" | "verify">>
   ): Promise<EnrichedUser> {
     const user = await UserModel.findById(userId);
-    // Sửa lỗi: Dùng NotFoundError và kiểm tra isDeleted
     if (!user || user.isDeleted)
       throw new NotFoundError("Không tìm thấy người dùng.");
     return this.updateUser(userId, updateData);
@@ -401,8 +386,7 @@ export const userService = {
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) throw new ConflictError("Email đã được sử dụng.");
 
-    // Tương tự createUser, lấy thông tin gói cước để gán token
-    const userPlan = await PlanModel.findOne({ slug: "free" }).lean(); // Giả sử admin tạo user cũng mặc định là free
+    const userPlan = await PlanModel.findOne({ slug: "free" }).lean();
 
     const newDirectory = await DirectoryModel.create({
       name: `${username}'s Directory`,
@@ -416,7 +400,7 @@ export const userService = {
       directory_id: newDirectory._id,
       verify: verify,
       plan: "free",
-      remainingTokens: userPlan?.tokenAllotment || 10, // Gán token, fallback về 10 nếu không tìm thấy plan
+      remainingTokens: userPlan?.tokenAllotment || 10,
     });
     await user.save();
     newDirectory.creator_id = user._id as mongoose.Types.ObjectId;

@@ -32,7 +32,7 @@ export const subscriptionService = {
 
     if (!user) throw new NotFoundError("Không tìm thấy người dùng");
     if (!plan) throw new NotFoundError("Không tìm thấy gói cước");
-    
+
     const currentSubscription = await SubscriptionModel.findOne({
       userId: user._id,
       status: { $in: ['active', 'trialing'] }
@@ -40,16 +40,16 @@ export const subscriptionService = {
 
     if (currentSubscription && currentSubscription.planSlug === planSlug) {
 
-        const now = new Date();
-        const threeDays = 3 * 24 * 60 * 60 * 1000;
-        if (currentSubscription.currentPeriodEnd.getTime() - now.getTime() > threeDays) {
-            throw new BadRequestError(`Bạn đang sử dụng gói ${plan.name}. Vui lòng chờ đến gần ngày hết hạn để gia hạn.`);
-        }
+      const now = new Date();
+      const threeDays = 3 * 24 * 60 * 60 * 1000;
+      if (currentSubscription.currentPeriodEnd.getTime() - now.getTime() > threeDays) {
+        throw new BadRequestError(`Bạn đang sử dụng gói ${plan.name}. Vui lòng chờ đến gần ngày hết hạn để gia hạn.`);
+      }
     }
-    
+
 
     const amount = billingPeriod === "monthly" ? plan.priceMonthly : plan.priceYearly;
-    
+
     const orderId = uuidv4();
     const requestId = orderId;
     const orderInfo = `Nâng cấp tài khoản lên gói ${plan.name} (${billingPeriod === 'monthly' ? 'tháng' : 'năm'})`;
@@ -89,7 +89,7 @@ export const subscriptionService = {
           { email: { $regex: search, $options: 'i' } }
         ]
       }).select('_id');
-      
+
       const userIds = users.map(u => u._id);
       if (userIds.length === 0) {
         return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } };
@@ -100,7 +100,7 @@ export const subscriptionService = {
     const [transactions, total] = await Promise.all([
       TransactionModel.find(query)
         // Populate 'user' vì Frontend TransactionPage cần 'username' và 'email'
-        .populate('user', 'username email name') 
+        .populate('user', 'username email name')
         .populate('plan', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -115,7 +115,6 @@ export const subscriptionService = {
 
   /**
    * [Admin] Lấy danh sách các ĐĂNG KÝ (Subscriptions)
-   * SỬA LỖI: Frontend cần 'name', nhưng DB có thể chỉ có 'username'.
    */
   async getAllSubscriptions(options: { page: number; limit: number; search?: string; status?: SubscriptionDoc['status']; planId?: string; }) {
     const { page = 1, limit = 10, search, status, planId } = options;
@@ -134,7 +133,7 @@ export const subscriptionService = {
           { name: { $regex: search, $options: 'i' } } // Tìm cả tên nếu có
         ]
       }).select('_id');
-      
+
       const userIds = users.map(u => u._id);
       if (userIds.length === 0) {
         return { data: [], pagination: { total: 0, page, limit, totalPages: 0 } };
@@ -144,8 +143,7 @@ export const subscriptionService = {
 
     const [subscriptions, total] = await Promise.all([
       SubscriptionModel.find(query)
-        // SỬA LỖI: Populate cả 'username' và 'name' để fallback
-        .populate('userId', 'username email name') 
+        .populate('userId', 'username email name')
         .populate('planId', 'name')
         .sort({ createdAt: -1 })
         .skip(skip)
@@ -154,13 +152,10 @@ export const subscriptionService = {
       SubscriptionModel.countDocuments(query)
     ]);
 
-    // XỬ LÝ HẬU KỲ: Đảm bảo field 'name' luôn có dữ liệu cho Frontend
     const processedSubscriptions = subscriptions.map((sub: any) => {
       if (sub.userId) {
-        // Nếu user không có field 'name', dùng 'username' thay thế
-        // Frontend: sub.userId?.name
         if (!sub.userId.name) {
-            sub.userId.name = sub.userId.username || sub.userId.email.split('@')[0];
+          sub.userId.name = sub.userId.username || sub.userId.email.split('@')[0];
         }
       }
       return sub;
@@ -209,15 +204,15 @@ export const subscriptionService = {
           status: { $in: ['active', 'trialing'] }
         },
         {
-          $set: { 
-            status: 'canceled', 
-            canceledAt: new Date() 
+          $set: {
+            status: 'canceled',
+            canceledAt: new Date()
           }
         }
       );
-      
+
       logger.info(`[MoMo IPN] Canceled previous active subscriptions for user ${user._id}`);
-      
+
       transaction.status = 'completed';
       transaction.gatewayTransactionId = transId;
       transaction.rawIpnResponse = JSON.stringify(ipnPayload);
@@ -245,7 +240,7 @@ export const subscriptionService = {
 
       transaction.subscriptionId = newSubscription._id as Types.ObjectId; // Cast to fix type
       await transaction.save();
-      
+
       await UserModel.findByIdAndUpdate(user._id, {
         $set: { plan: plan.slug, remainingTokens: plan.tokenAllotment, subscriptionId: newSubscription._id }
       });
@@ -297,8 +292,8 @@ export const subscriptionService = {
 
         // 2. Downgrade user về gói Free
         await UserModel.findByIdAndUpdate(sub.userId, {
-          $set: { 
-            plan: 'free', 
+          $set: {
+            plan: 'free',
             remainingTokens: freePlan.tokenAllotment,
             subscriptionId: null // Xóa liên kết subscription
           }

@@ -84,12 +84,10 @@ export default function Home() {
     };
   }, [trackVisit, cleanupPreview, previewUrl]);
 
-  // Thêm listener cho phím Enter
   useEffect(() => {
     const handleKeyPress = (event: KeyboardEvent) => {
-      // Nếu nhấn Enter, có file được chọn và chưa bắt đầu dự đoán
       if (event.key === "Enter" && selectedFile && !isDetecting) {
-        event.preventDefault(); // Ngăn hành vi mặc định (nếu có)
+        event.preventDefault();
         handleDetect();
       }
     };
@@ -98,7 +96,7 @@ export default function Home() {
     return () => {
       window.removeEventListener("keydown", handleKeyPress);
     };
-  }, [selectedFile, isDetecting]); // Dependencies để hook chạy lại khi state thay đổi
+  }, [selectedFile, isDetecting]);
 
   const clearTimeouts = () => {
     timeoutRefs.current.forEach(clearTimeout);
@@ -106,13 +104,12 @@ export default function Home() {
   };
 
   const handleFileSelect = (file: File) => {
-    // Validate kích thước file nếu cần (ví dụ: max 50MB)
-    if (file.size > 50 * 1024 * 1024) {
-      setError(t("home.fileTooLarge") || "File too large (Max 50MB)")
+    if (file.size > 20 * 1024 * 1024) {
+      setError(t("home.fileTooLarge") || "File too large (Max 20MB)")
       return
     }
 
-    cleanupPreview() // Xóa URL cũ trước khi tạo mới
+    cleanupPreview()
     setSelectedFile(file)
     setError(null)
     
@@ -142,7 +139,7 @@ export default function Home() {
 
   const runDetectionSimulation = () => {
     setUploadProgress(0);
-    clearTimeouts(); // Reset các timer cũ
+    clearTimeouts();  
 
     const t1 = setTimeout(() => {
       setDetectionStatusMessage(t("home.simulation.uploading"));
@@ -183,7 +180,7 @@ export default function Home() {
             response = await apiClient.predictVideo(selectedFile!, onProgress);
         }
 
-        clearTimeouts(); // Dừng giả lập ngay khi có kết quả thật
+        clearTimeouts(); 
         setUploadProgress(100);
         setDetectionStatusMessage(t("home.simulation.success"));
 
@@ -356,7 +353,6 @@ export default function Home() {
                       </div>
                     </div>
                   ) : (
-                    // PREVIEW STATE
                     <div className="space-y-6 md:space-y-8 animate-in fade-in zoom-in-95 duration-300">
                       <div className="relative rounded-2xl overflow-hidden bg-black/90 border border-white/10 shadow-inner group">
                         {fileType === "image" && previewUrl && (
@@ -459,7 +455,6 @@ export default function Home() {
                 </TabsContent>
               </Tabs>
 
-              {/* Progress & Error Display (Shared) */}
               {isDetecting && (
                 <div className="space-y-3 p-4 rounded-xl bg-secondary/50 border border-border/50 mt-4">
                   <div className="flex justify-between text-sm font-medium">

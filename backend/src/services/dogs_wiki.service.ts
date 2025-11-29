@@ -18,16 +18,13 @@ export interface QueryOptions {
 }
 
 export const wikiService = {
-  /**
-   * CREATE: Admin thêm một giống chó mới vào wiki
-   */
   async createBreed(data: Partial<DogBreedWikiDoc>, lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc> {
     const Model = getDogBreedWikiModel(lang);
     if (!data.slug || !data.breed) {
       throw new Error('Slug và Breed Name là bắt buộc.');
     }
-    const existing = await Model.findOne({ 
-      $or: [{ slug: data.slug }, { breed: data.breed }] 
+    const existing = await Model.findOne({
+      $or: [{ slug: data.slug }, { breed: data.breed }]
     });
     if (existing) {
       throw new ConflictError('Slug hoặc Display Name đã tồn tại.');
@@ -35,9 +32,6 @@ export const wikiService = {
     return Model.create(data);
   },
 
-  /**
-   * READ (Single): Lấy thông tin của một giống chó bằng slug
-   */
   async getBreedBySlug(slug: string, lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc> {
     const Model = getDogBreedWikiModel(lang);
     const breed = await Model.findOne({
@@ -48,9 +42,6 @@ export const wikiService = {
     return breed;
   },
 
-  /**
-   * READ (Multiple by Slugs): Lấy thông tin của nhiều giống chó bằng mảng các slug.
-   */
   async getBreedsBySlugs(slugs: string[], lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc[]> {
     const Model = getDogBreedWikiModel(lang);
     if (!slugs || slugs.length === 0) {
@@ -62,9 +53,6 @@ export const wikiService = {
     });
   },
 
-  /**
-   * READ (Multiple): Lấy danh sách tất cả các giống chó (có phân trang và tìm kiếm)
-   */
   async getAllBreeds(options: QueryOptions) {
     const { page = 1, limit = 20, search, group, energy_level, trainability, shedding_level, suitable_for, ids, excludeIds, lang = 'en' } = options;
     const Model = getDogBreedWikiModel(lang);
@@ -83,7 +71,7 @@ export const wikiService = {
     }
 
     const query: any = { isDeleted: { $ne: true } };
-    
+
     if (search) {
       const searchRegex = { $regex: search, $options: 'i' };
       query.$or = [{ breed: searchRegex }, { slug: searchRegex }];
@@ -108,24 +96,18 @@ export const wikiService = {
         .lean(),
       Model.countDocuments(query)
     ]);
-    
+
     return {
       data: breeds,
       pagination: { total, page, limit, totalPages: Math.ceil(total / limit) }
     };
   },
 
-  /**
-   * READ: Đếm tổng số giống chó trong hệ thống.
-   */
   async getTotalBreedsCount(lang: 'vi' | 'en' = 'en'): Promise<number> {
     const Model = getDogBreedWikiModel(lang);
     return Model.countDocuments({ isDeleted: { $ne: true } });
   },
 
-  /**
-   * UPDATE: Admin cập nhật thông tin của một giống chó
-   */
   async updateBreed(slug: string, data: Partial<DogBreedWikiDoc>, lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc> {
     const Model = getDogBreedWikiModel(lang);
     const breed = await Model.findOneAndUpdate(
@@ -137,9 +119,6 @@ export const wikiService = {
     return breed;
   },
 
-  /**
-   * DELETE (Soft): Admin xóa mềm một giống chó
-   */
   async softDeleteBreed(slug: string, lang: 'vi' | 'en' = 'en'): Promise<{ message: string }> {
     const Model = getDogBreedWikiModel(lang);
     const result = await Model.updateOne(
@@ -147,7 +126,7 @@ export const wikiService = {
       { isDeleted: true }
     );
     if (result.modifiedCount === 0) {
-        throw new NotFoundError(`Không tìm thấy giống chó với slug: ${slug} để xóa.`);
+      throw new NotFoundError(`Không tìm thấy giống chó với slug: ${slug} để xóa.`);
     }
     return { message: 'Giống chó đã được xóa mềm thành công.' };
   },

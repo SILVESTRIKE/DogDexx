@@ -65,8 +65,6 @@ export const getProfile = async (req: Request, res: Response, next: NextFunction
 export const getSessionStatus = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if ((req as any).user) {
-      // SỬA ĐỔI: Thay vì gọi getProfile (tốn kém), chỉ lấy thông tin user cần thiết.
-      // `userService.getById` đã được tối ưu để làm giàu thông tin user với plan.
       const user = await userService.getById((req as any).user._id.toString());
       if (!user) {
         throw new NotFoundError("User session is invalid.");

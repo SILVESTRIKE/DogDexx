@@ -11,6 +11,7 @@ export interface User {
   avatarUrl?: string;
   country?: string;
   city?: string;
+  phoneNumber?: string;
   remainingTokens: number;
   tokenAllotment: number;
 }
@@ -150,13 +151,13 @@ export interface FeedbackPayload {
 }
 
 export interface Achievement {
-  id: string; // Achievement key/identifier
-  title: string; // Đổi từ name
+  id: string;
+  title: string;
   description: string;
   icon: string;
   unlocked: boolean;
-  unlockedAt?: string | null; // Thêm trường này
-  requiredCount: number; // Thêm trường này
+  unlockedAt?: string | null;
+  requiredCount: number;
 }
 
 export interface CollectionStats {
@@ -177,7 +178,7 @@ export interface ApiError {
   error?: any;
 }
 
-// THÊM MỚI: Cấu trúc cho tin nhắn lỗi qua WebSocket
+
 export interface WebSocketError {
   type: "error";
   code?: "INSUFFICIENT_TOKENS" | string; // Mã lỗi để xác định nguyên nhân
@@ -186,11 +187,11 @@ export interface WebSocketError {
 
 // Cấu trúc cho một con chó được phát hiện trong mảng 'detections'
 export interface Detection {
-  track_id?: number; // <<< THÊM DÒNG NÀY
+  track_id?: number;
   detectedBreed: string; // slug
   confidence: number;
   boundingBox: BoundingBox;
-  breedInfo: EnrichedDogBreed | null; // Cập nhật để khớp với dữ liệu được làm giàu từ BFF
+  breedInfo: EnrichedDogBreed | null;
 }
 
 // Cấu trúc response hoàn chỉnh từ BFF
@@ -208,7 +209,7 @@ export interface BffPredictionResponse {
 }
 
 // Cấu trúc cho một sản phẩm được gợi ý
-// CẬP NHẬT: Cấu trúc này giờ đây khớp với dữ liệu trả về từ BFF
+
 export interface RecommendedProduct {
   category: string;
   reason: string;
@@ -219,7 +220,7 @@ export interface RecommendedProduct {
 // Nó chứa các trường được chọn lọc từ DogBreedWiki
 export interface EnrichedDogBreed {
   slug: string;
-  breed: string; // Thêm trường này
+  breed: string;
   group?: string;
   description: string;
   life_expectancy?: string;
@@ -232,20 +233,20 @@ export interface EnrichedDogBreed {
   weight?: string;
   good_with_children?: boolean;
   suitable_for?: string[];
+  pokedexNumber?: number;
 }
 
-// THÊM MỚI: Các kiểu dữ liệu cho Gói cước (Plan)
+
 export interface Plan {
   name: string;
   slug: "free" | "starter" | "professional" | "enterprise" | "guest";
   priceMonthly: number;
   priceYearly: number;
-  tokenAllotment: number; // Số token được cấp mỗi chu kỳ
+  tokenAllotment: number;
   apiAccess: boolean;
-  description?: string; // Mô tả ngắn cho gói
-  isFeatured?: boolean; // Gói nổi bật
+  description?: string;
+  isFeatured?: boolean;
   features?: {
-    // Danh sách các tính năng nổi bật
     name: string;
     included: boolean;
   }[];
@@ -256,9 +257,9 @@ export interface PaginatedPlansResponse {
   total: number;
 }
 
-// THÊM MỚI: Kiểu dữ liệu cho một Đăng ký (Subscription)
+
 export interface Subscription {
-  _id: string; // Thêm _id để dùng làm key
+  _id: string;
   userId: {
     _id: string;
     name: string;

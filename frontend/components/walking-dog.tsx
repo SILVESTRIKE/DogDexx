@@ -38,20 +38,20 @@ type Behavior =
   | "FALLING"
   | "PET"
   | "CHASE"
-  | "BEG"; // Thêm BEG
+  | "BEG";
 
 export default function WalkingDog() {
   const [behavior, setBehavior] = useState<Behavior>("IDLE");
   const [direction, setDirection] = useState(1);
   const [showHeart, setShowHeart] = useState(false);
-  const [tick, setTick] = useState(0); // Trigger render
+  const [tick, setTick] = useState(0);
 
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
 
   const xPos = useRef(0);
-  const mouseX = useRef<number | null>(null); // Lưu vị trí chuột
-  const isInteracting = useRef(false); // Đang kéo thả hoặc được vuốt ve
+  const mouseX = useRef<number | null>(null);
+  const isInteracting = useRef(false);
   const controls = useAnimation();
 
   useEffect(() => {

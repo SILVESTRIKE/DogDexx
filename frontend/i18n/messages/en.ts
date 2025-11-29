@@ -57,6 +57,7 @@ export default {
     username: "Username",
     firstName: "First Name",
     lastName: "Last Name",
+    phoneNumber: "Phone Number",
     avatar: "Avatar (optional)",
     emailPlaceholder: "email@example.com",
     passwordPlaceholder: "••••••••",

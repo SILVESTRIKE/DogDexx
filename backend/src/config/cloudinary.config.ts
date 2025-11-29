@@ -59,15 +59,13 @@ export const predictionStorage = new CloudinaryStorage({
 
 export const avatarStorage = new CloudinaryStorage({
   cloudinary: cloudinary,
-  params: async (req: Request, file: Express.Multer.File) => { // SỬA ĐỔI: Chuyển thành hàm async
+  params: async (req: Request, file: Express.Multer.File) => {
     try {
-      // SỬA ĐỔI: Chỉ định thư mục, để Cloudinary tự tạo tên file.
-      // Điều này giúp quản lý file trong Media Library dễ dàng hơn.
       const folderPath = 'public/uploads/avatars';
 
       const result = {
         folder: folderPath,
-        resource_type: 'image', // Avatar luôn là ảnh        
+        resource_type: 'image',
         asset_folder: folderPath
       };
 

@@ -5,17 +5,15 @@ import { IncomingMessage } from 'http';
 import { parse } from 'url';
 import { logger } from '../utils/logger.util';
 import { NotAuthorizedError } from '../errors';
-import { tokenConfig } from '../config/token.config'; // Import tokenConfig để lấy secret chính xác
+import { tokenConfig } from '../config/token.config';
 
-// SỬA: Cập nhật interface để khớp với payload token (dùng 'id' thay vì 'userId')
 interface JwtPayload {
-  id: string; 
+  id: string;
   role?: string;
 }
 export const optionalAuthMiddleware: RequestHandler = async (req, res, next) => {
   const authHeader = req.headers.authorization;
 
-  // Logic fingerprint
   const visitorIdFromHeader = req.headers['x-visitor-id'] as string;
   if (visitorIdFromHeader) {
     (req as any).fingerprint = {
@@ -32,13 +30,13 @@ export const optionalAuthMiddleware: RequestHandler = async (req, res, next) => 
   const token = authHeader.split(" ")[1];
   try {
     const secret = tokenConfig.access.secret || process.env.ACCESS_TOKEN_SECRET || process.env.JWT_SECRET!;
-    
+
     // 2. Verify Token
     const decoded = jwt.verify(token, secret) as JwtPayload;
 
     if (!decoded.id) {
-        // Payload sai -> Báo lỗi 401
-        throw new Error("Token missing 'id' field");
+      // Payload sai -> Báo lỗi 401
+      throw new Error("Token missing 'id' field");
     }
 
     const user = await userService.getById(decoded.id);

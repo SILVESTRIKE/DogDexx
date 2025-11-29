@@ -66,7 +66,6 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
       {/* Phần nội dung của thẻ không thay đổi */}
       <div className="aspect-square bg-gradient-to-br from-muted to-secondary flex items-center justify-center relative overflow-hidden">
           <img
-            // SỬA LỖI: Ưu tiên dùng dog.imageUrl. Nếu không có, mới fallback sang Unsplash.
             src={dog.mediaUrl || `https://source.unsplash.com/300x300/?${encodeURIComponent(dog.breed + " dog")}`}
             alt={dog.breed}
             width={300}

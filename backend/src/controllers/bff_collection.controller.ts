@@ -62,11 +62,10 @@ export const getDogDex = async (req: Request, res: Response) => {
 
     // 2. Nếu user đã đăng nhập, LUÔN LUÔN lấy dữ liệu bộ sưu tập của họ
     if (userId) {
-      const userCollection = await collectionService.getUserCollection(userId, lang); // Đã sửa ở các lượt trước, đảm bảo đúng
+      const userCollection = await collectionService.getUserCollection(userId, lang);
       collectedBreedsCount = userCollection.length;
 
       userCollection.forEach((item: any) => {
-        // Dữ liệu đã được populate và lean()
         if (item.breed_id?.slug && item.first_prediction_id) {
           userCollectionMap.set(item.breed_id.slug, {
             collectedAt: item.first_prediction_id?.createdAt,
@@ -78,7 +77,6 @@ export const getDogDex = async (req: Request, res: Response) => {
       // 3. Áp dụng bộ lọc isCollected NẾU nó được cung cấp
       const collectedBreedIds = userCollection.map((item: any) => item.breed_id?._id).filter(id => id);
       if (userId && isCollected === 'true') {
-        // Nếu không có con chó nào được sưu tầm, trả về một ID không thể tồn tại để đảm bảo kết quả rỗng
         options.ids = collectedBreedIds.length > 0 ? collectedBreedIds : [new Types.ObjectId()];
       } else if (isCollected === 'false') {
         options.excludeIds = collectedBreedIds;
@@ -88,7 +86,7 @@ export const getDogDex = async (req: Request, res: Response) => {
     // 4. Gọi Wiki Service MỘT LẦN DUY NHẤT với tất cả các options
     const [breedsResult, totalBreedsInSystem] = await Promise.all([
       wikiService.getAllBreeds(options),
-      wikiService.getTotalBreedsCount(lang) // Lấy tổng số theo ngôn ngữ, đã sửa ở service
+      wikiService.getTotalBreedsCount(lang)
     ]);
 
     // 5. "Làm giàu" kết quả với thông tin thu thập và biến đổi URL media
@@ -96,9 +94,9 @@ export const getDogDex = async (req: Request, res: Response) => {
       const collectionInfo = userCollectionMap.get(breed.slug);
       return {
         slug: breed.slug,
-        breed: breed.breed, // Giữ lại tên gốc để nhất quán với DogCard
+        breed: breed.breed,
         group: breed.group,
-        pokedexNumber: breed.pokedexNumber, // SỬA: Đảm bảo gán từ pokedexNumber
+        pokedexNumber: breed.pokedexNumber,
         origin: breed.origin,
         mediaUrl: breed.mediaUrl,
         rarity_level: breed.rarity_level,
@@ -122,11 +120,6 @@ export const getDogDex = async (req: Request, res: Response) => {
       pagination: breedsResult.pagination,
     });
   } catch (error) {
-    // `res` is available here, but we should use `next` for error handling in Express
-    // For now, let's assume there's a `next` function available or this is a simplified example.
-    // A proper Express controller would have `(req, res, next)`.
-    // Since this is a `res.status(500)` call, it implies error handling.
-    // Let's log the error and send a generic response.
     logger.error('Error in getDogDex:', error);
     res.status(500).json({ message: 'Internal Server Error' });
   }
@@ -135,24 +128,19 @@ export const getDogDex = async (req: Request, res: Response) => {
 export const addBreed = async (req: Request, res: Response) => {
   const userId = req.user!._id;
 
-  // Với kiến trúc mới, việc thêm thủ công không được hỗ trợ
   throw new BadRequestError("Manual collection is not supported in this version.");
 
   /*
-  // Logic dưới đây sẽ không được thực thi, nhưng đã được sửa lỗi để tham khảo
   const userCollections = await collectionService.getUserCollection(userId);
   const user = await userService.getById(userId.toString());
 
-  // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
   const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
-  // Bây giờ `user` chắc chắn không phải là null
   const achievements = await achievementService.processUserAchievements(user, userCollections, lang);
   const unlockedAchievements = achievements.filter(a => a.unlocked);
-  const unlockedAchievements = achievements.filter((a: any) => a.unlocked);
 
   const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
 
@@ -161,8 +149,6 @@ export const addBreed = async (req: Request, res: Response) => {
     isNew: false,
     totalCollected: userCollections.length,
     achievementsUnlocked: unlockedAchievements.map(a => a.key),
-    achievementsUnlocked: unlockedAchievements.map((a: any) => a.key),
-    // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
     nextAchievement: nextAchievement
       ? {
           name: nextAchievement.name,
@@ -195,10 +181,9 @@ export const getAchievements = async (req: Request, res: Response) => {
     const [user, userCollections, totalBreedsInSystem] = await Promise.all([
       userService.getById(userId.toString()),
       collectionService.getUserCollection(userId, lang),
-      wikiService.getTotalBreedsCount(lang), // Sửa ở đây: truyền lang vào
+      wikiService.getTotalBreedsCount(lang),
     ]);
 
-    // SỬA LỖI 1: Kiểm tra `user` có tồn tại không
     if (!user) {
       throw new NotFoundError('User not found');
     }
@@ -215,7 +200,6 @@ export const getAchievements = async (req: Request, res: Response) => {
         unlockedAchievements: unlockedCount,
         totalCollected: userCollections.length,
       },
-      // SỬA LỖI 2 & 3: Kiểm tra `nextAchievement` trước khi truy cập thuộc tính
       nextAchievement: nextAchievement
         ? {
           name: nextAchievement.name,
@@ -228,15 +212,14 @@ export const getAchievements = async (req: Request, res: Response) => {
         title: ach.name,
         description: ach.description,
         icon: ach.icon || '🏆',
-        requiredCount: ach.condition?.value || 0, // <-- Sửa ở đây
+        requiredCount: ach.condition?.value || 0,
         unlocked: ach.unlocked,
         unlockedAt: unlockedMap.get(ach.key) || null,
       }))
     };
 
-    // THÊM: Lưu kết quả vào cache trước khi gửi response
     if (redisClient) {
-      await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 }); // Cache trong 5 phút
+      await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 });
     }
 
     res.status(200).json(responseData);

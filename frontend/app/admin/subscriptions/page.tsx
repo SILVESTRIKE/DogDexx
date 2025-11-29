@@ -19,19 +19,17 @@ import {
 } from "@/components/ui/pagination";
 import { format } from "date-fns";
 
-// Định nghĩa lại Interface cho khớp với dữ liệu Backend trả về
 interface Subscription {
   _id: string;
   userId: {
     _id: string;
     username?: string;
     email: string;
-  } | null; // userId có thể null nếu user bị xóa
+  } | null;
   planId: {
     name: string;
   } | null;
   status: string;
-  // SỬA LỖI DATE: Dùng đúng tên trường trong DB
   currentPeriodStart: string; 
   currentPeriodEnd: string;
 }
@@ -40,14 +38,14 @@ const SubscriptionStatusBadge = ({ status }: { status: string }) => {
   const variant = useMemo(() => {
     switch (status) {
       case "active":
-        return "default"; // Xanh lá/Đen tùy theme
+        return "default";
       case "pending":
       case "trialing":
-        return "secondary"; // Xám
+        return "secondary";
       case "cancelled":
       case "expired":
       case "past_due":
-        return "destructive"; // Đỏ
+        return "destructive";
       default:
         return "outline";
     }
@@ -159,7 +157,6 @@ export default function AdminSubscriptionsPage() {
                 subscriptions.map((sub: Subscription) => (
                   <TableRow key={sub._id}>
                     <TableCell>
-                      {/* SỬA LỖI NAME: Ưu tiên Name -> Username -> Email prefix */}
                       <div className="font-medium">
                         {sub.userId?.username || sub.userId?.username || 'Unknown User'}
                       </div>
@@ -176,11 +173,9 @@ export default function AdminSubscriptionsPage() {
                       <SubscriptionStatusBadge status={sub.status} />
                     </TableCell>
                     <TableCell>
-                        {/* SỬA LỖI DATE: Dùng currentPeriodStart */}
                         {sub.currentPeriodStart ? format(new Date(sub.currentPeriodStart), "dd/MM/yyyy") : "N/A"}
                     </TableCell>
                     <TableCell>
-                        {/* SỬA LỖI DATE: Dùng currentPeriodEnd */}
                         {sub.currentPeriodEnd ? format(new Date(sub.currentPeriodEnd), "dd/MM/yyyy") : "N/A"}
                     </TableCell>
                   </TableRow>

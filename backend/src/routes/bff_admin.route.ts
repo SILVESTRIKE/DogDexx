@@ -252,8 +252,6 @@ router.get('/media/browse', browseMedia);
  */
 router.delete('/media/:id', deleteMedia);
 
-// --- THAY ĐỔI: THÊM CÁC ENDPOINT MỚI ĐỂ QUẢN LÝ PLANS ---
-
 /**
  * @swagger
  * /bff/admin/plans:
@@ -356,7 +354,7 @@ router.put('/plans/:id', updatePlan);
  */
 router.delete('/plans/:id', deletePlan);
 
-// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ WIKI ---
+
 
 /**
  * @swagger
@@ -450,8 +448,6 @@ router.put('/wiki/:slug', updateWikiBreed);
  */
 router.delete('/wiki/:slug', deleteWikiBreed);
 
-// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ AI MODELS ---
-
 /**
  * @swagger
  * /bff/admin/ai-models:
@@ -487,7 +483,7 @@ router.get('/ai-models', getAIModels);
  */
 router.post('/ai-models/:id/activate', activateAIModel);
 
-// --- THÊM MỚI: CÁC ENDPOINT ĐỂ QUẢN LÝ DATASET ---
+
 
 /**
  * @swagger
@@ -528,8 +524,6 @@ router.get('/datasets/browse', browseDatasets);
  */
 router.get('/datasets/download', downloadDataset);
 
-// --- THÊM MỚI: ENDPOINT ĐỂ XUẤT BÁO CÁO ---
-
 /**
  * @swagger
  * /bff/admin/reports/export:
@@ -558,7 +552,7 @@ router.get('/datasets/download', downloadDataset);
  *         description: Bắt đầu tải file báo cáo.
  */
 router.get('/reports/export', exportReport);
-// --- THÊM MỚI: ENDPOINT ĐỂ XEM TRƯỚC BÁO CÁO ---
+
 /**
  * @swagger
  * /bff/admin/reports/preview:
@@ -617,8 +611,6 @@ router.get('/subscriptions', getSubscriptions);
  *       200: { description: Lấy danh sách thành công. }
  */
 router.get('/transactions', getTransactions);
-
-// --- THÊM MỚI: CÁC ENDPOINT CHO DATABASE BACKUP & RESTORE ---
 
 /**
  * @swagger

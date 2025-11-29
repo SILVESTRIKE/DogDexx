@@ -270,7 +270,6 @@ function ResultsContent() {
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{selectedDisplayName}</h2>
                   <div className="flex flex-wrap gap-2 mb-4">
-                    {/* Nếu là chó thì link sang DogDex, nếu không thì chỉ hiện Badge tĩnh */}
                     {isDog ? (
                       <Link href={`/dogdex?filter=${encodeURIComponent(selectedBreedInfo.group || '')}`}>
                         <Badge variant="default" className="text-sm px-3 py-1 hover:bg-primary/80 hover:text-primary-foreground transition-colors cursor-pointer">
@@ -297,7 +296,7 @@ function ResultsContent() {
                 {isDog && (
                   <>
                     <Button
-                      onClick={() => router.push(`/dogdex?highlight=${selectedBreedInfo.slug}`)}
+                      onClick={() => router.push(`/dogdex?highlight=${selectedBreedInfo.pokedexNumber}`)}
                       size="lg"
                       className="w-full gap-2"
                     >

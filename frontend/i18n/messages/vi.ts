@@ -56,6 +56,7 @@ export default {
     username: "Tên người dùng",
     firstName: "Họ",
     lastName: "Tên",
+    phoneNumber: "Số điện thoại",
     avatar: "Ảnh đại diện (tùy chọn)",
     emailPlaceholder: "email@example.com",
     passwordPlaceholder: "••••••••",

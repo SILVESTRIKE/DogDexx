@@ -80,6 +80,7 @@ function ProfileContent() {
     lastName: "",
     country: "",
     city: "",
+    phoneNumber: "",
   });
 
   useEffect(() => {
@@ -92,6 +93,7 @@ function ProfileContent() {
         lastName: user.lastName || "",
         country: user.country || "",
         city: user.city || "",
+        phoneNumber: user.phoneNumber || "",
       }));
       
       // Set country code from country name
@@ -156,6 +158,8 @@ function ProfileContent() {
         formDataToSend.append("country", formData.country);
       if (user?.city !== formData.city)
         formDataToSend.append("city", formData.city);
+      if (user?.phoneNumber !== formData.phoneNumber)
+        formDataToSend.append("phoneNumber", formData.phoneNumber);
       if (newAvatar) formDataToSend.append("avatar", newAvatar);
 
       if (formDataToSend.entries().next().value) {
@@ -305,6 +309,7 @@ function ProfileContent() {
                           lastName: user?.lastName || "",
                           country: user?.country || "",
                           city: user?.city || "",
+                          phoneNumber: user?.phoneNumber || "",
                         });
                         setNewAvatar(null);
                       }}
@@ -464,6 +469,20 @@ function ProfileContent() {
                   }}
                   selectClassName="flex h-11 w-full items-center justify-between rounded-md border border-white/10 bg-white/5 px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
+                <div className="space-y-2">
+                  <Label htmlFor="phoneNumber" className="text-sm font-medium">
+                    {t("auth.phoneNumber") || "Số điện thoại"}
+                  </Label>
+                  <Input
+                    id="phoneNumber"
+                    value={formData.phoneNumber}
+                    onChange={(e) =>
+                      setFormData({ ...formData, phoneNumber: e.target.value.replace(/[^0-9]/g, '') })
+                    }
+                    disabled={!isEditing}
+                    className="bg-white/5 border-white/10 focus:bg-background/50 h-11"
+                  />
+                </div>
               </div>
 
               {/* Password Change Section (Only visible when editing) */}

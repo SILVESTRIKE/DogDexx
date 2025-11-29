@@ -35,11 +35,11 @@ export interface DogBreedWikiDoc extends Document {
 }
 
 const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
-  slug: { type: String, required: true, unique: true},
-  breed: { type: String, required: true, text: true, index: true }, // Đây sẽ là tên hiển thị
+  slug: { type: String, required: true, unique: true },
+  breed: { type: String, required: true, text: true, index: true },
   pokedexNumber: { type: Number, unique: true, sparse: true },
   origin: { type: String },
-  mediaPath: { type: String }, // Thêm trường mediaPath
+  mediaPath: { type: String },
   group: { type: String },
   coat_type: { type: String },
   coat_colors: { type: [String] },
@@ -62,8 +62,8 @@ const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
   trainable_skills: { type: [String] },
   fun_fact: { type: String },
   isDeleted: { type: Boolean, default: false, select: false },
-}, { 
-  timestamps: true, // Tự động thêm createdAt và updatedAt
+}, {
+  timestamps: true,
   collection: 'dog_breed_wikis',
   toJSON: {
     virtuals: true,

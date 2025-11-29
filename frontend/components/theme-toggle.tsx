@@ -39,7 +39,6 @@ export function ThemeToggle() {
         <span className="sr-only">Dark</span>
       </button>
       
-      {/* Nếu muốn thêm nút System thì thêm 1 nút tương tự ở đây */}
     </div>
   )
 }

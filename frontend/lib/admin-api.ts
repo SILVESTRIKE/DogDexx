@@ -134,10 +134,10 @@ export interface AdminFeedbackResponse {
   }
 }
 
-export const getAdminFeedback = async (params: { 
-  page: number; 
-  limit: number; 
-  status?: string; 
+export const getAdminFeedback = async (params: {
+  page: number;
+  limit: number;
+  status?: string;
   search?: string;
   startDate?: string;
   endDate?: string;
@@ -290,7 +290,7 @@ export interface UserUsageData {
   lastActive: string;
 }
 
-// [THÊM MỚI] Interface cho Cloudinary Stats
+
 export interface CloudinaryResourceUsage {
   used_bytes: number;
   limit_bytes: number;
@@ -303,9 +303,9 @@ export interface CloudinaryObjectUsage {
 }
 
 export interface CloudinaryUsageItem {
-    usage: number;
-    limit: number;
-    usage_percent: number;
+  usage: number;
+  limit: number;
+  usage_percent: number;
 }
 
 export interface CloudinaryStats {
@@ -318,19 +318,19 @@ export interface CloudinaryStats {
   last_updated: string;
 }
 
-// [CẬP NHẬT] Interface response tổng
+
 export interface AdminUsageResponse {
   usageData: UserUsageData[];
   tokensChartData: any[];
   plansChartData: any[];
-  storageStats?: CloudinaryStats; // Thêm field này (optional vì có thể null)
+  storageStats?: CloudinaryStats;
 }
 
 export const getAdminUsageStats = async (): Promise<AdminUsageResponse> => {
   return adminApiClient.getAdminUsageStats();
 };
 
-// --- THÊM MỚI: Interface cho Dataset Management ---
+
 export interface AdminFileItem {
   id: string;
   name: string;

@@ -23,8 +23,6 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
   const [pagination, setPagination] = useState({ page: 1, totalPages: 1, total: 0 });
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // XÓA: const fetchingPage = useRef<number | null>(null); -> Nguyên nhân gây load vô tận
-
   const [highlightedSlug, setHighlightedSlug] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
@@ -33,26 +31,22 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
     return null;
   });
 
-  // Effect 1: Reset dữ liệu khi filter thay đổi
   useEffect(() => {
     setDogBreeds([]);
     setPagination({ page: 1, totalPages: 1, total: 0 });
-    setLoading(true); // Bắt đầu loading ngay khi đổi filter
+    setLoading(true); 
   }, [search, sort, filter, locale]);
 
-  // Effect 2: Gọi API
   useEffect(() => {
     let isMounted = true;
 
     const fetchBreeds = async () => {
-      // Logic hiển thị loading
       if (pagination.page === 1) setLoading(true);
       else setLoadingMore(true);
 
       try {
         const isCollectedParam = filter === "collected" ? "true" : filter === "uncollected" ? "false" : undefined;
         
-        // Gọi API
         const response = await apiClient.getDogDex({
           limit: 20,
           page: pagination.page,
@@ -65,16 +59,11 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
 
         if (isMounted) {
           setDogBreeds((prev) => {
-            // Nếu là trang 1, thay thế hoàn toàn danh sách cũ
             if (pagination.page === 1) {
               return response.breeds;
             } 
-            // Nếu là trang > 1, nối thêm vào danh sách cũ
             else {
-              // --- SỬA LỖI DUPLICATE KEY TẠI ĐÂY ---
-              // Tạo Set chứa các slug đã tồn tại
               const existingSlugs = new Set(prev.map((dog: DogBreedType) => dog.slug));
-              // Chỉ lấy những con chó chưa có trong danh sách hiện tại
               const newUniqueBreeds = response.breeds.filter((dog: DogBreedType) => !existingSlugs.has(dog.slug));
               
               return [...prev, ...newUniqueBreeds];
@@ -91,7 +80,6 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
       } catch (error) {
         console.error("Failed to fetch breeds:", error);
       } finally {
-        // Đảm bảo loading luôn được tắt dù thành công hay thất bại
         if (isMounted) {
           setLoading(false);
           setLoadingMore(false);
@@ -101,7 +89,6 @@ export function DogGrid({ search, sort, filter, locale, onTotalCountChange }: Do
 
     fetchBreeds();
 
-    // Cleanup function để tránh update state khi component đã unmount
     return () => { isMounted = false; };
   }, [pagination.page, search, sort, filter, locale, onTotalCountChange]);
 

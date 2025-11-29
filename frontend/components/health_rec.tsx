@@ -7,9 +7,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Stethoscope } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// ==============================================================================
-// BƯỚC 1: IMPORT CÁC COMPONENT ACCORDION CẦN THIẾT
-// ==============================================================================
 import {
   Accordion,
   AccordionContent,
@@ -17,27 +14,20 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
-// Interface để định nghĩa cấu trúc dữ liệu sau khi phân tích
 interface HealthBlock {
   title: string;
   items: string[];
 }
-
-// Cấu trúc dữ liệu mới để phân loại các mục
 interface StructuredHealthData {
   generalCare: HealthBlock[];
   commonIssues: HealthBlock[];
 }
 
-// Helper component to render simple markdown (bold)
 const SimpleMarkdown: React.FC<{ text: string }> = ({ text }) => {
   const html = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
   return <span dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
-// ==============================================================================
-// BƯỚC 2: CẬP NHẬT COMPONENT CHÍNH
-// ==============================================================================
 interface HealthRecommendationsProps {
   breedSlug: string;
   breedName: string;
@@ -47,9 +37,8 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
   const [recommendations, setRecommendations] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { locale: lang, t } = useI18n(); // Lấy thêm hàm t
+  const { locale: lang, t } = useI18n();
 
-  // Logic fetch dữ liệu không thay đổi
   useEffect(() => {
     if (!breedSlug) return;
     const fetchRecommendations = async () => {
@@ -68,7 +57,6 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
     fetchRecommendations();
   }, [breedSlug, lang]);
 
-  // BƯỚC 3: PHÂN TÍCH DỮ LIỆU TỪ AI THÀNH CẤU TRÚC PHÙ HỢP VỚI ACCORDION
   const structuredData = useMemo(() => {
     if (!recommendations) return { generalCare: [], commonIssues: [] };
 
@@ -76,7 +64,6 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
     const commonIssues: HealthBlock[] = [];
     let currentBlock: HealthBlock | null = null;
 
-    // Từ khóa để xác định các mục chăm sóc chung (có thể cần điều chỉnh nếu prompt thay đổi)
     const generalCareKeywords = [
         "nutrition", "dinh dưỡng", 
         "exercise", "vận động", 
@@ -89,7 +76,6 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
       const trimmedLine = line.trim();
       if (trimmedLine.startsWith('### ')) {
         currentBlock = { title: trimmedLine.substring(4), items: [] };
-        // Phân loại vào nhóm generalCare hoặc commonIssues
         if (generalCareKeywords.some(keyword => currentBlock!.title.toLowerCase().includes(keyword))) {
           generalCare.push(currentBlock);
         } else {
@@ -101,7 +87,6 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
     });
     return { generalCare, commonIssues };
   }, [recommendations]);
-
 
   if (isLoading) {
     return (
@@ -119,10 +104,9 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
   }
 
   if (error || (structuredData.generalCare.length === 0 && structuredData.commonIssues.length === 0)) {
-    return null; // Không hiển thị gì nếu có lỗi hoặc không có dữ liệu
+    return null;
   }
 
-  // BƯỚC 4: RENDER RA GIAO DIỆN ACCORDION
   return (
     <Card className="border-2">
       <CardHeader>
@@ -133,7 +117,6 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
       </CardHeader>
       <CardContent>
         <Accordion type="single" collapsible className="w-full">
-          {/* Render các mục chăm sóc chung */}
           {structuredData.generalCare.map((block, index) => (
             <AccordionItem value={`item-${index}`} key={index}>
               <AccordionTrigger className="text-base text-left font-semibold">
@@ -149,14 +132,12 @@ export function HealthRecommendations({ breedSlug, breedName }: HealthRecommenda
             </AccordionItem>
           ))}
 
-          {/* Render mục gộp cho các vấn đề sức khỏe */}
           {structuredData.commonIssues.length > 0 && (
             <AccordionItem value="common-health-issues">
               <AccordionTrigger className="text-base text-left font-semibold">
                 {t('results.commonHealthIssues')}
               </AccordionTrigger>
               <AccordionContent>
-                {/* Accordion lồng bên trong */}
                 <Accordion type="single" collapsible className="w-full pl-4 border-l-2 border-border">
                   {structuredData.commonIssues.map((issue, index) => (
                     <AccordionItem value={`issue-${index}`} key={`issue-${index}`}>

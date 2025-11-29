@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { LeaderboardEntry } from '@/lib/types';
 import { useI18n } from '@/lib/i18n-context';
-import { MapPin, Search, Globe, Building2, Trophy, Crown, User } from 'lucide-react'; // Thêm icon User làm fallback dự phòng
+import { MapPin, Search, Globe, Building2, Trophy, Crown, User } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
 import { LocationPicker } from '@/components/location-picker';

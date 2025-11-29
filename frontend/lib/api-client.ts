@@ -58,12 +58,12 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  // THÊM MỚI: Cung cấp một phương thức công khai để lấy baseUrl.
+
   public getBaseUrl(): string {
     return this.baseUrl;
   }
 
-  // THÊM MỚI: Cung cấp một phương thức công khai để lấy access token.
+
   public getAccessToken(): string | null {
     return TokenManager.getAccessToken();
   }
@@ -74,7 +74,6 @@ export class ApiClient {
     this.onTokenUpdate = callback;
   }
 
-  // --- HÀM NÀY ĐƯỢC ĐỊNH NGHĨA Ở ĐÂY ĐỂ FIX LỖI 'this' ---
   private handleTokenHeaders(response: Response | XMLHttpRequest) {
     if (!this.onTokenUpdate) return;
     const getHeader = (name: string) =>
@@ -136,7 +135,6 @@ export class ApiClient {
     }
   }
 
-  // SỬA LẠI: Hàm request<T> phiên bản đơn giản, không có hàm lồng nhau
   public async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -181,7 +179,7 @@ export class ApiClient {
       this.handleTokenHeaders(response);
 
       if (!response.ok) {
-        // SỬA LỖI: Cung cấp thông báo lỗi tốt hơn cho các lỗi server.
+
         if (response.status >= 500) {
           throw new Error(
             `Server Error: ${response.status}. Please try again later or contact support.`
@@ -197,7 +195,6 @@ export class ApiClient {
         }
       }
 
-      // SỬA LỖI: Xử lý các response không có nội dung (204) hoặc có content-length là 0
       const contentType = response.headers.get("content-type");
       if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
         return Promise.resolve(undefined as T);
@@ -206,8 +203,6 @@ export class ApiClient {
       return response.json();
     } catch (error) {
       // BỎ QUA LỖI ABORT: Lỗi này xảy ra khi một request bị hủy bỏ,
-      // thường là do component unmount (ví dụ trong React Strict Mode).
-      // Đây là hành vi mong muốn, không cần log ra console.
       if (error instanceof Error && error.name === "AbortError")
         return Promise.reject(error);
 
@@ -222,7 +217,6 @@ export class ApiClient {
     }
   }
 
-  // SỬA ĐỔI: Hàm requestWithFormData<T>
   private async requestWithFormData<T>(
     endpoint: string,
     formData: FormData,
@@ -261,13 +255,12 @@ export class ApiClient {
       };
 
       xhr.onload = async () => {
-        this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
+        this.handleTokenHeaders(xhr);
 
         if (xhr.status === 401 && TokenManager.getRefreshToken() && !_isRetry) {
           try {
             const refreshed = await this.handleUnauthorized();
             if (refreshed) {
-              // Gọi lại chính hàm này với cờ _isRetry = true
               const result = await this.requestWithUploadProgress<T>(
                 endpoint,
                 formData,
@@ -317,6 +310,7 @@ export class ApiClient {
     password: string;
     firstName: string;
     lastName: string;
+    phoneNumber?: string;
     avatar?: File;
     captchaToken: string;
   }) {
@@ -350,23 +344,20 @@ export class ApiClient {
     }
 
     try {
-      // Gửi yêu cầu logout đến server với refreshToken
       const response = await this.request<any>(
         "/bff/user/logout",
         {
           method: "POST",
           body: JSON.stringify({ refreshToken }),
         },
-        true // Yêu cầu xác thực để gửi accessToken nếu có
+        true
       );
       return response;
     } finally {
-      // Quan trọng: Luôn xóa token ở client sau khi gọi API, bất kể thành công hay thất bại.
       TokenManager.clearTokens();
     }
   }
 
-  // THÊM MỚI: Hàm kiểm tra trạng thái phiên làm việc
   async getSessionStatus() {
     return this.request<any>("/bff/user/session-status", {
       cache: "no-cache",
@@ -375,7 +366,6 @@ export class ApiClient {
 
   // Auth endpoints (non-BFF)
   async forgotPassword(email: string) {
-    // Use BFF endpoint for unified behavior
     return this.request<any>("/bff/user/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -383,7 +373,6 @@ export class ApiClient {
   }
 
   async resetPassword(email: string, otp: string, password: string) {
-    // Use BFF endpoint for unified behavior
     return this.request<any>("/bff/user/reset-password", {
       method: "POST",
       body: JSON.stringify({ email, otp, password }),
@@ -534,7 +523,7 @@ export class ApiClient {
   async predictImage(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+
     const requiresAuth = !!TokenManager.getAccessToken();
     return this.requestWithUploadProgress<any>(
       "/bff/predict/image",
@@ -547,7 +536,7 @@ export class ApiClient {
   async predictVideo(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+
     const requiresAuth = !!TokenManager.getAccessToken();
     return this.requestWithUploadProgress<any>(
       "/bff/predict/video",
@@ -558,7 +547,7 @@ export class ApiClient {
   }
 
   async predictUrl(url: string) {
-    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+
     const requiresAuth = !!TokenManager.getAccessToken();
     return this.request<any>(
       "/bff/predict/url",
@@ -674,7 +663,6 @@ export class ApiClient {
     );
   }
 
-  // ----- MODIFIED: HÀM MỚI ĐƯỢC THÊM VÀO ĐÂY -----
   async getPredictionHistoryById(
     id: string,
     lang: "vi" | "en"
@@ -775,7 +763,7 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy danh sách các gói cước công khai
+
   async getPublicPlans() {
     return this.request<any>(
       "/bff/public/plans",
@@ -784,7 +772,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy chi tiết một gói cước công khai bằng slug
   async getPublicPlanBySlug(slug: string) {
     return this.request<any>(
       `/bff/public/plans/${slug}`,
@@ -793,7 +780,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Các hàm quản lý Plan cho Admin
   async getAdminPlans(params?: {
     page?: number;
     limit?: number;
@@ -858,7 +844,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy danh sách GIAO DỊCH cho Admin
   async getAdminTransactions(params?: {
     page?: number;
     limit?: number;
@@ -923,7 +908,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Gửi form liên hệ
   async submitContactForm(payload: {
     email: string;
     message: string;

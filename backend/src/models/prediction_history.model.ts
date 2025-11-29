@@ -2,34 +2,27 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 import { MediaDoc } from "./medias.model";
 import { UserDoc } from "./user.model";
 
-// =================================================================
-// ĐỊNH NGHĨA IYoloPrediction NẰM Ở ĐÂY
-// =================================================================
-/**
- * Định nghĩa cấu trúc cho một đối tượng dự đoán duy nhất trả về từ AI Service.
- */
 export interface IYoloPrediction {
   track_id?: number;
   box: number[];
   class: string;
   confidence: number;
-  class_id?: number; // Thêm class_id để có thể dùng sau này nếu cần
+  class_id?: number;
 }
-// =================================================================
 
 export type PredictionHistoryDoc = Document & {
   user?: UserDoc;
   media: MediaDoc;
-  mediaPath: string; // Đường dẫn của file media gốc
+  mediaPath: string;
   modelUsed: string;
   source: 'image_upload' | 'video_upload' | 'stream_capture' | 'url_input';
   predictions: IYoloPrediction[];
-  processedMediaPath?: string; // Đường dẫn của file media đã được xử lý (có vẽ bounding box)
+  processedMediaPath?: string;
   isCorrect: boolean | null;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
-  feedback?: Types.ObjectId; // Thêm trường ảo để populate
+  feedback?: Types.ObjectId;
 };
 
 const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
@@ -37,7 +30,7 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
-      required: false, // Cho phép guest (khách)
+      required: false,
       index: true,
     },
     media: {
@@ -55,7 +48,7 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     },
     predictions: [
       {
-        _id: false, // Không tạo _id cho các sub-document trong mảng
+        _id: false,
         track_id: { type: Number, required: false },
         box: { type: [Number], required: true },
         class: { type: String, required: true },
@@ -89,15 +82,11 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     },
   }
 );
-
-// --- VIRTUALS ---
-// Thêm một trường ảo 'feedback' để tạo mối quan hệ hai chiều với FeedbackModel
-// Điều này cho phép chúng ta populate('feedback') trên một PredictionHistory.
 predictionHistorySchema.virtual('feedback', {
-  ref: 'Feedback', // Model để tham chiếu
-  localField: '_id', // Trường trên model này (PredictionHistory)
-  foreignField: 'prediction_id', // Trường trên model kia (Feedback)
-  justOne: true, // Chỉ tìm một bản ghi feedback duy nhất cho mỗi prediction
+  ref: 'Feedback',
+  localField: '_id',
+  foreignField: 'prediction_id',
+  justOne: true,
 });
 
 export const PredictionHistoryModel = mongoose.model<PredictionHistoryDoc>(

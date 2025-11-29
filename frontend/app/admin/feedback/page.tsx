@@ -60,6 +60,7 @@ import {
   getAdminFeedback,
   approveAdminFeedback,
   rejectAdminFeedback,
+  browseAdminDatasets,
   AdminFeedbackResponse,
   Feedback,
 } from "@/lib/admin-api";
@@ -252,26 +253,16 @@ export default function FeedbackManagement() {
   );
 
   const fetchApprovedBreeds = useCallback(async () => {
-    setLoading(true);
+    // Don't set main loading state here to avoid flickering if it's independent
     try {
-      // This is a placeholder for an API call that should be created
-      // For now, we'll simulate it.
-      setApprovedBreeds([
-        "Poodle",
-        "Golden Retriever",
-        "Labrador",
-        "German Shepherd",
-        "Bulldog",
-        "Beagle",
-        "Pomeranian",
-        "Chihuahua",
-        "Siberian Husky",
-        "Shiba Inu",
-      ]);
-    } finally {
-      setLoading(false);
+      const response = await browseAdminDatasets("dataset/approved");
+      // directories have { id, name, type }
+      const folders = response.directories.map((dir) => String(dir.name));
+      setApprovedBreeds(folders);
+    } catch (error) {
+      console.error("Failed to fetch dataset folders:", error);
     }
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     setPage(1); // Reset page when filters change
@@ -551,7 +542,7 @@ export default function FeedbackManagement() {
               </div>
             </CardHeader>
             <CardContent>
-              {/* THÊM MỚI: Tabs để lọc theo trạng thái */}
+              {/* Tabs để lọc theo trạng thái */}
               <div className="mb-4">
                 <Tabs
                   value={statusFilter}
