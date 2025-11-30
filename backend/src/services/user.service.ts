@@ -208,7 +208,14 @@ export const userService = {
     await directory.save();
     user.directory_id = directory._id as any;
     await user.save();
-    await this.sendOtp(user.email);
+
+    try {
+      await this.sendOtp(user.email);
+    } catch (error) {
+      logger.error(`[USER_SERVICE] Failed to send OTP during registration for ${user.email}:`, error);
+      // Không throw error để tránh rollback user đã tạo. 
+      // User sẽ nhận được thông báo thành công nhưng cần resend OTP khi login.
+    }
 
     const enrichedUser = await _enrich(user);
     delete (enrichedUser as any).password;

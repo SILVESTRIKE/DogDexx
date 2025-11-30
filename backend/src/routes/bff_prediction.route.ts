@@ -429,6 +429,23 @@ router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
 
 /**
  * @swagger
+ * /bff/predict/status/{id}:
+ *   get:
+ *     summary: "(BFF) Lấy trạng thái xử lý dự đoán (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Kiểm tra trạng thái xử lý của một dự đoán đang trong hàng đợi hoặc bộ nhớ.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Trả về trạng thái xử lý. }
+ */
+router.get("/status/:id", optionalAuthMiddleware, bffPredictionController.getPredictionStatus);
+
+/**
+ * @swagger
  * /bff/predict/history/{id}:
  *   delete:
  *     summary: "(BFF) Xóa một lịch sử dự đoán (Miễn phí)"

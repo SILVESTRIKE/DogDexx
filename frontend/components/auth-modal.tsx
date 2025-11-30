@@ -13,8 +13,9 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Country } from 'country-state-city';
 import { LocationPicker } from "@/components/location-picker";
+import { Eye, EyeOff } from "lucide-react";
 // 1. IMPORT RECAPTCHA
-import { useGoogleReCaptcha } from "react-google-recaptcha-v3"; 
+import { useGoogleReCaptcha } from "react-google-recaptcha-v3";
 
 interface AuthModalProps {
   isOpen: boolean
@@ -25,9 +26,9 @@ interface AuthModalProps {
 
 export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProps) {
   const { login, register, verifyOtp } = useAuth()
-  
+
   // 2. KHỞI TẠO HOOK
-  const { executeRecaptcha } = useGoogleReCaptcha(); 
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -36,14 +37,16 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   // --- FORM STATES ---
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
   const [username, setUsername] = useState("")
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
   const [otp, setOtp] = useState("")
-  
+
   // --- LOCATION STATES ---
-  const [selectedCountryCode, setSelectedCountryCode] = useState("VN") 
+  const [selectedCountryCode, setSelectedCountryCode] = useState("VN")
   const [selectedCityName, setSelectedCityName] = useState("")
 
   const allCountries = useMemo(() => Country.getAllCountries(), []);
@@ -77,11 +80,11 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         }
 
         if (mode === "login") {
-          await login(email, password, token) 
-          
+          await login(email, password, token)
+
           toast.success(t('auth.loginTitle') + " thành công!")
           resetAndClose()
-          
+
           const redirectUrl = searchParams.get("redirect")
           if (redirectUrl) {
             const [path, params] = redirectUrl.split('?')
@@ -90,9 +93,15 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           } else {
             router.refresh()
           }
-        } else { 
+        } else {
           if (!username.trim()) {
             setError(t("auth.errorUsernameRequired"))
+            setIsLoading(false)
+            return
+          }
+
+          if (password !== confirmPassword) {
+            setError("Mật khẩu xác nhận không khớp.")
             setIsLoading(false)
             return
           }
@@ -106,16 +115,16 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
             username,
             firstName,
             lastName,
-            country: countryName, 
-            city: selectedCityName, 
+            country: countryName,
+            city: selectedCityName,
             phoneNumber,
             captchaToken: token
           })
-          
+
           setMessage(response.message || "Mã OTP đã được gửi tới email của bạn.")
-          setView("otp") 
+          setView("otp")
         }
-      } else { 
+      } else {
         await verifyOtp(email, otp)
         setMessage(t('auth.otpSuccess'))
         toast.success("Xác thực thành công! Vui lòng đăng nhập.")
@@ -123,6 +132,17 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         onSwitchMode("login")
       }
     } catch (err: any) {
+      // Kiểm tra nếu lỗi là do tài khoản chưa xác thực
+      if (err.message && (
+        err.message.includes("Tài khoản chưa được xác thực") ||
+        err.message.includes("Tài khoản chưa xác thực")
+      )) {
+        toast.error("Tài khoản chưa xác thực", { description: "Vui lòng nhập mã OTP vừa được gửi đến email của bạn." });
+        setMessage("Vui lòng nhập mã OTP để xác thực tài khoản.");
+        setView("otp");
+        return;
+      }
+
       toast.error("Thất bại", { description: err.message || "Có lỗi xảy ra" });
       setError(err.message);
     } finally {
@@ -131,15 +151,15 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
   }
 
   const resetAndClose = () => {
-    setEmail(""); setPassword(""); setUsername(""); setFirstName(""); setLastName(""); setOtp("");
+    setEmail(""); setPassword(""); setConfirmPassword(""); setUsername(""); setFirstName(""); setLastName(""); setOtp("");
     setSelectedCountryCode("VN"); setSelectedCityName("");
-    setError(""); setMessage(""); setView("form");
+    setError(""); setMessage(""); setView("form"); setShowPassword(false);
     onClose();
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={resetAndClose}>
-      <DialogContent className="sm:max-w-md overflow-y-auto max-h-[90vh]">
+      <DialogContent className={`overflow-y-auto max-h-[90vh] ${mode === 'register' ? 'sm:max-w-2xl' : 'sm:max-w-md'}`}>
         <DialogHeader>
           <DialogTitle>{mode === "login" ? t("auth.loginTitle") : t("auth.registerTitle")}</DialogTitle>
           <DialogDescription>
@@ -150,61 +170,142 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         {/* Form Content */}
         {view === 'form' && (
           <form id="auth-form" onSubmit={handleSubmit} className="space-y-4">
-             {mode === "register" && (
-              <>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>{t("auth.firstName")}</Label>
-                    <Input value={firstName} onChange={e => { setFirstName(e.target.value); setError(""); }} placeholder="Nguyen" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>{t("auth.lastName")}</Label>
-                    <Input value={lastName} onChange={e => { setLastName(e.target.value); setError(""); }} placeholder="Van A" />
-                  </div>
-                </div>
-                
+            {mode === "register" ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* --- Hàng 1: Họ & Tên --- */}
                 <div className="space-y-2">
-                  <Label>Username</Label>
-                  <Input 
-                    value={username} 
-                    onChange={e => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); setError(""); }} 
-                    required 
-                    placeholder="username_123"
+                  <Label>{t("auth.lastName")}</Label>
+                  <Input
+                    value={lastName}
+                    onChange={e => { setLastName(e.target.value); setError(""); }}
+                    placeholder="Nguyen"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t("auth.firstName")}</Label>
+                  <Input
+                    value={firstName}
+                    onChange={e => { setFirstName(e.target.value); setError(""); }}
+                    placeholder="Van A"
                   />
                 </div>
 
-                <LocationPicker
-                  selectedCountryCode={selectedCountryCode}
-                  onCountryChange={(code, name) => {
-                    setSelectedCountryCode(code);
-                    setSelectedCityName("");
-                  }}
-                  selectedCityName={selectedCityName}
-                  onCityChange={setSelectedCityName}
-                />
-                
+                {/* --- Hàng 2: Username & Số điện thoại --- */}
+                <div className="space-y-2">
+                  <Label>Username</Label>
+                  <Input
+                    value={username}
+                    onChange={e => { setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '')); setError(""); }}
+                    required
+                    placeholder="username_123"
+                  />
+                </div>
                 <div className="space-y-2">
                   <Label>{t("auth.phoneNumber")}</Label>
-                  <Input type="text" value={phoneNumber} onChange={e => { setPhoneNumber(e.target.value); setError(""); }} required placeholder="0123456789" />
+                  <Input
+                    type="text"
+                    value={phoneNumber}
+                    onChange={e => { setPhoneNumber(e.target.value); setError(""); }}
+                    required
+                    placeholder="0123456789"
+                  />
+                </div>
+
+                {/* --- Hàng 3: Email (Full width) --- */}
+                <div className="space-y-2 md:col-span-2">
+                  <Label>{t("auth.email")}</Label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={e => { setEmail(e.target.value); setError(""); }}
+                    required
+                    placeholder="admin@gmail.com"
+                  />
+                </div>
+
+                {/* --- Hàng 4: Location (Full width container) --- */}
+                {/* Giả sử LocationPicker render ra 2 ô select, ta bọc nó vào col-span-2 để nó có không gian */}
+                <div className="md:col-span-2">
+                  <LocationPicker
+                    selectedCountryCode={selectedCountryCode}
+                    onCountryChange={(code, name) => {
+                      setSelectedCountryCode(code);
+                      setSelectedCityName("");
+                    }}
+                    selectedCityName={selectedCityName}
+                    onCityChange={setSelectedCityName}
+                  />
+                </div>
+
+                {/* --- Hàng 5: Mật khẩu & Xác nhận mật khẩu --- */}
+                <div className="space-y-2">
+                  <Label>{t("auth.password")}</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={e => { setPassword(e.target.value); setError(""); }}
+                      required
+                      placeholder="******"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Xác nhận mật khẩu</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={confirmPassword}
+                      onChange={e => { setConfirmPassword(e.target.value); setError(""); }}
+                      required
+                      placeholder="******"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              // Login Form (Single Column)
+              <>
+                <div className="space-y-2">
+                  <Label>{t("auth.email")}</Label>
+                  <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} required placeholder="email@example.com" />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>{t("auth.password")}</Label>
+                  <div className="relative">
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={e => { setPassword(e.target.value); setError(""); }}
+                      required
+                      placeholder="******"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
               </>
             )}
 
-            <div className="space-y-2">
-              <Label>{t("auth.email")}</Label>
-              <Input type="email" value={email} onChange={e => { setEmail(e.target.value); setError(""); }} required placeholder="email@example.com" />
-            </div>
-            
-            <div className="space-y-2">
-              <Label>{t("auth.password")}</Label>
-              <Input type="password" value={password} onChange={e => { setPassword(e.target.value); setError(""); }} required placeholder="******" />
-            </div>
-
             {mode === 'login' && (
               <div className="flex justify-between items-center mt-2">
                 <button type="button" onClick={() => {
-                   toast.info("Vui lòng nhập Email và chọn 'Đăng ký' để nhận mã OTP mới.");
-                   onSwitchMode('register');
+                  toast.info("Vui lòng nhập Email và chọn 'Đăng ký' để nhận mã OTP mới.");
+                  onSwitchMode('register');
                 }} className="text-xs text-muted-foreground hover:text-primary hover:underline">
                   Tài khoản chưa xác thực?
                 </button>
@@ -233,20 +334,20 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
         )}
 
         {view === 'forgot' && (
-           <div className="text-center py-8 text-sm text-gray-500">Tính năng quên mật khẩu đang cập nhật... <button onClick={()=>setView('form')} className="text-primary underline">Quay lại</button></div>
+          <div className="text-center py-8 text-sm text-gray-500">Tính năng quên mật khẩu đang cập nhật... <button onClick={() => setView('form')} className="text-primary underline">Quay lại</button></div>
         )}
 
         {error && <p className="text-sm text-red-500 text-center mt-2">{error}</p>}
 
-        <Button 
-          type="submit" 
-          form={view === 'form' ? 'auth-form' : 'otp-form'} 
-          className="w-full mt-4" 
+        <Button
+          type="submit"
+          form={view === 'form' ? 'auth-form' : 'otp-form'}
+          className="w-full mt-4"
           disabled={isLoading}
         >
-          {isLoading ? "Đang xử lý..." : 
-           view === "otp" ? "Xác thực OTP" : 
-           mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
+          {isLoading ? "Đang xử lý..." :
+            view === "otp" ? "Xác thực OTP" :
+              mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
         </Button>
 
         <div className="text-center text-sm mt-4">

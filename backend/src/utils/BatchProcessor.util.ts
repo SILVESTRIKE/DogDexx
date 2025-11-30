@@ -3,6 +3,7 @@ import { Types } from 'mongoose';
 import FormData from 'form-data';
 import fs from 'fs';
 import axios from 'axios';
+import { logger } from './logger.util';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
@@ -137,6 +138,8 @@ export class BatchProcessor extends EventEmitter {
         throw new Error("No file or buffer provided");
       }
 
+      const startTime = Date.now();
+      logger.info(`[Timing] [BatchProcessor] [${item.id}] Sending video request to AI Service.`);
       const response = await axios.post(
         `${AI_SERVICE_URL}/predict/video`,
         formData,
@@ -145,6 +148,7 @@ export class BatchProcessor extends EventEmitter {
           timeout: 300000, // 5 minutes timeout for video
         }
       );
+      logger.info(`[Timing] [BatchProcessor] [${item.id}] Received video response from AI Service. Duration: ${Date.now() - startTime}ms`);
 
       this.progressMap.set(item.id, {
         status: 'completed',
@@ -205,6 +209,8 @@ export class BatchProcessor extends EventEmitter {
         });
       });
 
+      const startTime = Date.now();
+      logger.info(`[Timing] [BatchProcessor] Sending request to ${AI_SERVICE_URL}/predict/images`);
       const response = await axios.post(
         `${AI_SERVICE_URL}/predict/images`,
         formData,
@@ -213,6 +219,7 @@ export class BatchProcessor extends EventEmitter {
           timeout: 60000,
         }
       );
+      logger.info(`[Timing] [BatchProcessor] Received response from AI Service. Status: ${response.status}. Duration: ${Date.now() - startTime}ms`);
 
       const results = response.data.results;
       currentBatch.forEach((item, index) => {

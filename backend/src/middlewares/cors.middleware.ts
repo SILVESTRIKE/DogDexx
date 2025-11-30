@@ -28,7 +28,6 @@ export const corsMiddleware = cors({
       callback(null, true);
       return;
     }
-    logger.info("Origin đang gọi tới:", origin);
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {

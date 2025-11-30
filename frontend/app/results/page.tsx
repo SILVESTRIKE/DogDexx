@@ -1,99 +1,139 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import type { BffPredictionResponse, Detection } from "@/lib/types"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, Loader2, Sparkles, ShoppingCart, Stethoscope } from "lucide-react"
+import { ArrowLeft, BookOpen, Heart, Activity, Brain, Wind, MapPin, Ruler, Calendar, AlertTriangle, Loader2 } from "lucide-react"
 import Link from "next/link"
 import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
-import { BreedChatBox } from "@/components/breed-chat-box"; 
+import { BreedChatBox } from "@/components/breed-chat-box";
 import { HealthRecommendations } from "@/components/health_rec";
 import { RecommendedProducts } from "@/components/product_rec";
 
 function ResultsContent() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const { t, locale } = useI18n()
   const { user } = useAuth();
-  
-  // State mới cho loading và error
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const historyId = searchParams.get('id')
 
-  // State cũ của bạn
-  const [allDetections, setAllDetections] = useState<Detection[]>([]) 
-  const [predictionId, setPredictionId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [predictionId, setPredictionId] = useState<string>("")
+  const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null)
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
-  const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
-  const [noDetectionsFound, setNoDetectionsFound] = useState(false);
-  const [specialMessage, setSpecialMessage] = useState<string | null>(null); // State mới cho thông báo đặc biệt
-  const [hasFeedback, setHasFeedback] = useState(false); // State mới để lưu trạng thái feedback
+  const [allDetections, setAllDetections] = useState<Detection[]>([])
+  const [noDetectionsFound, setNoDetectionsFound] = useState(false)
+  const [specialMessage, setSpecialMessage] = useState<string | null>(null)
+  const [hasFeedback, setHasFeedback] = useState(false);
 
+  // --- POLLING LOGIC ---
+  const pollForStatus = async (id: string) => {
+    let attempts = 0;
+    const maxAttempts = 20; // 20 * 1s = 20s timeout
+
+    const poll = async () => {
+      if (attempts >= maxAttempts) {
+        setError("Timeout waiting for prediction result.");
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const status = await apiClient.getPredictionStatus(id);
+        console.log("Polling status:", status);
+
+        if (status.status === 'completed' && status.result) {
+          // If completed, fetch history again to get the full enriched response
+          fetchHistoryById();
+          return;
+        } else if (status.status === 'failed') {
+          setError(status.message || "Prediction failed.");
+          setLoading(false);
+          return;
+        } else {
+          // Still processing or queued
+          attempts++;
+          setTimeout(poll, 1000);
+        }
+      } catch (e) {
+        console.error("Polling error:", e);
+        attempts++;
+        setTimeout(poll, 1000);
+      }
+    };
+
+    poll();
+  };
+
+  const processResultData = (result: BffPredictionResponse) => {
+    setPredictionId(result.predictionId);
+    setProcessedMediaUrl(result.processedMediaUrl || null);
+    setHasFeedback(result.hasFeedback || false);
+
+    if ((!result.detections || result.detections.length === 0) && !result.message) {
+      setNoDetectionsFound(true);
+      return;
+    }
+    setSpecialMessage(null); // Reset message nếu có detections
+
+    if (result.message) {
+      setSpecialMessage(result.message);
+      // Nếu có message nhưng vẫn có detections (trường hợp warning), vẫn hiển thị detections
+      if (!result.detections || result.detections.length === 0) {
+        setLoading(false);
+        return;
+      }
+    }
+
+    const primary = result.detections.reduce((prev, current) =>
+      prev.confidence > current.confidence ? prev : current
+    );
+
+    setAllDetections(result.detections);
+    setSelectedDetection(primary);
+  };
+
+  const fetchHistoryById = async () => {
+    if (!historyId) return;
+    setLoading(true);
+
+    try {
+      const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId, locale);
+
+      // Check if result is still processing (placeholder)
+      if (result.processedMediaUrl === 'processing' || (result.processedMediaUrl && result.processedMediaUrl.includes('processing'))) {
+        console.log("Result is still processing, starting poll...");
+        pollForStatus(historyId);
+      } else {
+        processResultData(result);
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error("[ResultsPage] Failed to fetch prediction history:", err);
+      console.log("Trying to poll status as fallback...");
+      pollForStatus(historyId);
+    }
+  };
 
   useEffect(() => {
-    const historyId = searchParams.get('id');
-
-    const processResultData = (result: BffPredictionResponse) => {
-      setHasFeedback(result.hasFeedback ?? false); // Cập nhật state từ response
-      setProcessedMediaUrl(result.processedMediaUrl);
-      setPredictionId(result.predictionId); // Luôn set predictionId
-
-      if (result.message) {
-        setSpecialMessage(result.message);
-        setAllDetections([]);
-        setSelectedDetection(null);
-        setNoDetectionsFound(false); // Đảm bảo không hiển thị trang "no detections"
-        return;
-      }
-      
-      if ((!result.detections || result.detections.length === 0) && !result.message) {
-        setNoDetectionsFound(true);
-        return;
-      }
-      setSpecialMessage(null); // Reset message nếu có detections
-
-      const primary = result.detections.reduce((prev, current) => 
-        prev.confidence > current.confidence ? prev : current
-      );
-      
-      setAllDetections(result.detections);
-      setSelectedDetection(primary);
-    };
-    
-    // Luồng logic mới: Luôn lấy dữ liệu từ historyId trên URL.
     if (!historyId) {
-      setError("No prediction yet. Please go back and try again.");
+      setError(t("results.invalidId") || "Invalid Prediction ID");
       setLoading(false);
       return;
     }
-    
-    const fetchHistoryById = async () => {
-      setLoading(true);
-      try {
-        const result: BffPredictionResponse = await apiClient.getPredictionHistoryById(historyId, locale);
-        processResultData(result);
-      } catch (err) {
-        console.error("[ResultsPage] Failed to fetch prediction history:", err);
-        setError("Failed to load prediction history. It may have been deleted or the link is invalid.");
-      } finally {
-        setLoading(false);
-      }
-    };
 
     fetchHistoryById();
-
-    // Không cần dọn dẹp sessionStorage nữa.
-  }, [locale]); // Chạy lại khi locale thay đổi
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyId, locale]); // Chạy lại khi locale thay đổi
 
 
   const handleSelectionChange = (selectionKey: string) => {
@@ -116,7 +156,7 @@ function ResultsContent() {
   }
 
   if (error) {
-     return (
+    return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-auto p-8 text-center">
           <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
@@ -127,7 +167,7 @@ function ResultsContent() {
       </main>
     )
   }
-  
+
   // ----- GIAO DIỆN MỚI: HIỂN THỊ KHI CÓ THÔNG BÁO ĐẶC BIỆT (VD: KHÔNG PHẢI CHÓ) -----
   if (specialMessage) {
     return (
@@ -136,7 +176,7 @@ function ResultsContent() {
           <Card className="mb-8">
             <CardContent className="p-4">
               <div className="relative rounded-lg overflow-hidden bg-muted aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
                   (
                     <video src={processedMediaUrl} className="w-full h-full object-contain" controls autoPlay loop muted />
                   ) : (
@@ -147,19 +187,19 @@ function ResultsContent() {
             </CardContent>
           </Card>
           <Card className="p-6">
-              <div className="flex justify-center mb-4">
-                  <div className="p-3 bg-yellow-500/10 rounded-full">
-                      <AlertTriangle className="h-10 w-10 text-yellow-500" />
-                  </div>
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-yellow-500/10 rounded-full">
+                <AlertTriangle className="h-10 w-10 text-yellow-500" />
               </div>
-              <h2 className="text-2xl font-bold mb-3">{t("results.specialMessageTitle")}</h2>
-              <p className="text-muted-foreground mb-6 text-lg">{specialMessage}</p>
-              <Link href="/">
-                  <Button className="gap-2">
-                      <ArrowLeft className="h-5 w-5" />
-                      {t("results.tryAgain")}
-                  </Button>
-              </Link>
+            </div>
+            <h2 className="text-2xl font-bold mb-3">{t("results.specialMessageTitle")}</h2>
+            <p className="text-muted-foreground mb-6 text-lg">{specialMessage}</p>
+            <Link href="/">
+              <Button className="gap-2">
+                <ArrowLeft className="h-5 w-5" />
+                {t("results.tryAgain")}
+              </Button>
+            </Link>
           </Card>
         </div>
       </main>
@@ -171,21 +211,21 @@ function ResultsContent() {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center p-4">
-            <Card className="max-w-md mx-auto p-8">
-                <div className="flex justify-center mb-4">
-                    <div className="p-3 bg-destructive/10 rounded-full">
-                        <AlertTriangle className="h-10 w-10 text-destructive" />
-                    </div>
-                </div>
-                <h2 className="text-2xl font-bold mb-3">{t("results.noDetectionsTitle")}</h2>
-                <p className="text-muted-foreground mb-6">{t("results.noDetectionsDescription")}</p>
-                <Link href="/">
-                    <Button className="gap-2">
-                        <ArrowLeft className="h-5 w-5" />
-                        {t("results.tryAgain")}
-                    </Button>
-                </Link>
-            </Card>
+          <Card className="max-w-md mx-auto p-8">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold mb-3">{t("results.noDetectionsTitle")}</h2>
+            <p className="text-muted-foreground mb-6">{t("results.noDetectionsDescription")}</p>
+            <Link href="/">
+              <Button className="gap-2">
+                <ArrowLeft className="h-5 w-5" />
+                {t("results.tryAgain")}
+              </Button>
+            </Link>
+          </Card>
         </div>
       </main>
     )
@@ -193,7 +233,7 @@ function ResultsContent() {
 
   if (!selectedDetection || !selectedDetection.breedInfo) {
     // Trường hợp này có thể coi là một lỗi nếu dữ liệu không nhất quán
-     return (
+    return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-auto p-8 text-center">
           <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
@@ -239,7 +279,7 @@ function ResultsContent() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* --- CỘT TRÁI: ẢNH/VIDEO --- */}
               <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
                   (
                     <video
                       src={processedMediaUrl}
@@ -251,14 +291,14 @@ function ResultsContent() {
                     />
                   ) : (
                     <>
-                      <img 
-                        src={processedMediaUrl} 
-                        alt="Background" 
-                        className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50" 
+                      <img
+                        src={processedMediaUrl}
+                        alt="Background"
+                        className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50"
                       />
-                      <img 
-                        src={processedMediaUrl} 
-                        alt="Detection result" 
+                      <img
+                        src={processedMediaUrl}
+                        alt="Detection result"
                         className="relative w-full h-full object-contain z-10" />
                     </>
                   )
@@ -319,7 +359,7 @@ function ResultsContent() {
           {/* --- THANH CHỌN ĐỐI TƯỢNG (DROPDOWN) --- */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <h2 className="text-2xl font-bold">{t("results.detailsTitle")}</h2>
-                        {uniqueDetections.length > 1 && (
+            {uniqueDetections.length > 1 && (
               <Select
                 onValueChange={handleSelectionChange}
                 value={`${selectedDetection?.detectedBreed}-${allDetections.indexOf(selectedDetection!)}`}
@@ -329,7 +369,7 @@ function ResultsContent() {
                 </SelectTrigger>
                 <SelectContent>
                   {uniqueDetections.map(({ detection: det, index }) => (
-                    <SelectItem 
+                    <SelectItem
                       key={`${det.detectedBreed}-${index}`}
                       value={`${det.detectedBreed}-${index}`}
                     >
@@ -398,15 +438,15 @@ function ResultsContent() {
               ) : (
                 // --- NẾU KHÔNG PHẢI LÀ CHÓ: HIỆN CARD THÔNG BÁO ĐƠN GIẢN ---
                 <Card className="bg-muted/30 border-dashed border-2">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-muted-foreground">
-                            <AlertTriangle className="h-5 w-5" />
-                            Non-Dog Object Detected
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-lg text-center py-8 text-muted-foreground">
-                        <p>{selectedBreedInfo.description}</p>
-                    </CardContent>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                      <AlertTriangle className="h-5 w-5" />
+                      Non-Dog Object Detected
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-lg text-center py-8 text-muted-foreground">
+                    <p>{selectedBreedInfo.description}</p>
+                  </CardContent>
                 </Card>
               )}
             </>
@@ -416,12 +456,12 @@ function ResultsContent() {
         </div>
 
         <div className="h-4" />
-        
+
         {/* Feedback form luôn hiện để user report nếu AI nhận diện sai */}
         <FeedbackForm
           detectedBreed={selectedDisplayName}
           confidence={selectedConfidence}
-          imageUrl={""} 
+          imageUrl={""}
           predictionId={predictionId}
           initialSubmitted={hasFeedback}
         />

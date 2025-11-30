@@ -28,6 +28,7 @@ import { useMounted } from "@/hooks/use-mounted";
 import { ContactForm } from "@/components/contact-form";
 import { motion } from "framer-motion";
 
+
 export default function Home() {
   const mounted = useMounted();
   const { user, isAuthenticated, refetchUser } = useAuth();
@@ -112,10 +113,10 @@ export default function Home() {
     cleanupPreview()
     setSelectedFile(file)
     setError(null)
-    
+
     const url = URL.createObjectURL(file)
     setPreviewUrl(url)
-    
+
     if (file.type.startsWith("image/")) setFileType("image")
     else if (file.type.startsWith("video/")) setFileType("video")
   };
@@ -139,7 +140,7 @@ export default function Home() {
 
   const runDetectionSimulation = () => {
     setUploadProgress(0);
-    clearTimeouts();  
+    clearTimeouts();
 
     const t1 = setTimeout(() => {
       setDetectionStatusMessage(t("home.simulation.uploading"));
@@ -169,28 +170,28 @@ export default function Home() {
         const onProgress = (progress: number) =>
           console.log(`Upload: ${progress}%`);
         let response;
-        
+
         if (activeTab === "url") {
-             if (!urlInput.trim()) throw new Error(t("home.errors.emptyUrl") || "Please enter a URL");
-             response = await apiClient.predictUrl(urlInput);
+          if (!urlInput.trim()) throw new Error(t("home.errors.emptyUrl") || "Please enter a URL");
+          response = await apiClient.predictUrl(urlInput);
         } else {
-            if (fileType === "image")
+          if (fileType === "image")
             response = await apiClient.predictImage(selectedFile!, onProgress);
-            else if (fileType === "video")
+          else if (fileType === "video")
             response = await apiClient.predictVideo(selectedFile!, onProgress);
+
+          if (!response) {
+            throw new Error("Unsupported file type or prediction failed.");
+          }
+
+          if (isAuthenticated) await refetchUser();
+
+          if (!response.predictionId) {
+            throw new Error("Invalid response from server: Missing prediction ID");
+          }
+
+          router.push(`/results?id=${response.predictionId}`);
         }
-
-        clearTimeouts(); 
-        setUploadProgress(100);
-        setDetectionStatusMessage(t("home.simulation.success"));
-
-        if (isAuthenticated) await refetchUser();
-        
-        if (!response.predictionId) {
-          throw new Error("Invalid response from server: Missing prediction ID");
-        }
-
-        router.push(`/results?id=${response.predictionId}`);
       } catch (error: any) {
         console.error("Prediction failed:", error);
         setError(error.message || t("home.detectionFailed"));
@@ -249,11 +250,11 @@ export default function Home() {
 
           <Card className="relative p-1 border-0 bg-background/40 backdrop-blur-xl shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
             <div className="bg-background/60 backdrop-blur-sm p-4 md:p-10 rounded-[1.4rem] md:rounded-[1.8rem] h-full border border-white/10">
-              
+
               <Tabs defaultValue="upload" value={activeTab} onValueChange={(val) => { setActiveTab(val); resetUpload(); }} className="w-full mb-6">
-                                <TabsList className="grid w-full grid-cols-2 mb-4 p-1 bg-muted/50 rounded-xl relative">
-                  <TabsTrigger 
-                    value="upload" 
+                <TabsList className="grid w-full grid-cols-2 mb-4 p-1 bg-muted/50 rounded-xl relative">
+                  <TabsTrigger
+                    value="upload"
                     disabled={isDetecting}
                     className="relative z-10 rounded-lg bg-transparent data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none transition-colors duration-200"
                   >
@@ -269,9 +270,9 @@ export default function Home() {
                       {t("home.tabs.upload") || "Upload File"}
                     </span>
                   </TabsTrigger>
-                  
-                  <TabsTrigger 
-                    value="url" 
+
+                  <TabsTrigger
+                    value="url"
                     disabled={isDetecting}
                     className="relative z-10 rounded-lg bg-transparent data-[state=active]:bg-transparent data-[state=active]:text-primary-foreground data-[state=active]:shadow-none transition-colors duration-200"
                   >
@@ -302,10 +303,9 @@ export default function Home() {
                         relative group cursor-pointer
                         border-2 border-dashed rounded-2xl md:rounded-3xl p-6 md:p-12 text-center transition-all duration-300 ease-out
                         flex flex-col items-center justify-center gap-4 md:gap-6 min-h-[250px] md:min-h-[300px]
-                        ${
-                          isDragging
-                            ? "border-primary bg-primary/10 scale-[1.02]"
-                            : "border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5"
+                        ${isDragging
+                          ? "border-primary bg-primary/10 scale-[1.02]"
+                          : "border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5"
                         }
                       `}
                     >
@@ -405,53 +405,53 @@ export default function Home() {
                 </TabsContent>
 
                 <TabsContent value="url" className="mt-0 space-y-6">
-                    <div className="flex flex-col gap-4 min-h-[250px] md:min-h-[300px] justify-center">
-                        <div className="space-y-2 text-center">
-                            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
-                                <LinkIcon className="w-6 h-6 text-primary" />
-                            </div>
-                            <h3 className="text-xl font-bold">{t("home.urlInputTitle") || "Enter Image URL"}</h3>
-                            <p className="text-muted-foreground text-sm max-w-md mx-auto">
-                                {t("home.urlInputDesc") || "Paste a link to an image (JPG, PNG, WebP) to identify the dog breed."}
-                            </p>
-                        </div>
-
-                        <div className="max-w-md mx-auto w-full space-y-4">
-                            <Input 
-                                placeholder="https://example.com/dog.jpg" 
-                                value={urlInput}
-                                onChange={(e) => setUrlInput(e.target.value)}
-                                className="h-12 text-lg bg-background/50"
-                                disabled={isDetecting}
-                            />
-                            
-                            <Alert className="bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400">
-                                <AlertTriangle className="h-4 w-4" />
-                                <AlertTitle>{t("home.securityWarning")}</AlertTitle>
-                                <AlertDescription className="text-xs">
-                                    {t("home.securityWarningDesc")}
-                                </AlertDescription>
-                            </Alert>
-
-                            <Button
-                                onClick={handleDetect}
-                                className="w-full h-12 text-base font-bold rounded-xl bg-gradient-to-r from-primary to-violet-600 hover:from-violet-600 hover:to-primary shadow-lg shadow-primary/25"
-                                disabled={isDetecting || !urlInput.trim()}
-                            >
-                                {isDetecting ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        {t("home.detecting")}
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center gap-2">
-                                        <ScanSearch className="h-5 w-5" />
-                                        {t("home.detectButton")}
-                                    </div>
-                                )}
-                            </Button>
-                        </div>
+                  <div className="flex flex-col gap-4 min-h-[250px] md:min-h-[300px] justify-center">
+                    <div className="space-y-2 text-center">
+                      <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+                        <LinkIcon className="w-6 h-6 text-primary" />
+                      </div>
+                      <h3 className="text-xl font-bold">{t("home.urlInputTitle") || "Enter Image URL"}</h3>
+                      <p className="text-muted-foreground text-sm max-w-md mx-auto">
+                        {t("home.urlInputDesc") || "Paste a link to an image (JPG, PNG, WebP) to identify the dog breed."}
+                      </p>
                     </div>
+
+                    <div className="max-w-md mx-auto w-full space-y-4">
+                      <Input
+                        placeholder="https://example.com/dog.jpg"
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        className="h-12 text-lg bg-background/50"
+                        disabled={isDetecting}
+                      />
+
+                      <Alert className="bg-yellow-500/10 border-yellow-500/20 text-yellow-600 dark:text-yellow-400">
+                        <AlertTriangle className="h-4 w-4" />
+                        <AlertTitle>{t("home.securityWarning")}</AlertTitle>
+                        <AlertDescription className="text-xs">
+                          {t("home.securityWarningDesc")}
+                        </AlertDescription>
+                      </Alert>
+
+                      <Button
+                        onClick={handleDetect}
+                        className="w-full h-12 text-base font-bold rounded-xl bg-gradient-to-r from-primary to-violet-600 hover:from-violet-600 hover:to-primary shadow-lg shadow-primary/25"
+                        disabled={isDetecting || !urlInput.trim()}
+                      >
+                        {isDetecting ? (
+                          <div className="flex items-center gap-2">
+                            <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            {t("home.detecting")}
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <ScanSearch className="h-5 w-5" />
+                            {t("home.detectButton")}
+                          </div>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
                 </TabsContent>
               </Tabs>
 

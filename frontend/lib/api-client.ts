@@ -677,6 +677,14 @@ export class ApiClient {
       false // Để public, ai có link cũng xem được
     );
   }
+
+  async getPredictionStatus(id: string) {
+    return this.request<any>(
+      `/bff/predict/status/${id}`,
+      { method: "GET" },
+      false
+    );
+  }
   // --------------------------------------------------
 
   async deletePredictionHistory(id: string): Promise<void> {

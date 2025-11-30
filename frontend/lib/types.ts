@@ -2,8 +2,8 @@ export interface User {
   id: string;
   plan: "free" | "starter" | "professional" | "enterprise" | "guest";
   username: string;
-  email?: string; // Optional vì guest không có email
-  role?: "user" | "de" | "admin"; // Optional vì guest không có role
+  email?: string;
+  role?: "user" | "de" | "admin";
   verify?: boolean;
   createdAt?: string;
   firstName?: string;
@@ -206,6 +206,7 @@ export interface BffPredictionResponse {
   } | null;
   hasFeedback?: boolean;
   message?: string;
+  processed_base64?: string;
 }
 
 // Cấu trúc cho một sản phẩm được gợi ý
@@ -217,7 +218,6 @@ export interface RecommendedProduct {
 }
 
 // Cấu trúc dữ liệu chi tiết của giống chó được làm giàu bởi BFF
-// Nó chứa các trường được chọn lọc từ DogBreedWiki
 export interface EnrichedDogBreed {
   slug: string;
   breed: string;

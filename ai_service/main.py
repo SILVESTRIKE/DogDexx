@@ -1,5 +1,6 @@
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Body
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Body, Request
+import time
 from fastapi.responses import JSONResponse
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
@@ -160,7 +161,15 @@ app.add_middleware(
     allow_methods=["*"], 
     allow_headers=["*"]
 )
-
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    start_time = time.time()
+    print(f"[AI-API] Request received: {request.url.path}", flush=True)
+    response = await call_next(request)
+    process_time = (time.time() - start_time) * 1000
+    print(f"[AI-API] Request processed: {request.url.path} - Duration: {process_time:.2f}ms", flush=True)
+    response.headers["X-Process-Time"] = str(process_time)
+    return response
 config = None
 @app.on_event("startup")
 def startup_event():
@@ -225,14 +234,17 @@ def apply_nms(detections, iou_threshold=0.5):
 
 # --- LOGIC ẢNH: Hybrid (Detect -> Classify) ---
 def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
+    t_start = time.time()
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None: raise ValueError("Invalid image")
 
     # 1. Dùng Detect Model
+    t_detect_start = time.time()
     detector = config.detect_model if config.detect_model else config.classify_model
     detect_res = detector(img, conf=0.15, iou=config.IOU, verbose=False) 
     base_objects = process_results(detect_res, detector)
+    t_detect_end = time.time()
 
     final_results = []
     
@@ -249,6 +261,7 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
             other_objs.append(obj)
     
     # TRƯỜNG HỢP 1: Có chó trong ảnh
+    t_classify_start = time.time()
     if len(dog_objs) > 0:
         # Chỉ xử lý và trả về danh sách chó (bỏ qua other_objs)
         for obj in dog_objs:
@@ -272,11 +285,21 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
     else:
         # Trả về các vật thể khác (không qua classifier)
         final_results = other_objs
+    t_classify_end = time.time()
 
     final_results = apply_nms(final_results, iou_threshold=config.IOU)
 
     annotated_img = draw_annotations(img, final_results)
     _, buf = cv2.imencode(".jpg", annotated_img)
+    
+    t_end = time.time()
+    preprocess_ms = (t_detect_start - t_start) * 1000
+    detect_ms = (t_detect_end - t_detect_start) * 1000
+    classify_ms = (t_classify_end - t_classify_start) * 1000
+    total_ms = (t_end - t_start) * 1000
+    
+    print(f"[PERF] TYPE:IMAGE | Device: {config.device} | Preprocess: {preprocess_ms:.2f}ms | Detect: {detect_ms:.2f}ms | Classify: {classify_ms:.2f}ms | Total: {total_ms:.2f}ms", flush=True)
+
     return {
         "predictions": final_results,
         "processed_media_base64": base64.b64encode(buf).decode("utf-8"),
@@ -285,6 +308,7 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
 
 # --- LOGIC VIDEO: Hybrid Track ---
 def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
+    t_start = time.time()
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as t_in, \
          tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as t_out:
         t_in.write(video_bytes)
@@ -304,10 +328,13 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
         )
 
         cap = cv2.VideoCapture(t_in_path)
-        fps = cap.get(cv2.CAP_PROP_FPS) / VID_STRIDE
+        fps_input = cap.get(cv2.CAP_PROP_FPS)
+        fps = fps_input / VID_STRIDE
         writer = imageio.get_writer(t_out_path, fps=min(fps, 20), codec="libx264", pixelformat="yuv420p")
 
+        frame_count = 0
         for res in results_gen:
+            frame_count += 1
             frame = res.orig_img
             frame_dets = []
             
@@ -355,6 +382,11 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
             b64 = base64.b64encode(f.read()).decode("utf-8")
             
         gc.collect()
+        
+        t_end = time.time()
+        duration_ms = (t_end - t_start) * 1000
+        print(f"[PERF] TYPE:VIDEO | Device: {config.device} | Duration: {duration_ms:.2f}ms | Frames: {frame_count} | FPS: {fps:.2f}", flush=True)
+
         return {"predictions": list(unique_results.values()), "processed_media_base64": b64}
     finally:
         if os.path.exists(t_in_path): os.unlink(t_in_path)
@@ -416,6 +448,7 @@ async def predict_image(file: UploadFile = File(...)):
 
 @app.post("/predict/images")
 async def predict_images(files: List[UploadFile] = File(...)):
+    print(f"[AI-API] Received predict_images request with {len(files)} files.", flush=True)
     if not config.classify_model: return JSONResponse({"status": "error"}, 503)
     results = []
     for file in files:
@@ -467,6 +500,7 @@ async def ws_stream(websocket: WebSocket):
             data = await websocket.receive()
             if "bytes" in data:
                 def process_frame_v10(binary_data):
+                    t_frame_start = time.time()
                     nparr = np.frombuffer(binary_data, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is None: return None
@@ -480,7 +514,11 @@ async def ws_stream(websocket: WebSocket):
                         verbose=False,
                         imgsz=640 
                     )
-                    return process_results(results, config.classify_model)
+                    dets = process_results(results, config.classify_model)
+                    t_frame_end = time.time()
+                    process_ms = (t_frame_end - t_frame_start) * 1000
+                    print(f"[PERF] TYPE:STREAM | Device: {config.device} | Frame Process: {process_ms:.2f}ms", flush=True)
+                    return dets
 
                 detections = await run_in_threadpool(process_frame_v10, data["bytes"])
                 

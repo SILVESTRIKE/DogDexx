@@ -62,7 +62,7 @@ const userSchema = new Schema<UserDoc>(
       trim: true,
       lowercase: true,
     },
-    password: { type: String, required: true, select: false, trim: true, match: [/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/, "Password phải chứa ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt"] },
+    password: { type: String, required: true, select: false, trim: true },
     role: {
       type: String,
       enum: ["user", "de", "admin"],

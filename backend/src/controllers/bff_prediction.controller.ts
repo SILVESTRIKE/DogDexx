@@ -173,21 +173,34 @@ async function handlePredictionAndEnrichment(
   if (userId) {
     const validDogSlugs = allSlugs.filter((slug) => wikiInfoMap.has(slug));
     if (validDogSlugs.length > 0) {
-      collectionStatus = await updateUserCollectionAndAchievements(
-        userId,
-        validDogSlugs,
-        predictionResult._id,
-        req
-      );
+      // Handle both Mongoose document (_id) and plain object (predictionId)
+      const predictionId = predictionResult._id || predictionResult.predictionId;
+
+      if (predictionId) {
+        collectionStatus = await updateUserCollectionAndAchievements(
+          userId,
+          validDogSlugs,
+          new Types.ObjectId(predictionId.toString()),
+          req
+        );
+      }
     }
   }
   const predictionObject = predictionResult.toObject
     ? predictionResult.toObject()
     : predictionResult;
   const transformedPrediction = transformMediaURLs(req, predictionObject);
+
+  let processedMediaUrl = transformedPrediction.processedMediaUrl;
+  if (!processedMediaUrl && predictionResult.processed_base64) {
+    const isVideo = source === PREDICTION_SOURCES.VIDEO_UPLOAD;
+    const mimeType = isVideo ? 'video/mp4' : 'image/jpeg';
+    processedMediaUrl = `data:${mimeType};base64,${predictionResult.processed_base64}`;
+  }
+
   return {
-    predictionId: transformedPrediction.id,
-    processedMediaUrl: transformedPrediction.processedMediaUrl,
+    predictionId: transformedPrediction.predictionId || transformedPrediction.id,
+    processedMediaUrl: processedMediaUrl,
     detections: detections,
     collectionStatus: collectionStatus,
   };
@@ -199,6 +212,9 @@ export const bffPredictionController = {
       const userId = user?._id as Types.ObjectId | undefined;
       const file = req.file;
       if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+      const startTime = Date.now();
+      logger.info(`[Timing] [BFF] Request received for image prediction. User: ${userId || 'Guest'}`);
+
       const predictionPromise = predictionService.makePrediction(
         userId,
         file,
@@ -211,6 +227,10 @@ export const bffPredictionController = {
         PREDICTION_SOURCES.IMAGE_UPLOAD,
         userId?.toString()
       );
+
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
+
       await deductTokensForRequest(
         req,
         res,
@@ -228,6 +248,9 @@ export const bffPredictionController = {
       const userId = user?._id as Types.ObjectId | undefined;
       const file = req.file;
       if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+      const startTime = Date.now();
+      logger.info(`[Timing] [BFF] Request received for video prediction. User: ${userId || 'Guest'}`);
+
       const predictionPromise = predictionService.makePrediction(
         userId,
         file,
@@ -240,6 +263,10 @@ export const bffPredictionController = {
         PREDICTION_SOURCES.VIDEO_UPLOAD,
         userId?.toString()
       );
+
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: video | Total: ${duration}ms`);
+
       await deductTokensForRequest(
         req,
         res,
@@ -257,6 +284,7 @@ export const bffPredictionController = {
       const user = (req as any).user as UserDoc | undefined;
       const userId = user?._id as Types.ObjectId | undefined;
       const { url } = req.body;
+      const startTime = Date.now();
 
       if (!url) throw new BadRequestError("URL không được để trống.");
 
@@ -272,6 +300,9 @@ export const bffPredictionController = {
         PREDICTION_SOURCES.URL_INPUT,
         userId?.toString()
       );
+
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: url | Total: ${duration}ms`);
 
       // Tính phí token (ví dụ: giống image prediction)
       await deductTokensForRequest(
@@ -295,6 +326,8 @@ export const bffPredictionController = {
           ? "vi"
           : "en";
       const files = req.files as Express.Multer.File[];
+      const startTime = Date.now();
+
       if (!files || files.length === 0) {
         throw new BadRequestError("Không có file nào được cung cấp.");
       }
@@ -382,6 +415,10 @@ export const bffPredictionController = {
           collectionStatus: collectionStatus,
         };
       });
+
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: batch | Count: ${files.length} | Total: ${duration}ms`);
+
       await deductTokensForRequest(
         req,
         res,
@@ -521,9 +558,19 @@ export const bffPredictionController = {
         req.query.lang === "vi" || req.query.lang === "en"
           ? (req.query.lang as "vi" | "en")
           : "en";
-      const historyItem = await predictionHistoryService.getHistoryById(
-        historyId
-      );
+      let historyItem = null;
+      let attempts = 0;
+      while (attempts < 10 && !historyItem) {
+        try {
+          historyItem = await predictionHistoryService.getHistoryById(historyId);
+        } catch (error) {
+          // Ignore error and retry if not found
+        }
+        if (!historyItem) {
+          attempts++;
+          if (attempts < 10) await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
       if (!historyItem)
         throw new NotFoundError("Prediction history not found.");
       const breedSlugs: string[] = [
@@ -587,6 +634,15 @@ export const bffPredictionController = {
         hasFeedback: (historyItem as any).hasFeedback,
       };
       res.status(200).json(finalResponse);
+    } catch (error) {
+      next(error);
+    }
+  },
+  getPredictionStatus: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const status = await predictionService.getPredictionStatus(id);
+      res.status(200).json(status);
     } catch (error) {
       next(error);
     }
