@@ -724,7 +724,7 @@ export default {
     upgrade: "Upgrade Now",
   },
   pricing: {
-    featureTokenLimit: "{count} Tokens / week",
+    featureTokenLimit: "{count} Tokens / day",
     featureStorage: "History Storage",
     priority: "Priority Support",
     customModels: "Custom Models",

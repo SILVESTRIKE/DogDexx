@@ -51,10 +51,13 @@ function ResultsContent() {
         const status = await apiClient.getPredictionStatus(id);
         console.log("Polling status:", status);
 
-        if (status.status === 'completed' && status.result) {
-          // If completed, fetch history again to get the full enriched response
-          fetchHistoryById();
-          return;
+        if (status.status === 'completed') {
+          // Nếu đã hoàn thành và có kết quả -> Dừng polling và lấy dữ liệu
+          if (status.result) {
+            console.log("Polling completed, fetching final history...");
+            fetchHistoryById();
+            return;
+          }
         } else if (status.status === 'failed') {
           setError(status.message || "Prediction failed.");
           setLoading(false);

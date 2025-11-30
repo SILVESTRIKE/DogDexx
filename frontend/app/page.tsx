@@ -179,19 +179,19 @@ export default function Home() {
             response = await apiClient.predictImage(selectedFile!, onProgress);
           else if (fileType === "video")
             response = await apiClient.predictVideo(selectedFile!, onProgress);
-
-          if (!response) {
-            throw new Error("Unsupported file type or prediction failed.");
-          }
-
-          if (isAuthenticated) await refetchUser();
-
-          if (!response.predictionId) {
-            throw new Error("Invalid response from server: Missing prediction ID");
-          }
-
-          router.push(`/results?id=${response.predictionId}`);
         }
+
+        if (!response) {
+          throw new Error("Unsupported file type or prediction failed.");
+        }
+
+        if (isAuthenticated) await refetchUser();
+
+        if (!response.predictionId) {
+          throw new Error("Invalid response from server: Missing prediction ID");
+        }
+
+        router.push(`/results?id=${response.predictionId}`);
       } catch (error: any) {
         console.error("Prediction failed:", error);
         setError(error.message || t("home.detectionFailed"));

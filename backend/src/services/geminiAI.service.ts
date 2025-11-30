@@ -139,7 +139,7 @@ Requirements:
 - Talk only about the ${breed} breed.
 - If the user goes off-topic, gently guide the conversation back (for example: “Let’s stay focused on the ${breed} breed 🐶”).
 - Use a friendly, concise, and emotionally engaging tone that’s easy to understand.
-- Give detailed answers when the user asks about origin, temperament, living environment, care, diet, training, or friendliness with children/other pets.
+- Keep answers moderate in length, avoiding excessive detail unless specifically asked. Focus on key points about origin, temperament, care, and training.
 
 ---
 `
@@ -149,7 +149,7 @@ Yêu cầu:
 - Chỉ nói về giống chó ${breed}.
 - Nếu người dùng hỏi lạc đề, hãy khéo léo kéo về chủ đề (ví dụ: "Mình đang nói về giống chó ${breed} nhé 🐶").
 - Sử dụng phong cách thân thiện, ngắn gọn và dễ hiểu, có cảm xúc.
-- Trả lời chi tiết khi người dùng hỏi về nguồn gốc, tính cách, môi trường sống, chăm sóc, thức ăn, huấn luyện hoặc độ thân thiện với trẻ em/thú cưng khác.
+- Trả lời vừa phải, không quá dài dòng trừ khi được hỏi chi tiết. Tập trung vào các ý chính về nguồn gốc, tính cách, chăm sóc và huấn luyện.
 
 ---`;
 

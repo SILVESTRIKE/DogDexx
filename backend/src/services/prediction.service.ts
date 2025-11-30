@@ -7,7 +7,6 @@ import sharp from "sharp";
 import { spawnSync } from "child_process";
 import { Readable } from "stream";
 import { UploadApiResponse } from "cloudinary";
-
 import { AIModelService } from "./ai_models.service";
 import { DirectoryModel } from "../models/directory.model";
 import { MediaModel, MediaDoc } from "../models/medias.model";
@@ -121,15 +120,15 @@ const optimizeImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
   return image.jpeg({ quality: 85 }).toBuffer();
 };
 
-const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
+const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
   if (process.env.SKIP_VIDEO_OPTIMIZATION === '1') {
     logger.warn('[PredictionService] SKIP_VIDEO_OPTIMIZATION enabled — sending raw video buffer to AI service');
-    return Promise.resolve(buffer);
+    return fs.promises.readFile(filePath);
   }
 
   if (!FFMPEG_AVAILABLE) {
     logger.warn('[PredictionService] Skipping video preprocessing because ffmpeg is not available.');
-    return Promise.resolve(buffer);
+    return fs.promises.readFile(filePath);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -138,12 +137,9 @@ const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
   if (!VIDEO_PREPROCESS_ENABLED) {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
-      const readableStream = new Readable();
-      readableStream.push(buffer);
-      readableStream.push(null);
 
-      const command = ffmpeg()
-        .input(readableStream)
+      // SỬA: Truyền filePath trực tiếp vào ffmpeg, KHÔNG dùng .input(stream)
+      const command = ffmpeg(filePath)
         .videoBitrate(VIDEO_TARGET_BITRATE)
         .withVideoCodec('libx264')
         .addOption('-preset', 'fast')
@@ -162,15 +158,12 @@ const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
 
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const readableStream = new Readable();
-    readableStream.push(buffer);
-    readableStream.push(null);
 
     try {
       const scaleFilter = `scale=${VIDEO_PREPROCESS_MAX_WIDTH}:-2:force_original_aspect_ratio=decrease`;
 
-      const command = ffmpeg()
-        .input(readableStream)
+      // SỬA: Truyền filePath trực tiếp vào ffmpeg
+      const command = ffmpeg(filePath)
         .withVideoCodec('libx264')
         .videoBitrate(VIDEO_PREPROCESS_BITRATE)
         .addOption('-preset', VIDEO_PREPROCESS_PRESET)
@@ -189,7 +182,8 @@ const optimizeVideoBuffer = (buffer: Buffer): Promise<Buffer> => {
       outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
     } catch (err: any) {
       logger.error('[PredictionService] Exception while trying to preprocess video buffer:', err);
-      resolve(buffer);
+      // Fallback: đọc file gốc nếu lỗi
+      fs.promises.readFile(filePath).then(resolve).catch(reject);
     }
   });
 };
@@ -447,7 +441,7 @@ export const predictionService = {
       if (type === 'image') {
         optimizedBuffer = await optimizeImageBuffer(fileBuffer);
       } else {
-        optimizedBuffer = await optimizeVideoBuffer(fileBuffer);
+        optimizedBuffer = await optimizeVideoFile(file.path);
       }
       const optDuration = Date.now() - optStartTime;
 
@@ -526,7 +520,6 @@ export const predictionService = {
         fileType: type,
         predictionResult: {
           predictions: predictionResult.predictions,
-          // Đã xóa processed_media_base64 để tránh lỗi OOM Redis
         } as any,
         processedMediaPathTemp,
         modelName,

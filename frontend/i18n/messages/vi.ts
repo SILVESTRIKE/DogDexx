@@ -765,7 +765,7 @@ export default {
     upgrade: "Nâng cấp ngay",
   },
   pricing: {
-    featureTokenLimit: "{count} Tokens / tuần",
+    featureTokenLimit: "{count} Tokens / ngày",
     featureStorage: "Lưu trữ lịch sử",
     priority: "Hỗ trợ ưu tiên",
     customModels: "Mô hình tùy chỉnh",
