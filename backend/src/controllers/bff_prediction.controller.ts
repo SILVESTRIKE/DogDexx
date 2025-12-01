@@ -220,18 +220,33 @@ export const bffPredictionController = {
       const startTime = Date.now();
       logger.info(`[Timing] [BFF] Request received for image prediction. User: ${userId || 'Guest'}`);
 
-      const predictionPromise = predictionService.makePrediction(
+      // [BẮT ĐẦU SỬA]
+      const result = await predictionService.makePrediction(
         userId,
         file,
         "image",
         req
       );
+
+      // Thêm đoạn kiểm tra này (giống predictVideo)
+      if (result.status === 'processing') {
+        // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
+        res.status(202).json({
+          predictionId: result.predictionId,
+          status: 'processing',
+          message: "Ảnh đang được xử lý ngầm."
+        });
+        return;
+      }
+
+      // Logic cũ (để dự phòng)
       const data = await handlePredictionAndEnrichment(
         req,
-        predictionPromise,
+        Promise.resolve(result),
         PREDICTION_SOURCES.IMAGE_UPLOAD,
         userId?.toString()
       );
+      // [KẾT THÚC SỬA]
 
       const duration = Date.now() - startTime;
       logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
@@ -256,15 +271,30 @@ export const bffPredictionController = {
       const startTime = Date.now();
       logger.info(`[Timing] [BFF] Request received for video prediction. User: ${userId || 'Guest'}`);
 
-      const predictionPromise = predictionService.makePrediction(
+      const result = await predictionService.makePrediction(
         userId,
         file,
         "video",
         req
       );
+
+      // Kiểm tra nếu đang xử lý ngầm (Async)
+      if (result.status === 'processing') {
+        // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
+        res.status(202).json({
+          predictionId: result.predictionId,
+          status: 'processing',
+          message: "Video đang được xử lý ngầm."
+        });
+        return;
+      }
+
+      // Logic cũ (nếu status != processing, tức là xử lý xong ngay - thường là ảnh)
+      // Lưu ý: Với code mới của prediction.service, video luôn trả về 'processing'.
+      // Đoạn dưới này chỉ chạy nếu bạn áp dụng logic cũ cho ảnh hoặc trường hợp đồng bộ.
       const data = await handlePredictionAndEnrichment(
         req,
-        predictionPromise,
+        Promise.resolve(result), // Wrap result vào Promise vì handlePredictionAndEnrichment mong đợi Promise
         PREDICTION_SOURCES.VIDEO_UPLOAD,
         userId?.toString()
       );
@@ -621,12 +651,25 @@ export const bffPredictionController = {
             const isVideo = historyItem.source.includes("video");
             const mimeType = isVideo ? "video/mp4" : "image/jpeg";
             transformedPrediction.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+          } else {
+            // [FIX] Nếu DB bảo đang processing mà không thấy file tạm
+            // Chỉ báo failed nếu job đã tạo quá lâu (ví dụ: > 2 phút)
+            // Để tránh trường hợp vừa tạo xong chưa kịp ghi file đã bị báo lỗi
+            const jobAge = Date.now() - new Date(historyItem.createdAt).getTime();
+            if (jobAge > 5 * 60 * 1000) { // 5 phút
+              logger.warn(`[BFF] Temp file missing for STALE processing job ${historyId} (${jobAge}ms). Marking as failed.`);
+              transformedPrediction.processedMediaUrl = "failed";
+            } else {
+              // Nếu mới tạo thì cứ để processing, chờ worker ghi file
+              // Frontend sẽ tiếp tục polling
+            }
           }
         } catch (e) {
           logger.warn(
             `[BFF] Could not read temp file for history ${historyId}:`,
             e
           );
+          // Không set failed ở đây để tránh lỗi đọc file tạm thời
         }
       }
       // -----------------------------------------------------------------------

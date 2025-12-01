@@ -714,6 +714,7 @@ export default {
     sourceImage: "Ảnh tải lên",
     sourceVideo: "Video tải lên",
     sourceStream: "Chụp từ Camera",
+    sourceUrl: "Nhập URL",
     source: "Nguồn",
     sortBy: "Sắp xếp theo",
     sortNewest: "Mới nhất trước",
@@ -871,5 +872,16 @@ export default {
       achievement: "Thành tích",
     },
     unupdated: "Chưa cập nhật",
-  }
+  },
+  loadingMessages: {
+    sniffing: { title: "Đang đánh hơi dữ liệu...", desc: "Đang đánh hơi dữ liệu từng ngóc ngách..." },
+    wakingBoss: { title: "Đang gọi Boss dậy...", desc: "Đang gọi Boss dậy làm việc (Boss hơi lười)..." },
+    analyzingFur: { title: "Đang phân tích lông...", desc: "Đang soi từng cọng lông..." },
+    lookingBones: { title: "Đang tìm khúc xương...", desc: "Đang tìm khúc xương bị thất lạc..." },
+    didYouKnow: { title: "Bạn có biết?", desc: "Mũi của chó ướt là để hấp thụ mùi hương tốt hơn đó!" },
+    summoningAI: { title: "Đang triệu hồi AI...", desc: "Đang triệu hồi sức mạnh của Cậu Vàng..." },
+    identifying: { title: "Đang nhận diện...", desc: "Liệu đây là Husky ngáo hay Corgi mông to?" },
+    funFact: { title: "Sự thật thú vị", desc: "Chó Phú Quốc là một trong 3 giống chó có xoáy trên lưng hiếm nhất thế giới." },
+    processing: "Đang xử lý",
+  },
 };

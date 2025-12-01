@@ -19,6 +19,7 @@ import { batchProcessor } from "../utils/BatchProcessor.util";
 import { uploadQueue, UploadJobData } from "../utils/UploadQueue.util";
 import { analyticsService } from "./analytics.service";
 import { AnalyticsEventName } from "../constants/analytics.constants";
+import { predictionQueue, PredictionJobData } from "../utils/PredictionQueue.util";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const MAX_IMAGE_DIMENSION = 1500;
@@ -27,7 +28,7 @@ const VIDEO_PREPROCESS_ENABLED = process.env.VIDEO_PREPROCESS_ENABLED !== '0';
 const VIDEO_PREPROCESS_MAX_WIDTH = Number(process.env.VIDEO_PREPROCESS_MAX_WIDTH) || 640;
 const VIDEO_PREPROCESS_TARGET_FPS = Number(process.env.VIDEO_PREPROCESS_TARGET_FPS) || 15;
 const VIDEO_PREPROCESS_BITRATE = process.env.VIDEO_PREPROCESS_BITRATE || '500k';
-const VIDEO_PREPROCESS_PRESET = process.env.VIDEO_PREPROCESS_PRESET || 'veryfast';
+const VIDEO_PREPROCESS_PRESET = process.env.VIDEO_PREPROCESS_PRESET || 'ultrafast';
 const VIDEO_TARGET_BITRATE = process.env.VIDEO_TARGET_BITRATE || '2000k';
 
 const PREDICTION_SOURCES = {
@@ -223,6 +224,69 @@ const uploadBufferToCloudinary = async (buffer: Buffer, public_id_without_ext: s
 };
 
 export const predictionService = {
+  processAsyncPrediction: async (data: PredictionJobData) => {
+    const { predictionId, mediaId, userId, directoryId, filePath, fileOriginalName, fileType, modelName, startTime, analyticsData } = data;
+    try {
+      // 1. Optimize Video
+      const fileBuffer = await fs.promises.readFile(filePath);
+      let optimizedBuffer: Buffer;
+      if (fileType === 'image') optimizedBuffer = await optimizeImageBuffer(fileBuffer);
+      else optimizedBuffer = await optimizeVideoFile(filePath);
+
+      // 2. Gọi AI
+      const batchItem = {
+        id: predictionId,
+        userId: userId ? new Types.ObjectId(userId) : undefined,
+        buffer: optimizedBuffer,
+        originalName: fileOriginalName,
+        mediaType: fileType,
+        resolve: () => { }, reject: () => { }
+      };
+      const predictionResult = await batchProcessor.add(batchItem);
+
+      // 3. [QUAN TRỌNG] Lưu file tạm vào đúng chỗ Controller có thể đọc
+      // Đường dẫn này phải khớp với TEMP_UPLOAD_DIR trong Controller
+      const TEMP_UPLOAD_DIR = path.join(__dirname, "../../public/uploads/temp");
+      if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
+
+      const processedMediaPathTemp = path.join(TEMP_UPLOAD_DIR, `processed_${predictionId}.txt`);
+      await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
+
+      // 4. [MỚI] Update DB NGAY LẬP TỨC để Frontend hiển thị được luôn
+      await PredictionHistoryModel.findByIdAndUpdate(predictionId, {
+        predictions: predictionResult.predictions,
+        // Vẫn để path là 'processing' để Controller biết đường tìm file tạm
+        processedMediaPath: "processing"
+      });
+
+      // 5. Đẩy sang UploadQueue (để upload Cloudinary sau)
+      await uploadQueue.add('upload-job', {
+        predictionId,
+        mediaId: mediaId, // <--- SỬA CHỖ NÀY (trước là mediaId: "")
+        predictionHistoryId: predictionId,
+        userId,
+        directoryId,
+        filePath,
+        fileOriginalName,
+        fileType,
+        predictionResult: { predictions: predictionResult.predictions },
+        processedMediaPathTemp, // Truyền path file tạm sang cho UploadQueue dùng
+        modelName,
+        startTime,
+        analyticsData
+      }, { removeOnComplete: true });
+
+    } catch (error) {
+      logger.error(`[AsyncPrediction] Failed:`, error);
+
+      await PredictionHistoryModel.findByIdAndUpdate(predictionId, {
+        processedMediaPath: "failed"
+      });
+
+      if (fs.existsSync(filePath)) await fs.promises.unlink(filePath).catch(() => { });
+    }
+  },
+
   processBackgroundUpload: async (data: UploadJobData) => {
     const { predictionId, mediaId, predictionHistoryId, userId, directoryId, filePath, fileOriginalName, fileType, predictionResult, modelName, startTime, analyticsData, processedMediaPathTemp } = data;
     const bgStartTime = Date.now();
@@ -295,6 +359,11 @@ export const predictionService = {
     } catch (bgError) {
       logger.error(`[PredictionService] Background task failed for ID: ${predictionId}`, bgError);
       logger.error(`[Timing] [PredictionService] [${predictionId}] Background task failed:`, bgError);
+
+      // [FIX] Update DB to failed
+      await PredictionHistoryModel.findByIdAndUpdate(predictionHistoryId, {
+        processedMediaPath: "failed"
+      });
     } finally {
       // CLEANUP: Delete temp file
       try {
@@ -417,143 +486,57 @@ export const predictionService = {
     file: Express.Multer.File,
     type: "image" | "video",
     req: Request
-  ): Promise<{ predictions: IYoloPrediction[], processed_base64: string, predictionId: string }> => {
-    if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
-    const startTime = Date.now();
+  ): Promise<{ predictionId: string, status: string }> => {
+    if (!file) throw new BadRequestError("No file.");
+    const predictionId = new Types.ObjectId();
 
+    // ... (Giữ nguyên logic lấy directory_id, modelName) ...
     let directory_id: Types.ObjectId | undefined;
     if (userId) {
       const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });
-      if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
-      directory_id = userDirectory._id;
+      if (userDirectory) directory_id = userDirectory._id;
     }
-
     const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
     const modelName = activeModel ? activeModel.name : 'unknown_model';
 
-    try {
-      // 1. Đọc file từ disk
-      const fileBuffer = await fs.promises.readFile(file.path);
+    // 1. Tạo Placeholder DB Record
+    const newMedia = new MediaModel({
+      name: file.originalname,
+      mediaPath: "processing",
+      creator_id: userId,
+      directory_id,
+      type: type,
+    });
+    await newMedia.save();
 
-      // 2. Tối ưu file (Video/Image)
-      const optStartTime = Date.now();
-      let optimizedBuffer: Buffer;
-      if (type === 'image') {
-        optimizedBuffer = await optimizeImageBuffer(fileBuffer);
-      } else {
-        optimizedBuffer = await optimizeVideoFile(file.path);
-      }
-      const optDuration = Date.now() - optStartTime;
+    await PredictionHistoryModel.create({
+      _id: predictionId,
+      user: userId,
+      media: newMedia._id,
+      mediaPath: "processing",
+      predictions: [],
+      processedMediaPath: "processing",
+      modelUsed: modelName,
+      source: `${type}_upload`,
+      processingTime: 0
+    });
 
-      // 3. Gửi cho AI dự đoán
-      const timestamp = Date.now();
-      const predictionId = new Types.ObjectId();
+    // 2. Đẩy vào Queue
+    await predictionQueue.add('prediction-job', {
+      predictionId: predictionId.toString(),
+      mediaId: newMedia._id.toString(),
+      userId: userId?.toString(),
+      directoryId: directory_id?.toString(),
+      filePath: file.path,
+      fileOriginalName: file.originalname,
+      fileType: type,
+      modelName,
+      startTime: Date.now(),
+      analyticsData: { ip: req.ip, userAgent: req.headers['user-agent'] }
+    }, { removeOnComplete: true });
 
-      logger.info(`[Timing] [PredictionService] [${predictionId}] Starting prediction flow. Type: ${type}`);
-
-      const batchItem = {
-        id: predictionId.toString(),
-        userId: userId,
-        buffer: optimizedBuffer,
-        originalName: file.originalname,
-        mediaType: type,
-        resolve: () => { },
-        reject: () => { }
-      };
-
-      logger.info(`[PredictionService] Starting AI prediction (ID: ${batchItem.id})`);
-
-      // Gọi AI Service
-      const aiStartTime = Date.now();
-      logger.info(`[Timing] [PredictionService] [${predictionId}] Submitting to BatchProcessor.`);
-      const predictionResult = await batchProcessor.add(batchItem);
-      const aiDuration = Date.now() - aiStartTime;
-      logger.info(`[Timing] [PredictionService] [${predictionId}] AI processing complete. Duration: ${aiDuration}ms`);
-
-      const totalServiceDuration = Date.now() - startTime;
-      logger.info(`[PERF] BACKEND | Type: ${type} | Opt: ${optDuration}ms | AI: ${aiDuration}ms | Total: ${totalServiceDuration}ms`);
-
-      if (!predictionResult?.predictions || !predictionResult?.processed_media_base64) {
-        throw new Error("Kết quả từ AI service không hợp lệ.");
-      }
-
-      // 4. CREATE DB RECORDS SYNCHRONOUSLY (Placeholder status)
-      const newMedia = new MediaModel({
-        name: file.originalname,
-        mediaPath: `processing_upload_${timestamp}`, // Placeholder
-        creator_id: userId,
-        directory_id,
-        type: type,
-      });
-      await newMedia.save();
-
-      const newPredictionHistory = await PredictionHistoryModel.create({
-        _id: predictionId,
-        user: userId,
-        media: newMedia._id,
-        mediaPath: newMedia.mediaPath, // Placeholder
-        predictions: predictionResult.predictions,
-        processedMediaPath: "processing", // Placeholder
-        modelUsed: modelName,
-        source: `${type}_upload` as any,
-        processingTime: 0 // Will be updated later
-      });
-
-      // 5. BACKGROUND TASKS: Upload & Update DB (Use Queue)
-      const analyticsData = {
-        ip: req.ip,
-        userAgent: req.headers['user-agent']
-      };
-
-      // Write processed Base64 to temp file to avoid Redis OOM
-      const processedMediaPathTemp = path.join(path.dirname(file.path), `processed_${predictionId}.txt`);
-      await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
-
-      uploadQueue.add('upload-job', {
-        predictionId: predictionId.toString(),
-        mediaId: newMedia._id.toString(),
-        predictionHistoryId: newPredictionHistory._id.toString(),
-        userId: userId?.toString(),
-        directoryId: directory_id?.toString(), // SỬA: dùng directory_id
-        filePath: file.path,
-        fileOriginalName: file.originalname,
-        fileType: type,
-        predictionResult: {
-          predictions: predictionResult.predictions,
-        } as any,
-        processedMediaPathTemp,
-        modelName,
-        startTime,
-        analyticsData
-      }, {
-        removeOnComplete: true,
-        removeOnFail: 50,
-      });
-
-      logger.info(`[PredictionService] Job added to Redis queue for ID: ${predictionId}`);
-
-      // 6. Return result immediately
-      return {
-        predictions: predictionResult.predictions,
-        processed_base64: predictionResult.processed_media_base64,
-        predictionId: predictionId.toString()
-      };
-
-    } catch (error: any) {
-      // Cleanup temp file on error
-      try {
-        if (fs.existsSync(file.path)) {
-          await fs.promises.unlink(file.path);
-        }
-      } catch (e) { }
-
-      if (axios.isAxiosError(error)) {
-        logger.error(`[PredictionService] Lỗi Axios: ${error.message}`);
-      } else {
-        logger.error(`[PredictionService] Lỗi:`, error);
-      }
-      throw new Error("Không thể xử lý dự đoán do có lỗi từ dịch vụ AI.");
-    }
+    // 3. Trả về ngay
+    return { predictionId: predictionId.toString(), status: 'processing' };
   },
 
   saveStreamPrediction: async (

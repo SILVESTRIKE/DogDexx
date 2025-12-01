@@ -17,8 +17,7 @@ import { useAuth } from '@/lib/auth-context';
 import { BreedChatBox } from "@/components/breed-chat-box";
 import { HealthRecommendations } from "@/components/health_rec";
 import { RecommendedProducts } from "@/components/product_rec";
-
-function ResultsContent() {
+import Loading from "./loading"; function ResultsContent() {
   const { t, locale } = useI18n()
   const { user } = useAuth();
   const searchParams = useSearchParams()
@@ -38,7 +37,7 @@ function ResultsContent() {
   // --- POLLING LOGIC ---
   const pollForStatus = async (id: string) => {
     let attempts = 0;
-    const maxAttempts = 20; // 20 * 1s = 20s timeout
+    const maxAttempts = 300; // 300 * 1s = 300s (5 phút) timeout
 
     const poll = async () => {
       if (attempts >= maxAttempts) {
@@ -148,14 +147,7 @@ function ResultsContent() {
 
   // ----- GIAO DIỆN CHO CÁC TRẠNG THÁI MỚI -----
   if (loading) {
-    return (
-      <main className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-muted-foreground">{t("common.loading")}</p>
-        </div>
-      </main>
-    );
+    return <Loading />;
   }
 
   if (error) {

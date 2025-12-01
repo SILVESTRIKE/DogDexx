@@ -683,6 +683,7 @@ export default {
     deleteSuccess: "Prediction deleted successfully.",
     deleteError: "Failed to delete prediction.",
     loginRequired: "Please login to view your prediction history",
+    loadMore: "Load More",
     sourceStream: "Live Capture",
     sourceImage: "Image Upload",
     sourceVideo: "Video Upload",
@@ -820,5 +821,16 @@ export default {
       achievement: "Achievement",
     },
     unupdated: "Not updated",
-  }
+  },
+  loadingMessages: {
+    sniffing: { title: "Sniffing data...", desc: "Sniffing every corner for data..." },
+    wakingBoss: { title: "Waking up the Boss...", desc: "Calling the Boss (he's a bit lazy)..." },
+    analyzingFur: { title: "Analyzing fur patterns...", desc: "Examining every single hair..." },
+    lookingBones: { title: "Looking for bones...", desc: "Searching for the lost bone..." },
+    didYouKnow: { title: "Did you know?", desc: "A dog's nose is wet to help absorb scent chemicals!" },
+    summoningAI: { title: "Summoning AI...", desc: "Summoning the power of the Good Boy..." },
+    identifying: { title: "Identifying breed...", desc: "Is this a Husky or a Corgi?" },
+    funFact: { title: "Fun Fact", desc: "Phu Quoc Ridgeback is one of only three breeds with a ridge on its back." },
+    processing: "Processing",
+  },
 };
