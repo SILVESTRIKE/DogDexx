@@ -14,7 +14,7 @@ import { FeedbackForm } from "@/components/feedback-form"
 import { useI18n } from "@/lib/i18n-context"
 import { apiClient } from "@/lib/api-client"
 import { useAuth } from '@/lib/auth-context';
-import { BreedChatBox } from "@/components/breed-chat-box"; 
+import { BreedChatBox } from "@/components/breed-chat-box";
 import { HealthRecommendations } from "@/components/health_rec";
 import { RecommendedProducts } from "@/components/product_rec";
 
@@ -23,13 +23,13 @@ function ResultsContent() {
   const searchParams = useSearchParams()
   const { t, locale } = useI18n()
   const { user } = useAuth();
-  
+
   // State mới cho loading và error
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // State cũ của bạn
-  const [allDetections, setAllDetections] = useState<Detection[]>([]) 
+  const [allDetections, setAllDetections] = useState<Detection[]>([])
   const [predictionId, setPredictionId] = useState<string | null>(null)
   const [selectedDetection, setSelectedDetection] = useState<Detection | null>(null)
   const [processedMediaUrl, setProcessedMediaUrl] = useState<string | null>(null);
@@ -53,28 +53,28 @@ function ResultsContent() {
         setNoDetectionsFound(false); // Đảm bảo không hiển thị trang "no detections"
         return;
       }
-      
+
       if ((!result.detections || result.detections.length === 0) && !result.message) {
         setNoDetectionsFound(true);
         return;
       }
       setSpecialMessage(null); // Reset message nếu có detections
 
-      const primary = result.detections.reduce((prev, current) => 
+      const primary = result.detections.reduce((prev, current) =>
         prev.confidence > current.confidence ? prev : current
       );
-      
+
       setAllDetections(result.detections);
       setSelectedDetection(primary);
     };
-    
+
     // Luồng logic mới: Luôn lấy dữ liệu từ historyId trên URL.
     if (!historyId) {
       setError("No prediction yet. Please go back and try again.");
       setLoading(false);
       return;
     }
-    
+
     const fetchHistoryById = async () => {
       setLoading(true);
       try {
@@ -93,7 +93,7 @@ function ResultsContent() {
     // Không cần dọn dẹp sessionStorage nữa.
   }, [locale]); // Chạy lại khi locale thay đổi
 
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps
 
 
   const handleSelectionChange = (selectionKey: string) => {
@@ -116,7 +116,7 @@ function ResultsContent() {
   }
 
   if (error) {
-     return (
+    return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-auto p-8 text-center">
           <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
@@ -127,7 +127,7 @@ function ResultsContent() {
       </main>
     )
   }
-  
+
   // ----- GIAO DIỆN MỚI: HIỂN THỊ KHI CÓ THÔNG BÁO ĐẶC BIỆT (VD: KHÔNG PHẢI CHÓ) -----
   if (specialMessage) {
     return (
@@ -136,7 +136,7 @@ function ResultsContent() {
           <Card className="mb-8">
             <CardContent className="p-4">
               <div className="relative rounded-lg overflow-hidden bg-muted aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
                   (
                     <video src={processedMediaUrl} className="w-full h-full object-contain" controls autoPlay loop muted />
                   ) : (
@@ -147,19 +147,19 @@ function ResultsContent() {
             </CardContent>
           </Card>
           <Card className="p-6">
-              <div className="flex justify-center mb-4">
-                  <div className="p-3 bg-yellow-500/10 rounded-full">
-                      <AlertTriangle className="h-10 w-10 text-yellow-500" />
-                  </div>
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-yellow-500/10 rounded-full">
+                <AlertTriangle className="h-10 w-10 text-yellow-500" />
               </div>
-              <h2 className="text-2xl font-bold mb-3">{t("results.specialMessageTitle")}</h2>
-              <p className="text-muted-foreground mb-6 text-lg">{specialMessage}</p>
-              <Link href="/">
-                  <Button className="gap-2">
-                      <ArrowLeft className="h-5 w-5" />
-                      {t("results.tryAgain")}
-                  </Button>
-              </Link>
+            </div>
+            <h2 className="text-2xl font-bold mb-3">{t("results.specialMessageTitle")}</h2>
+            <p className="text-muted-foreground mb-6 text-lg">{specialMessage}</p>
+            <Link href="/">
+              <Button className="gap-2">
+                <ArrowLeft className="h-5 w-5" />
+                {t("results.tryAgain")}
+              </Button>
+            </Link>
           </Card>
         </div>
       </main>
@@ -171,21 +171,21 @@ function ResultsContent() {
     return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center p-4">
-            <Card className="max-w-md mx-auto p-8">
-                <div className="flex justify-center mb-4">
-                    <div className="p-3 bg-destructive/10 rounded-full">
-                        <AlertTriangle className="h-10 w-10 text-destructive" />
-                    </div>
-                </div>
-                <h2 className="text-2xl font-bold mb-3">{t("results.noDetectionsTitle")}</h2>
-                <p className="text-muted-foreground mb-6">{t("results.noDetectionsDescription")}</p>
-                <Link href="/">
-                    <Button className="gap-2">
-                        <ArrowLeft className="h-5 w-5" />
-                        {t("results.tryAgain")}
-                    </Button>
-                </Link>
-            </Card>
+          <Card className="max-w-md mx-auto p-8">
+            <div className="flex justify-center mb-4">
+              <div className="p-3 bg-destructive/10 rounded-full">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+              </div>
+            </div>
+            <h2 className="text-2xl font-bold mb-3">{t("results.noDetectionsTitle")}</h2>
+            <p className="text-muted-foreground mb-6">{t("results.noDetectionsDescription")}</p>
+            <Link href="/">
+              <Button className="gap-2">
+                <ArrowLeft className="h-5 w-5" />
+                {t("results.tryAgain")}
+              </Button>
+            </Link>
+          </Card>
         </div>
       </main>
     )
@@ -193,7 +193,7 @@ function ResultsContent() {
 
   if (!selectedDetection || !selectedDetection.breedInfo) {
     // Trường hợp này có thể coi là một lỗi nếu dữ liệu không nhất quán
-     return (
+    return (
       <main className="min-h-screen bg-background flex items-center justify-center">
         <Card className="max-w-md mx-auto p-8 text-center">
           <AlertTriangle className="h-10 w-10 text-destructive mx-auto mb-4" />
@@ -228,7 +228,7 @@ function ResultsContent() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* --- CỘT TRÁI: ẢNH/VIDEO --- */}
               <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ? 
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
                   (
                     <video
                       src={processedMediaUrl}
@@ -240,14 +240,14 @@ function ResultsContent() {
                     />
                   ) : (
                     <>
-                      <img 
-                        src={processedMediaUrl} 
-                        alt="Background" 
-                        className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50" 
+                      <img
+                        src={processedMediaUrl}
+                        alt="Background"
+                        className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50"
                       />
-                      <img 
-                        src={processedMediaUrl} 
-                        alt="Detection result" 
+                      <img
+                        src={processedMediaUrl}
+                        alt="Detection result"
                         className="relative w-full h-full object-contain z-10" />
                     </>
                   )
@@ -319,7 +319,7 @@ function ResultsContent() {
                 </SelectTrigger>
                 <SelectContent>
                   {allDetections.map((det, index) => (
-                    <SelectItem 
+                    <SelectItem
                       key={`${det.detectedBreed}-${index}`}
                       value={`${det.detectedBreed}-${index}`}
                     >
@@ -388,15 +388,15 @@ function ResultsContent() {
               ) : (
                 // --- NẾU KHÔNG PHẢI LÀ CHÓ: HIỆN CARD THÔNG BÁO ĐƠN GIẢN ---
                 <Card className="bg-muted/30 border-dashed border-2">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-muted-foreground">
-                            <AlertTriangle className="h-5 w-5" />
-                            Non-Dog Object Detected
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent className="text-lg text-center py-8 text-muted-foreground">
-                        <p>{selectedBreedInfo.description}</p>
-                    </CardContent>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-muted-foreground">
+                      <AlertTriangle className="h-5 w-5" />
+                      Non-Dog Object Detected
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-lg text-center py-8 text-muted-foreground">
+                    <p>{selectedBreedInfo.description}</p>
+                  </CardContent>
                 </Card>
               )}
             </>
@@ -406,12 +406,12 @@ function ResultsContent() {
         </div>
 
         <div className="h-4" />
-        
+
         {/* Feedback form luôn hiện để user report nếu AI nhận diện sai */}
         <FeedbackForm
           detectedBreed={selectedDisplayName}
           confidence={selectedConfidence}
-          imageUrl={""} 
+          imageUrl={""}
           predictionId={predictionId}
           initialSubmitted={hasFeedback}
         />

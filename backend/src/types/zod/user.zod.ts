@@ -47,6 +47,7 @@ export const RegisterSchema = z.object({
       lastName: z.string().optional(),
       country: z.string().optional(),
       city: z.string().optional(),
+      captchaToken: z.string().optional(),
     })
     .strict(), 
 });

@@ -68,7 +68,7 @@ export default function LiveDetectionPage() {
   const isStreamingRef = useRef(false);
   const snapshotThresholdRef = useRef<number>(0.7);
   const capturedTrackIdsRef = useRef<Set<number>>(new Set());
-  
+
   // FIX: Ref để theo dõi việc đóng kết nối chủ động (tránh lỗi 1005 khi chuyển trang)
   const isIntentionalCloseRef = useRef(false);
 
@@ -208,12 +208,12 @@ export default function LiveDetectionPage() {
 
     if (streamRef.current)
       streamRef.current.getTracks().forEach((t) => t.stop());
-    
+
     if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-    } 
-    
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
@@ -280,6 +280,7 @@ export default function LiveDetectionPage() {
 
       ws.onmessage = (e) => {
         try {
+          console.log("Received message from server");
           const data = JSON.parse(e.data);
           const dets = data.detections || (Array.isArray(data) ? data : []);
           setDetections(dets);
@@ -298,13 +299,13 @@ export default function LiveDetectionPage() {
 
         // 1. Nếu đóng chủ động (chuyển trang/stop) -> Không báo lỗi
         if (isIntentionalCloseRef.current) {
-            return;
+          return;
         }
 
         // 2. Nếu mã đóng là bình thường (1000, 1005) -> cleanup nhẹ nhàng
         if (event.code === 1000 || event.code === 1005) {
-            cleanupResources();
-            return;
+          cleanupResources();
+          return;
         }
 
         // 3. Xử lý lỗi thực sự
@@ -355,8 +356,8 @@ export default function LiveDetectionPage() {
   // Cleanup khi component unmount
   useEffect(() => {
     return () => {
-        isIntentionalCloseRef.current = true; // Đánh dấu chủ động đóng khi unmount
-        cleanupResources();
+      isIntentionalCloseRef.current = true; // Đánh dấu chủ động đóng khi unmount
+      cleanupResources();
     };
   }, [cleanupResources]);
 
@@ -371,7 +372,7 @@ export default function LiveDetectionPage() {
             data.config.stream_high_conf - 0.1
           );
         }
-      } catch {}
+      } catch { }
     };
     loadConfig();
   }, []);
@@ -541,20 +542,20 @@ export default function LiveDetectionPage() {
 
         {/* CENTER: VIEWPORT CAMERA */}
         <div className="flex-1 bg-black rounded-xl relative overflow-hidden border-2 border-gray-800 shadow-xl group aspect-video lg:aspect-auto lg:h-[70vh]">
-          <video 
-            ref={videoRef} 
-            muted playsInline 
-            className="w-full h-full object-contain pointer-events-none" 
+          <video
+            ref={videoRef}
+            muted playsInline
+            className="w-full h-full object-contain pointer-events-none"
           />
           <div ref={containerRef} className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
-             <div className="relative w-full h-full pointer-events-auto">
-                {isStreamingState && renderBoxes()}
-             </div>
+            <div className="relative w-full h-full pointer-events-auto">
+              {isStreamingState && renderBoxes()}
+            </div>
           </div>
           {!isStreamingState && !isConnecting && (
             <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 bg-gray-900/90">
-               <Camera className="w-16 h-16 opacity-30 mb-4" />
-               <p>Tap "Start Camera" to detect</p>
+              <Camera className="w-16 h-16 opacity-30 mb-4" />
+              <p>Tap "Start Camera" to detect</p>
             </div>
           )}
         </div>
