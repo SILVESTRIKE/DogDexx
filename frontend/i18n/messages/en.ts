@@ -186,7 +186,7 @@ export default {
       "We couldn't find any recognizable dogs in the uploaded file. Please try again with a different image or video.",
     tryAgain: "Try Again",
     chatWithAI: {
-      title: "Ask AI",
+      title: "Ask DogDex",
       placeholder: "Type your question about the {breedName}...",
       send: "Send",
       remaining: "{count} messages left",
@@ -737,7 +737,7 @@ export default {
       "We accept all major credit cards, PayPal, and bank transfers for enterprise plans.",
     faqQ3: "Is there a free trial?",
     faqA3: "Yes, the Free plan includes 10 detections per month with no credit card required.",
-    title: "Simple, Transparent Pricing",
+    title: "Upgrade to unlock unlimited detections!",
     description: "Choose the perfect plan for your needs",
     monthly: "Monthly",
     yearly: "Yearly",

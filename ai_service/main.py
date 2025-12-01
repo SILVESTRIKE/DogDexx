@@ -7,6 +7,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
 from ultralytics import YOLO
 from ultralytics.utils.plotting import Annotator, colors
+from ultralytics.trackers import BYTETracker
+from types import SimpleNamespace
 import cv2
 import numpy as np
 import tempfile
@@ -15,12 +17,10 @@ import base64
 import imageio
 import httpx
 import torch
-import asyncio
 import gc
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl
-
 # ==============================================================================
 # 0. GLOBAL SETTINGS
 # ==============================================================================
@@ -39,14 +39,16 @@ load_dotenv(dotenv_path=dotenv_path)
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
 COCO_DOG_CLASS_ID = 16 
+# Các class động vật trong COCO: 15: Cat, 16: Dog, 17: Horse, 18: Sheep, 19: Cow, 21: Bear
+ANIMAL_CLASSES = [15, 16, 17, 18, 19, 21]
 
 class URLPayload(BaseModel):
     url: HttpUrl
 
 class Config:
     def __init__(self):
-        self.classify_model = None   # Model CHÍNH
-        self.detect_model = None     # Model PHỤ
+        self.classify_model = None   # Model CHÍNH (V8s)
+        self.detect_model = None     # Model PHỤ (V11n)
         self.device = "cpu"
         
         # Kết nối DB
@@ -101,17 +103,24 @@ class Config:
     def _apply_config(self, config_data: dict):
         print(f"[CONFIG] Bắt đầu áp dụng cấu hình: {config_data}", flush=True)
         
-        self.IMAGE_CONF = float(config_data.get("image_conf", 0.25))
-        self.VIDEO_CONF = float(config_data.get("video_conf", 0.5))
-        self.STREAM_CONF = float(config_data.get("stream_conf", 0.4))
-        self.CLASS_CONF = float(config_data.get("class_conf", 0.25))
+        # Cấu hình Detector (V11n)
+        self.IMAGE_CONF = float(config_data.get("image_conf", 0.25)) # Chuẩn vàng YOLO
+        self.VIDEO_CONF = float(config_data.get("video_conf", 0.25))
+        self.STREAM_CONF = float(config_data.get("stream_conf", 0.25))
+        
+        # Cấu hình Classifier (V8s) - Inference Conf cực thấp để lấy kết quả
+        self.CLASS_CONF = float(config_data.get("class_conf", 0.1)) 
+        
+        # Ngưỡng Logic Python ("Tòa Án")
+        self.BREED_CONF_THRESHOLD = 0.45      # Tin tưởng kết quả giống chó
+        self.OVERRIDE_CONF_THRESHOLD = 0.65   # Lật kèo (VD: Ngựa -> Chó)
         
         # Xử lý IOU (Convert string từ DB sang float)
-        iou_val = config_data.get("iou", 0.5)
+        iou_val = config_data.get("iou", 0.45) # 0.45 để lọc box chồng chéo
         try:
             self.IOU = float(iou_val)
         except:
-            self.IOU = 0.5
+            self.IOU = 0.45
 
         self.device = config_data.get("device", "cpu")
         
@@ -124,9 +133,10 @@ class Config:
         self.HUGGINGFACE_REPO = config_data.get("huggingface_repo", "HakuDevon/Dog_Breed_ID")
         
         print("--- [CONFIG] Giá trị đã áp dụng ---", flush=True)
-        print(f"  - IMAGE_CONF: {self.IMAGE_CONF}", flush=True)
-        print(f"  - VIDEO_CONF: {self.VIDEO_CONF}", flush=True)
-        print(f"  - STREAM_CONF: {self.STREAM_CONF}", flush=True)
+        print(f"  - IMAGE_CONF (Detector): {self.IMAGE_CONF}", flush=True)
+        print(f"  - CLASS_CONF (Classifier): {self.CLASS_CONF}", flush=True)
+        print(f"  - BREED_CONF_THRESHOLD: {self.BREED_CONF_THRESHOLD}", flush=True)
+        print(f"  - OVERRIDE_CONF_THRESHOLD: {self.OVERRIDE_CONF_THRESHOLD}", flush=True)
         print(f"  - IOU: {self.IOU}", flush=True)
         print(f"  - device: {self.device}", flush=True)
         print(f"  - MODEL_PATH: {self.MODEL_PATH}", flush=True)
@@ -232,59 +242,70 @@ def apply_nms(detections, iou_threshold=0.5):
         dets = [d for d in dets if get_iou(best['box'], d['box']) < iou_threshold]
     return keep
 
-# --- LOGIC ẢNH: Hybrid (Detect -> Classify) ---
+# --- LOGIC ẢNH: Hybrid (Detect -> Classify -> Court Judgment) ---
 def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
     t_start = time.time()
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None: raise ValueError("Invalid image")
 
-    # 1. Dùng Detect Model
+    # BƯỚC 1: DETECTOR (YOLOv11n) - "Thằng Bảo Vệ"
     t_detect_start = time.time()
     detector = config.detect_model if config.detect_model else config.classify_model
-    detect_res = detector(img, conf=0.15, iou=config.IOU, verbose=False) 
+    # conf=0.25 (Chuẩn vàng), iou=0.45, classes=ANIMAL_CLASSES
+    detect_res = detector(img, conf=config.IMAGE_CONF, iou=config.IOU, classes=ANIMAL_CLASSES, verbose=False) 
     base_objects = process_results(detect_res, detector)
     t_detect_end = time.time()
 
     final_results = []
-    
-    # Tách ra làm 2 nhóm: Chó và Không phải chó
-    dog_objs = []
-    other_objs = []
+    t_classify_start = time.time()
 
     for obj in base_objects:
-        # Kiểm tra điều kiện là chó
-        is_dog = (obj['class_id'] == COCO_DOG_CLASS_ID) or (len(detector.names) == 1)
-        if is_dog:
-            dog_objs.append(obj)
-        else:
-            other_objs.append(obj)
-    
-    # TRƯỜNG HỢP 1: Có chó trong ảnh
-    t_classify_start = time.time()
-    if len(dog_objs) > 0:
-        # Chỉ xử lý và trả về danh sách chó (bỏ qua other_objs)
-        for obj in dog_objs:
-            crop = get_padded_crop(img, obj["box"])
-            if crop.size > 0:
-                # Chạy qua model classify
-                cls_res = config.classify_model(crop, conf=config.IMAGE_CONF, iou=config.IOU, verbose=False)
-                cls_dets = process_results(cls_res, config.classify_model)
+        # BƯỚC 2: CLASSIFIER (YOLOv8s) - "Thằng Chuyên Gia"
+        # Cắt ảnh (Crop)
+        crop = get_padded_crop(img, obj["box"])
+        
+        if crop.size > 0:
+            # Chạy suy luận với conf cực thấp (0.1) để lấy kết quả
+            cls_res = config.classify_model(crop, conf=config.CLASS_CONF, verbose=False)
+            cls_dets = process_results(cls_res, config.classify_model)
+            
+            # BƯỚC 3: TÒA ÁN PHÁN QUYẾT (Logic Python)
+            if cls_dets:
+                best_cls = max(cls_dets, key=lambda x: x["confidence"])
+                v8_conf = best_cls["confidence"]
+                v8_label = best_cls["class"]
                 
-                if cls_dets:
-                    best = max(cls_dets, key=lambda x: x["confidence"])
-                    best["box"] = obj["box"]
-                    final_results.append(best)
-                else:
-                    obj["class"] = "Unknown Dog"
-                    final_results.append(obj)
-            else:
-                final_results.append(obj)
+                v11_label = obj["class"]
+                v11_is_dog = (obj["class_id"] == COCO_DOG_CLASS_ID)
 
-    # TRƯỜNG HỢP 2: Không có chó nào
-    else:
-        # Trả về các vật thể khác (không qua classifier)
-        final_results = other_objs
+                # Case 1: V11 bảo là Chó
+                if v11_is_dog:
+                    if v8_conf > config.BREED_CONF_THRESHOLD:
+                        # V8 tin cậy -> Lấy giống chó cụ thể
+                        obj["class"] = v8_label
+                        obj["confidence"] = v8_conf
+                    else:
+                        # V8 không chắc -> Fallback về "Unknown Dog" (hoặc giữ "Dog")
+                        obj["class"] = "Unknown Dog"
+                        # Giữ confidence của V11 hoặc set lại
+                
+                # Case 2: V11 bảo là con khác (Ngựa, Mèo...)
+                else:
+                    if v8_conf > config.OVERRIDE_CONF_THRESHOLD:
+                        # V8 cực kỳ chắc chắn -> Lật kèo thành Chó
+                        obj["class"] = v8_label
+                        obj["confidence"] = v8_conf
+                    else:
+                        # V8 không đủ tuổi lật -> Giữ nguyên nhãn của V11 (Ngựa, Mèo...)
+                        pass 
+            else:
+                # V8 không ra gì cả (conf < 0.1)
+                if obj["class_id"] == COCO_DOG_CLASS_ID:
+                    obj["class"] = "Unknown Dog"
+        
+        final_results.append(obj)
+
     t_classify_end = time.time()
 
     final_results = apply_nms(final_results, iou_threshold=config.IOU)
@@ -320,10 +341,12 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
         unique_results = {}
         VID_STRIDE = 3 
         
+        # Step 1: Detect & Track (V11n)
         results_gen = tracker.track(
             t_in_path, stream=True, persist=True, 
             conf=config.VIDEO_CONF, 
-            iou=config.IOU, # Dùng IOU từ Config
+            iou=config.IOU, 
+            classes=ANIMAL_CLASSES,
             vid_stride=VID_STRIDE, verbose=False
         )
 
@@ -344,34 +367,48 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
                 classes = res.boxes.cls.int().cpu().tolist()
 
                 for t_id, box, cls_id in zip(ids, boxes, classes):
-                    is_dog = (cls_id == COCO_DOG_CLASS_ID) or (len(tracker.names) == 1)
+                    v11_label = tracker.names[cls_id]
+                    v11_is_dog = (cls_id == COCO_DOG_CLASS_ID)
                     
-                    if is_dog:
-                        if t_id not in breed_cache:
-                            crop = get_padded_crop(frame, box)
-                            if crop.size > 0:
-                                c_res = config.classify_model(crop, conf=config.VIDEO_CONF, iou=config.IOU, verbose=False)
-                                c_dets = process_results(c_res, config.classify_model)
-                                if c_dets:
-                                    best = max(c_dets, key=lambda x: x["confidence"])
-                                    breed_cache[t_id] = {"class": best["class"], "confidence": best["confidence"]}
-                                else:
-                                    breed_cache[t_id] = {"class": "Dog", "confidence": 0.0}
+                    # Chỉ classify lại nếu chưa có trong cache hoặc muốn update
+                    if t_id not in breed_cache:
+                        crop = get_padded_crop(frame, box)
+                        final_label = v11_label # Mặc định tin V11
+                        final_conf = 0.5
+
+                        if crop.size > 0:
+                            # Step 2: Classify (V8s)
+                            c_res = config.classify_model(crop, conf=config.CLASS_CONF, verbose=False)
+                            c_dets = process_results(c_res, config.classify_model)
+                            
+                            # Step 3: Court Judgment
+                            if c_dets:
+                                best = max(c_dets, key=lambda x: x["confidence"])
+                                v8_conf = best["confidence"]
+                                v8_label = best["class"]
+
+                                if v11_is_dog:
+                                    if v8_conf > config.BREED_CONF_THRESHOLD:
+                                        final_label = v8_label
+                                        final_conf = v8_conf
+                                    else:
+                                        final_label = "Unknown Dog"
+                                else: # Not dog
+                                    if v8_conf > config.OVERRIDE_CONF_THRESHOLD:
+                                        final_label = v8_label
+                                        final_conf = v8_conf
                             else:
-                                breed_cache[t_id] = {"class": "Dog", "confidence": 0.0}
-                        
-                        info = breed_cache[t_id]
-                        det_obj = {
-                            "track_id": t_id, "box": [int(x) for x in box],
-                            "class": info["class"], "confidence": info["confidence"]
-                        }
-                        frame_dets.append(det_obj)
-                        unique_results[t_id] = det_obj
-                    else:
-                        frame_dets.append({
-                            "track_id": t_id, "box": [int(x) for x in box],
-                            "class": tracker.names[cls_id], "confidence": 0.5
-                        })
+                                if v11_is_dog: final_label = "Unknown Dog"
+
+                        breed_cache[t_id] = {"class": final_label, "confidence": final_conf}
+                    
+                    info = breed_cache[t_id]
+                    det_obj = {
+                        "track_id": t_id, "box": [int(x) for x in box],
+                        "class": info["class"], "confidence": info["confidence"]
+                    }
+                    frame_dets.append(det_obj)
+                    unique_results[t_id] = det_obj
 
             writer.append_data(cv2.cvtColor(draw_annotations(frame, frame_dets), cv2.COLOR_BGR2RGB))
         
@@ -487,40 +524,73 @@ async def predict_url(payload: URLPayload):
 
 @app.websocket("/predict-stream")
 async def ws_stream(websocket: WebSocket):
-    """Logic Stream chuẩn V10"""
+    """
+    WebSocket Stream dùng DUY NHẤT config.classify_model.
+    Đã fix lỗi 'Tensor object has no attribute conf'.
+    """
     await websocket.accept()
-    if not config.classify_model: 
+    
+    # 1. Chỉ dùng đúng model ông yêu cầu
+    model = config.classify_model 
+    if not model: 
         await websocket.close()
         return
     
-    print(f"[AI-WS] Stream connected (V10 Logic).", flush=True)
+    print(f"[AI-WS] Client connected. Model: {config.MODEL_PATH}", flush=True)
+
+    # 2. Cấu hình Tracker đầy đủ tham số để không bị lỗi
+    tracker_args = SimpleNamespace(
+        track_high_thresh=0.25,
+        track_low_thresh=0.1,
+        new_track_thresh=0.25,
+        match_thresh=0.8,
+        track_buffer=30,
+        mot20=False,
+        conf=0.25,      # Bắt buộc
+        iou=0.7,        # Bắt buộc
+        fuse_score=True # Bắt buộc
+    )
+    local_tracker = BYTETracker(args=tracker_args, frame_rate=30)
 
     try:
         while True:
             data = await websocket.receive()
             if "bytes" in data:
-                def process_frame_v10(binary_data):
-                    t_frame_start = time.time()
+                
+                def process_stream_frame(binary_data):
                     nparr = np.frombuffer(binary_data, np.uint8)
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is None: return None
 
-                    # Sử dụng IOU và Conf từ Config
-                    results = config.classify_model.track(
-                        frame,
-                        persist=True,
+                    # Detect bằng model chính chủ của ông
+                    results = model.predict(
+                        frame, 
                         conf=config.STREAM_CONF, 
-                        iou=config.IOU, 
-                        verbose=False,
-                        imgsz=640 
+                        iou=0.6, 
+                        verbose=False, 
+                        imgsz=640
                     )
-                    dets = process_results(results, config.classify_model)
-                    t_frame_end = time.time()
-                    process_ms = (t_frame_end - t_frame_start) * 1000
-                    print(f"[PERF] TYPE:STREAM | Device: {config.device} | Frame Process: {process_ms:.2f}ms", flush=True)
-                    return dets
+                    
+                    # FIX QUAN TRỌNG: Truyền object "boxes" (có chứa .conf), không truyền .data
+                    if results and len(results[0].boxes) > 0:
+                        det = results[0].boxes.cpu() 
+                        online_targets = local_tracker.update(det, img=frame)
+                    else:
+                        online_targets = []
 
-                detections = await run_in_threadpool(process_frame_v10, data["bytes"])
+                    # Format kết quả
+                    final_dets = []
+                    for t in online_targets:
+                        final_dets.append({
+                            "track_id": int(t[4]),
+                            "class_id": int(t[6]),
+                            "class": model.names[int(t[6])],
+                            "confidence": float(t[5]),
+                            "box": [int(t[0]), int(t[1]), int(t[2]), int(t[3])]
+                        })
+                    return final_dets
+
+                detections = await run_in_threadpool(process_stream_frame, data["bytes"])
                 
                 if detections is not None:
                     await websocket.send_json({
@@ -529,10 +599,10 @@ async def ws_stream(websocket: WebSocket):
                     })
 
     except WebSocketDisconnect:
-        print("[AI-WS] Stream disconnected")
+        print("[AI-WS] Client disconnected")
     except Exception as e:
         print(f"[AI-WS] Error: {e}")
-
+        
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

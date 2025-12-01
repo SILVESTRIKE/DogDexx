@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import WebSocket from "ws";
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
@@ -26,6 +28,9 @@ import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PREDICTION_SOURCES } from "../constants/prediction.constants";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
+
+const TEMP_UPLOAD_DIR = path.join(__dirname, "../../public/uploads/temp");
+
 interface PredictionItem {
   class: string;
   confidence: number;
@@ -587,6 +592,45 @@ export const bffPredictionController = {
         wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
       } catch (error) { }
       const transformedPrediction = transformMediaURLs(req, historyItem);
+
+      // --- FALLBACK LOGIC: Nếu đang xử lý (processing), đọc ảnh tạm từ disk ---
+      if (
+        transformedPrediction.processedMediaUrl === "processing" ||
+        (transformedPrediction.processedMediaUrl &&
+          transformedPrediction.processedMediaUrl.includes("processing"))
+      ) {
+        const processedMediaPathTemp = path.join(
+          TEMP_UPLOAD_DIR,
+          `processed_${historyId}.txt`
+        );
+        try {
+          if (fs.existsSync(processedMediaPathTemp)) {
+            const base64Data = await fs.promises.readFile(
+              processedMediaPathTemp,
+              "utf-8"
+            );
+            // Giả sử là ảnh JPEG, nếu video thì cần logic phức tạp hơn chút hoặc chấp nhận ảnh thumbnail
+            // Tuy nhiên, prediction.service lưu base64 của ảnh/video đã vẽ bounding box.
+            // Với video, AI service trả về base64 của video (mp4) hoặc ảnh (jpg) tùy logic.
+            // Ở đây ta cứ gán vào, frontend sẽ hiển thị.
+            // Lưu ý: AI service trả về "processed_media_base64" là chuỗi raw base64.
+            // Cần xác định mime type.
+            // Trong prediction.service, ta thấy:
+            // const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
+            // Ta cần check source để biết là video hay ảnh.
+            const isVideo = historyItem.source.includes("video");
+            const mimeType = isVideo ? "video/mp4" : "image/jpeg";
+            transformedPrediction.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+          }
+        } catch (e) {
+          logger.warn(
+            `[BFF] Could not read temp file for history ${historyId}:`,
+            e
+          );
+        }
+      }
+      // -----------------------------------------------------------------------
+
       const detections = transformedPrediction.predictions.map((p: any) => {
         const slug = p.class.toLowerCase().replace(/\s+/g, "-");
         const breedInfoDoc = wikiInfoMap.get(slug);
@@ -744,32 +788,36 @@ export const bffPredictionController = {
     }
   },
   chatWithGemini: async (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user as UserDoc | undefined;
-    const { breedSlug } = req.params;
-    const { message } = req.body;
-    if (!message) throw new BadRequestError("Message is required.");
-    const lang =
-      req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
-        ? "vi"
-        : "en";
-    const userId = user?._id?.toString();
-    const guestIdentifier = user
-      ? undefined
-      : (req as any).fingerprint?.hash || req.ip;
-    if (!userId && !guestIdentifier) {
-      throw new Error(
-        "Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện."
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const { breedSlug } = req.params;
+      const { message } = req.body;
+      if (!message) throw new BadRequestError("Message is required.");
+      const lang =
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en";
+      const userId = user?._id?.toString();
+      const guestIdentifier = user
+        ? undefined
+        : (req as any).fingerprint?.hash || req.ip;
+      if (!userId && !guestIdentifier) {
+        throw new Error(
+          "Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện."
+        );
+      }
+      const result = await askGemini(
+        breedSlug,
+        message,
+        lang,
+        userId,
+        guestIdentifier
       );
+      await deductTokensForRequest(req, res, tokenConfig.costs.chatMessage);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
     }
-    const result = await askGemini(
-      breedSlug,
-      message,
-      lang,
-      userId,
-      guestIdentifier
-    );
-    await deductTokensForRequest(req, res, tokenConfig.costs.chatMessage);
-    res.status(200).json(result);
   },
   getHealthRecommendations: async (
     req: Request,

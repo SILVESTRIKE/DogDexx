@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus } from "lucide-react"
+import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus, ImageIcon, Video, Radio, MessageSquare } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,6 +17,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
 import { ThemeToggle } from "@/components/theme-toggle"
 import { LanguageToggle } from "@/components/language-toggle"
 import { cn } from "@/lib/utils";
@@ -30,14 +35,14 @@ export function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const pathname = usePathname()
   const searchParams = useSearchParams()
-  
+
   const itemsRef = useRef<(HTMLAnchorElement | null)[]>([])
   const navContainerRef = useRef<HTMLDivElement>(null)
-  
-  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({ 
-    opacity: 0, 
-    width: 0, 
-    left: 0 
+
+  const [indicatorStyle, setIndicatorStyle] = useState<React.CSSProperties>({
+    opacity: 0,
+    width: 0,
+    left: 0
   })
 
   const handleAuthClick = useCallback((mode: "login" | "register") => {
@@ -48,7 +53,7 @@ export function Navbar() {
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 10)
     window.addEventListener("scroll", handleScroll)
-    handleScroll() 
+    handleScroll()
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
@@ -91,7 +96,7 @@ export function Navbar() {
         setIndicatorStyle({
           left: itemRect.left - containerRect.left,
           width: itemRect.width,
-          opacity: 1, 
+          opacity: 1,
         });
       } else {
         setIndicatorStyle(prev => ({ ...prev, opacity: 0 }));
@@ -111,37 +116,76 @@ export function Navbar() {
 
   const navLinksContent = useMemo(() => (
     navLinks
-    .filter((link) => !link.auth || (link.auth && isAuthenticated))
-    .map((link, index) => {
-      const active = isLinkActive(link.href);
-      return (
-        <Link
-          key={link.href}
-          href={link.href}
-          ref={(el) => { itemsRef.current[index] = el }}
-          className={cn(
-            "relative transition-colors duration-300 px-5 py-2 rounded-full text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
-            active 
-              ? "text-white" 
-              : "text-muted-foreground hover:text-primary"
-          )}
-        >
-          {link.label}
-        </Link>
-      );
-    })
+      .filter((link) => !link.auth || (link.auth && isAuthenticated))
+      .map((link, index) => {
+        const active = isLinkActive(link.href);
+        return (
+          <Link
+            key={link.href}
+            href={link.href}
+            ref={(el) => { itemsRef.current[index] = el }}
+            className={cn(
+              "relative transition-colors duration-300 px-5 py-2 rounded-full text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
+              active
+                ? "text-white"
+                : "text-muted-foreground hover:text-primary"
+            )}
+          >
+            {link.label}
+          </Link>
+        );
+      })
   ), [navLinks, isAuthenticated, isLinkActive]);
 
   // --- TOKEN DISPLAY (Tách riêng để dùng ở Left Section) ---
   const tokenDisplay = useMemo(() => {
     if (!user || typeof user.remainingTokens !== 'number') return null;
     return (
-      <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-2 py-0.5 sm:px-3 sm:py-1 backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm">
-        <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-600 dark:text-yellow-500" />
-        <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
-            {user.remainingTokens}/{user.tokenAllotment}
-        </span>
-      </div>
+      <Popover>
+        <PopoverTrigger asChild>
+          <div className="flex items-center gap-1.5 sm:gap-2 rounded-full bg-white/60 dark:bg-secondary/50 border border-border px-2 py-0.5 sm:px-3 sm:py-1 backdrop-blur-sm group-hover:bg-primary/10 transition-colors shadow-sm cursor-pointer hover:bg-primary/5">
+            <Coins className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-yellow-600 dark:text-yellow-500" />
+            <span className="font-mono text-xs sm:text-sm font-bold text-foreground">
+              {user.remainingTokens}/{user.tokenAllotment}
+            </span>
+          </div>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-4" align="end">
+          <div className="space-y-3">
+            <h4 className="font-semibold text-sm leading-none text-primary mb-2">Token Usage Cost</h4>
+            <div className="grid gap-2">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <ImageIcon className="h-4 w-4 text-blue-500" />
+                  <span>Image Detection</span>
+                </div>
+                <span className="font-mono font-bold">2</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Video className="h-4 w-4 text-purple-500" />
+                  <span>Video Analysis</span>
+                </div>
+                <span className="font-mono font-bold">10</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-red-500" />
+                  <span>Live Stream</span>
+                </div>
+                <span className="font-mono font-bold">5</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-green-500" />
+                  <span>AI Chat</span>
+                </div>
+                <span className="font-mono font-bold">1</span>
+              </div>
+            </div>
+          </div>
+        </PopoverContent>
+      </Popover>
     );
   }, [user]);
 
@@ -152,14 +196,14 @@ export function Navbar() {
       .map(link => {
         const active = isLinkActive(link.href);
         return (
-            <DropdownMenuItem key={`mobile-${link.href}`} asChild>
+          <DropdownMenuItem key={`mobile-${link.href}`} asChild>
             <Link href={link.href} className={cn(
-                "cursor-pointer w-full font-medium py-2",
-                active && "bg-primary/15 text-primary font-bold"
+              "cursor-pointer w-full font-medium py-2",
+              active && "bg-primary/15 text-primary font-bold"
             )}>
-                {link.label}
+              {link.label}
             </Link>
-            </DropdownMenuItem>
+          </DropdownMenuItem>
         )
       });
 
@@ -181,21 +225,21 @@ export function Navbar() {
   }, [navLinks, isAuthenticated, isLinkActive, handleAuthClick, t]);
 
   // --- RIGHT MENU (Đã bỏ token display ở đây) ---
-  const userMenuContent = useMemo(() => {    
+  const userMenuContent = useMemo(() => {
     if (isAuthenticated && user) {
       return (
         <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center gap-2 md:gap-3 cursor-pointer group select-none">
-                <Button variant="ghost" className="flex items-center gap-2 rounded-full pl-1 pr-2 h-8 md:h-9 hover:bg-primary/10">
-                  <Avatar className="h-7 w-7 md:h-8 md:w-8 border-2 border-white shadow-sm">
-                    <AvatarImage src={user.avatarUrl} alt={user.username} />
-                    <AvatarFallback className="bg-primary text-primary-foreground text-xs">{user.username.charAt(0).toUpperCase()}</AvatarFallback>
-                  </Avatar>
-                  <span className="hidden lg:inline text-sm font-bold text-foreground">{user.username}</span>
-                </Button>
-              </div>
-            </DropdownMenuTrigger>
+          <DropdownMenuTrigger asChild>
+            <div className="flex items-center gap-2 md:gap-3 cursor-pointer group select-none">
+              <Button variant="ghost" className="flex items-center gap-2 rounded-full pl-1 pr-2 h-8 md:h-9 hover:bg-primary/10">
+                <Avatar className="h-7 w-7 md:h-8 md:w-8 border-2 border-white shadow-sm">
+                  <AvatarImage src={user.avatarUrl} alt={user.username} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs">{user.username.charAt(0).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                <span className="hidden lg:inline text-sm font-bold text-foreground">{user.username}</span>
+              </Button>
+            </div>
+          </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-xl border-border/50 shadow-xl">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
@@ -213,14 +257,14 @@ export function Navbar() {
             )}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={logout} className="cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
-                <LogOut className="h-4 w-4 mr-2" />
-                {t("nav.logout")}
+              <LogOut className="h-4 w-4 mr-2" />
+              {t("nav.logout")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )
     }
-    
+
     // --- CHƯA ĐĂNG NHẬP ---
     return (
       <div className="flex items-center gap-2 md:gap-3">
@@ -232,11 +276,11 @@ export function Navbar() {
 
         {/* Mobile Button */}
         <div className="md:hidden flex items-center">
-             {!user && (
-                <Button onClick={() => handleAuthClick("login")} size="sm" variant="default" className="rounded-full h-8 text-xs px-3 bg-primary text-white shadow-sm">
-                    {t("nav.login")}
-                </Button>
-             )}
+          {!user && (
+            <Button onClick={() => handleAuthClick("login")} size="sm" variant="default" className="rounded-full h-8 text-xs px-3 bg-primary text-white shadow-sm">
+              {t("nav.login")}
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -244,34 +288,34 @@ export function Navbar() {
 
   return (
     <>
-      <nav 
+      <nav
         className={cn(
-            "sticky top-0 z-50 transition-all duration-500 border-b",
-            scrolled 
-                ? "bg-background/80 backdrop-blur-xl border-border/60 shadow-sm" 
-                : "bg-transparent border-transparent"
+          "sticky top-0 z-50 transition-all duration-500 border-b",
+          scrolled
+            ? "bg-background/80 backdrop-blur-xl border-border/60 shadow-sm"
+            : "bg-transparent border-transparent"
         )}
       >
         <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between">
-          
+
           {/* ======================= */}
           {/* 1. LEFT SECTION (Logo + Tokens) */}
           {/* ======================= */}
           <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1">
             <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group flex-shrink-0">
               <div className="relative">
-                 <img 
-                    src="/LogoWebBlack.png" 
-                    alt={t("common.appName")} 
-                    className="w-8 h-auto md:w-10 dark:hidden group-hover:rotate-12 transition-transform duration-300" 
-                  />
-                  <img 
-                    src="/LogoWebWhite.png" 
-                    alt={t("common.appName")} 
-                    className="w-8 h-auto md:w-10 hidden dark:block group-hover:rotate-12 transition-transform duration-300" 
-                  />
+                <img
+                  src="/LogoWebBlack.png"
+                  alt={t("common.appName")}
+                  className="w-8 h-auto md:w-10 dark:hidden group-hover:rotate-12 transition-transform duration-300"
+                />
+                <img
+                  src="/LogoWebWhite.png"
+                  alt={t("common.appName")}
+                  className="w-8 h-auto md:w-10 hidden dark:block group-hover:rotate-12 transition-transform duration-300"
+                />
               </div>
-              
+
               <span className="hidden lg:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
                 {t("common.appName")}
               </span>
@@ -285,19 +329,19 @@ export function Navbar() {
           {/* 2. CENTER SECTION (Nav Pill) */}
           {/* ======================= */}
           <div className="hidden md:flex justify-center flex-shrink-0">
-            <div 
-                ref={navContainerRef} 
-                className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
+            <div
+              ref={navContainerRef}
+              className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
             >
               {mounted ? (
                 <>
-                  <div 
+                  <div
                     className="absolute rounded-full h-[calc(100%-10px)] shadow-md shadow-primary/25 transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
                     style={{
-                        ...indicatorStyle,
-                        top: '5px',
-                        backgroundColor: 'var(--primary)',
-                    }} 
+                      ...indicatorStyle,
+                      top: '5px',
+                      backgroundColor: 'var(--primary)',
+                    }}
                   />
                   {navLinksContent}
                 </>
@@ -311,10 +355,10 @@ export function Navbar() {
           {/* 3. RIGHT SECTION (User Menu & Settings) */}
           {/* ======================= */}
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 md:flex-1">
-            
+
             {/* Hiển thị Token trên Mobile (nếu muốn) hoặc ẩn đi. Ở đây tôi để ẩn trên Desktop (vì đã có ở bên trái), hiện trên Mobile để user check */}
             <div className="md:hidden">
-                {mounted && tokenDisplay}
+              {mounted && tokenDisplay}
             </div>
 
             {mounted ? userMenuContent : <div className="h-9 w-24 bg-muted/20 rounded-full animate-pulse" />}
@@ -327,9 +371,9 @@ export function Navbar() {
                 </Button>
               </DropdownMenuTrigger>
               {/* Token Display Moved Here */}
-            <div className="hidden md:block">
+              <div className="hidden md:block">
                 {mounted && tokenDisplay}
-            </div>
+              </div>
               <DropdownMenuContent align="end" className="w-56 bg-background/90 backdrop-blur-xl border-border shadow-lg">
                 <DropdownMenuLabel className="text-primary">{t('nav.light')}/{t('nav.dark')}</DropdownMenuLabel>
                 <div className="px-2 py-1"><ThemeToggle /></div>

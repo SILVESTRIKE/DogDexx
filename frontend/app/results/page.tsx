@@ -179,12 +179,22 @@ function ResultsContent() {
           <Card className="mb-8">
             <CardContent className="p-4">
               <div className="relative rounded-lg overflow-hidden bg-muted aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
-                  (
-                    <video src={processedMediaUrl} className="w-full h-full object-contain" controls autoPlay loop muted />
-                  ) : (
-                    <img src={processedMediaUrl} alt="Processed media" className="w-full h-full object-contain" />
-                  )
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') || processedMediaUrl.startsWith('data:video')) ? ( // <--- SỬA ĐIỀU KIỆN
+                  <video
+                    key={processedMediaUrl} // <--- THÊM KEY
+                    src={processedMediaUrl}
+                    className="w-full h-full object-contain"
+                    controls
+                    autoPlay
+                    loop
+                    muted
+                  />
+                ) : (
+                  <img
+                    src={processedMediaUrl || ""} // <--- SỬA LỖI TYPESCRIPT (thêm || "")
+                    alt="Processed media"
+                    className="w-full h-full object-contain"
+                  />
                 )}
               </div>
             </CardContent>
@@ -282,9 +292,10 @@ function ResultsContent() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* --- CỘT TRÁI: ẢNH/VIDEO --- */}
               <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') ?
+                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') || processedMediaUrl.startsWith('data:video')) ? // <--- SỬA Ở ĐÂY
                   (
                     <video
+                      key={processedMediaUrl}
                       src={processedMediaUrl}
                       className="w-full h-full object-contain z-10"
                       controls
@@ -295,17 +306,17 @@ function ResultsContent() {
                   ) : (
                     <>
                       <img
-                        src={processedMediaUrl}
+                        src={processedMediaUrl || ''}
                         alt="Background"
                         className="absolute inset-0 w-full h-full object-cover scale-125 blur-xl opacity-50"
                       />
                       <img
-                        src={processedMediaUrl}
+                        src={processedMediaUrl || ''}
                         alt="Detection result"
                         className="relative w-full h-full object-contain z-10" />
                     </>
                   )
-                )}
+                }
               </div>
 
               {/* --- CỘT PHẢI: THÔNG TIN CƠ BẢN --- */}

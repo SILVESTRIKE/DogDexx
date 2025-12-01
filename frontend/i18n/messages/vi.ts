@@ -190,7 +190,7 @@ export default {
       "Chúng tôi không thể tìm thấy bất kỳ con chó nào trong tệp bạn đã tải lên. Vui lòng thử lại với một hình ảnh hoặc video khác.",
     tryAgain: "Thử Lại",
     chatWithAI: {
-      title: "Hỏi AI",
+      title: "Hỏi DogDex",
       placeholder: "Nhập câu hỏi của bạn về giống chó {breedName}...",
       send: "Gửi",
       remaining: "Còn lại {count} lượt hỏi",
@@ -779,7 +779,7 @@ export default {
     faqQ3: "Có bản dùng thử miễn phí không?",
     faqA3:
       "Có, gói Miễn phí bao gồm 10 lượt nhận diện mỗi tháng mà không cần thẻ tín dụng.",
-    title: "Bảng giá đơn giản, minh bạch",
+    title: "Nâng cấp để dùng không giới hạn",
     description: "Chọn gói hoàn hảo cho nhu cầu của bạn",
     monthly: "Hàng tháng",
     yearly: "Hàng năm",

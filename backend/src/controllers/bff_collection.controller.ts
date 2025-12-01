@@ -1,5 +1,5 @@
 // bff_collection.controller.ts
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { wikiService } from '../services/dogs_wiki.service';
 import { collectionService } from '../services/user_collections.service';
 import { achievementService } from '../services/achievement.service';
@@ -25,7 +25,7 @@ export type DogDexBreed = {
   source: string | null;
 };
 
-export const getDogDex = async (req: Request, res: Response) => {
+export const getDogDex = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?._id;
     const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
@@ -120,47 +120,50 @@ export const getDogDex = async (req: Request, res: Response) => {
       pagination: breedsResult.pagination,
     });
   } catch (error) {
-    logger.error('Error in getDogDex:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    next(error);
   }
 };
 
-export const addBreed = async (req: Request, res: Response) => {
-  const userId = req.user!._id;
+export const addBreed = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user!._id;
 
-  throw new BadRequestError("Manual collection is not supported in this version.");
+    throw new BadRequestError("Manual collection is not supported in this version.");
 
-  /*
-  const userCollections = await collectionService.getUserCollection(userId);
-  const user = await userService.getById(userId.toString());
+    /*
+    const userCollections = await collectionService.getUserCollection(userId);
+    const user = await userService.getById(userId.toString());
 
-  if (!user) {
-    throw new NotFoundError('User not found');
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
+    const achievements = await achievementService.processUserAchievements(user, userCollections, lang);
+    const unlockedAchievements = achievements.filter(a => a.unlocked);
+
+    const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
+
+    res.status(200).json({
+      success: true,
+      isNew: false,
+      totalCollected: userCollections.length,
+      achievementsUnlocked: unlockedAchievements.map(a => a.key),
+      nextAchievement: nextAchievement
+        ? {
+            name: nextAchievement.name,
+            requirement: nextAchievement.condition.value,
+            progress: userCollections.length,
+          }
+        : null,
+    });
+    */
+  } catch (error) {
+    next(error);
   }
-
-  const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
-  const achievements = await achievementService.processUserAchievements(user, userCollections, lang);
-  const unlockedAchievements = achievements.filter(a => a.unlocked);
-
-  const nextAchievement = achievements.find(a => !a.unlocked && a.condition.type === 'collection_count');
-
-  res.status(200).json({
-    success: true,
-    isNew: false,
-    totalCollected: userCollections.length,
-    achievementsUnlocked: unlockedAchievements.map(a => a.key),
-    nextAchievement: nextAchievement
-      ? {
-          name: nextAchievement.name,
-          requirement: nextAchievement.condition.value,
-          progress: userCollections.length,
-        }
-      : null,
-  });
-  */
 };
 
-export const getAchievements = async (req: Request, res: Response) => {
+export const getAchievements = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!._id;
     const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
@@ -224,12 +227,11 @@ export const getAchievements = async (req: Request, res: Response) => {
 
     res.status(200).json(responseData);
   } catch (error) {
-    logger.error('Error in getAchievements:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    next(error);
   }
 };
 
-export const getStats = async (req: Request, res: Response) => {
+export const getStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!._id;
     const stats = await collectionService.getCollectionStats(userId);
@@ -242,11 +244,10 @@ export const getStats = async (req: Request, res: Response) => {
       }
     });
   } catch (error) {
-    logger.error('Error in getStats:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    next(error);
   }
 };
-export const getAchievementStats = async (req: Request, res: Response) => {
+export const getAchievementStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user!._id;
     const lang = (req.query.lang === 'vi' || req.query.lang === 'en')
@@ -289,7 +290,6 @@ export const getAchievementStats = async (req: Request, res: Response) => {
 
     res.status(200).json(responseData);
   } catch (error) {
-    logger.error('Error in getAchievementStats:', error);
-    res.status(500).json({ message: 'Internal Server Error' });
+    next(error);
   }
 };
