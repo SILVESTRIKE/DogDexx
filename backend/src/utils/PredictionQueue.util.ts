@@ -30,6 +30,7 @@ export interface PredictionJobData {
     modelName: string;
     startTime: number;
     analyticsData: any;
+    lang?: 'vi' | 'en';
 }
 
 export const predictionQueue = new Queue<PredictionJobData>('prediction-queue', {

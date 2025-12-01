@@ -15,4 +15,4 @@ httpx
 onnxruntime
 torch
 torchvision
-torchaudio
+pydantic

@@ -151,12 +151,16 @@ class Config:
         try:
             print(f"--> Loading CLASSIFIER: {self.MODEL_PATH}...", flush=True)
             self.classify_model = YOLO(self.MODEL_PATH)
-            self.classify_model.to(self.device)
+            
+            # Chỉ gọi .to() nếu là model PyTorch (.pt)
+            if self.MODEL_PATH.endswith(".pt"):
+                self.classify_model.to(self.device)
+            
             # Warmup
             self.classify_model(np.zeros((640, 640, 3), dtype=np.uint8), verbose=False) 
-            print("CLASSIFIER loaded.", flush=True)
+            print(f"CLASSIFIER loaded ({'ONNX' if self.MODEL_PATH.endswith('.onnx') else 'PyTorch'}).", flush=True)
         except Exception as e:
-            print(f"❌ Classify model error: {e}", flush=True)
+            print(f"Classify model error: {e}", flush=True)
 
     def _download_model(self):
         from huggingface_hub import hf_hub_download

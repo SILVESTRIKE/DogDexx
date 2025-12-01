@@ -21,6 +21,9 @@ import { analyticsService } from "./analytics.service";
 import { AnalyticsEventName } from "../constants/analytics.constants";
 import { predictionQueue, PredictionJobData } from "../utils/PredictionQueue.util";
 import os from "os";
+import { collectionService } from "./user_collections.service";
+import { achievementService } from "./achievement.service";
+import { userService } from "./user.service";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const MAX_IMAGE_DIMENSION = 1500;
@@ -255,9 +258,41 @@ export const predictionService = {
       // 4. [MỚI] Update DB NGAY LẬP TỨC để Frontend hiển thị được luôn
       await PredictionHistoryModel.findByIdAndUpdate(predictionId, {
         predictions: predictionResult.predictions,
-        // Vẫn để path là 'processing' để Controller biết đường tìm file tạm
         processedMediaPath: "processing"
       });
+
+      // [THÊM ĐOẠN NÀY] Cập nhật User Collection & Achievements
+      if (userId) {
+        try {
+          const lang = data.lang || 'en';
+          const breedSlugs = predictionResult.predictions.map((p: IYoloPrediction) => p.class.toLowerCase().replace(/\s+/g, '-'));
+
+          // Update Collection
+          await collectionService.addOrUpdateManyCollections(
+            new Types.ObjectId(userId),
+            breedSlugs,
+            new Types.ObjectId(predictionId),
+            lang
+          );
+
+          // Process Achievements
+          const [userAfterUpdate, newCollections] = await Promise.all([
+            userService.getById(userId),
+            collectionService.getUserCollection(new Types.ObjectId(userId))
+          ]);
+
+          if (userAfterUpdate) {
+            await achievementService.processUserAchievements(
+              userAfterUpdate as UserDoc,
+              newCollections,
+              lang
+            );
+          }
+          logger.info(`[AsyncPrediction] Updated collection & achievements for User ${userId}`);
+        } catch (err) {
+          logger.error(`[AsyncPrediction] Failed to update collection/achievements:`, err);
+        }
+      }
 
       // 5. Đẩy sang UploadQueue (để upload Cloudinary sau)
       await uploadQueue.add('upload-job', {
@@ -532,9 +567,9 @@ export const predictionService = {
       fileType: type,
       modelName,
       startTime: Date.now(),
-      analyticsData: { ip: req.ip, userAgent: req.headers['user-agent'] }
+      analyticsData: { ip: req.ip, userAgent: req.headers['user-agent'] },
+      lang: req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi" ? "vi" : "en"
     }, { removeOnComplete: true });
-
     // 3. Trả về ngay
     return { predictionId: predictionId.toString(), status: 'processing' };
   },
