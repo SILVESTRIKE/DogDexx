@@ -20,6 +20,7 @@ import { uploadQueue, UploadJobData } from "../utils/UploadQueue.util";
 import { analyticsService } from "./analytics.service";
 import { AnalyticsEventName } from "../constants/analytics.constants";
 import { predictionQueue, PredictionJobData } from "../utils/PredictionQueue.util";
+import os from "os";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const MAX_IMAGE_DIMENSION = 1500;
@@ -246,10 +247,9 @@ export const predictionService = {
 
       // 3. [QUAN TRỌNG] Lưu file tạm vào đúng chỗ Controller có thể đọc
       // Đường dẫn này phải khớp với TEMP_UPLOAD_DIR trong Controller
-      const TEMP_UPLOAD_DIR = path.join(__dirname, "../../public/uploads/temp");
-      if (!fs.existsSync(TEMP_UPLOAD_DIR)) fs.mkdirSync(TEMP_UPLOAD_DIR, { recursive: true });
-
+      const TEMP_UPLOAD_DIR = os.tmpdir();
       const processedMediaPathTemp = path.join(TEMP_UPLOAD_DIR, `processed_${predictionId}.txt`);
+      logger.info(`[PredictionService] Writing temp file to: ${processedMediaPathTemp}`);
       await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
 
       // 4. [MỚI] Update DB NGAY LẬP TỨC để Frontend hiển thị được luôn

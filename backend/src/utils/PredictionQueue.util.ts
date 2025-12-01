@@ -2,7 +2,22 @@ import { Queue, Worker } from 'bullmq';
 import { logger } from "./logger.util";
 import IORedis from 'ioredis';
 
-const redisConfig = { maxRetriesPerRequest: null };
+const getRedisConfig = () => {
+    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const isTls = redisUrl.startsWith('rediss://');
+    return {
+        maxRetriesPerRequest: null,
+        family: 4, // Force IPv4
+        keepAlive: 10000,
+        ...(isTls && {
+            tls: {
+                rejectUnauthorized: false
+            }
+        })
+    };
+};
+
+const redisConfig = getRedisConfig();
 
 export interface PredictionJobData {
     predictionId: string;

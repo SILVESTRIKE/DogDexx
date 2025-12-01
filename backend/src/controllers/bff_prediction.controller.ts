@@ -29,8 +29,6 @@ import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PREDICTION_SOURCES } from "../constants/prediction.constants";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
 
-const TEMP_UPLOAD_DIR = path.join(__dirname, "../../public/uploads/temp");
-
 interface PredictionItem {
   class: string;
   confidence: number;
@@ -629,6 +627,8 @@ export const bffPredictionController = {
         (transformedPrediction.processedMediaUrl &&
           transformedPrediction.processedMediaUrl.includes("processing"))
       ) {
+        const os = require('os');
+        const TEMP_UPLOAD_DIR = os.tmpdir();
         const processedMediaPathTemp = path.join(
           TEMP_UPLOAD_DIR,
           `processed_${historyId}.txt`
