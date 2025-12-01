@@ -45,6 +45,10 @@ export default {
     pricing: "Nâng cấp",
     tokens: "Tokens",
     rank: "Xếp hạng",
+    sourceImage: "Upload ảnh",
+    sourceVideo: "Upload video",
+    sourceStream: "Live Capture",
+    sourceUrl: "URL Input",
   },
   auth: {
     loginTitle: "Đăng nhập",

@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PredictionHistoryItem } from "@/lib/types";
 import { useI18n } from "@/lib/i18n-context";
-import { Calendar, Download, Trash2, Eye, Video, Camera, Webcam } from "lucide-react";
+import { Calendar, Download, Trash2, Eye, Video, Camera, Webcam, Link as LinkIcon } from "lucide-react";
 
 interface HistoryCardProps {
   prediction: PredictionHistoryItem;
@@ -24,20 +24,23 @@ export function HistoryCard({ prediction, onDelete, onDownload }: HistoryCardPro
         return { icon: <Video className="h-3 w-3" />, text: t('history.sourceVideo') };
       case 'stream_capture':
         return { icon: <Webcam className="h-3 w-3" />, text: t('history.sourceStream') };
+      case 'url_input':
+        return { icon: <LinkIcon className="h-3 w-3" />, text: t('history.sourceUrl') };
       default:
         return { icon: null, text: source };
     }
   };
 
   const sourceInfo = getSourceInfo(prediction.source);
-  const primaryDetection = prediction.detections[0]; // Lấy kết quả đầu tiên làm đại diện
+  const primaryDetection = prediction.detections[0];
   const maxConfidence = Math.max(...prediction.detections.map(p => p.confidence), 0);
 
   return (
     <Card className="overflow-hidden hover:shadow-lg transition-shadow flex flex-col group">
       <Link href={`/results?id=${prediction.id}`} className="block">
         <div className="relative overflow-hidden bg-gradient-to-br from-muted to-muted/50 aspect-square flex items-center justify-center bg-black">
-          {prediction.source === 'image_upload' || prediction.source === 'stream_capture' ? (
+          {/* FIX: Kiểm tra media.type thay vì source để hiển thị đúng ảnh cho Link (url_input) */}
+          {prediction.media.type === 'image' ? (
             <img
               src={prediction.processedMediaUrl || "/placeholder.svg"}
               alt={primaryDetection?.detectedBreed || 'Detection'}

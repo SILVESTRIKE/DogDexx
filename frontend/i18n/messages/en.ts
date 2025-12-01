@@ -686,6 +686,7 @@ export default {
     sourceStream: "Live Capture",
     sourceImage: "Image Upload",
     sourceVideo: "Video Upload",
+    sourceUrl: "URL Input",
   },
   footer: {
     company: "Company",

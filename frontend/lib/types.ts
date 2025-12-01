@@ -23,7 +23,8 @@ export interface AuthTokens {
 export type CollectionSource =
   | "image_upload"
   | "video_upload"
-  | "stream_capture";
+  | "stream_capture"
+  | "url_input";
 
 export interface UserCollectionItem {
   _id: string;
