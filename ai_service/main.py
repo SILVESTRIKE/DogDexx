@@ -71,9 +71,9 @@ class Config:
         path = "models/yolo11n.pt"
         if not os.path.exists("models"): os.makedirs("models")
         try:
-            print(f"--> Loading DETECTOR (yolo11n)...", flush=True)
             self.detect_model = YOLO(path)
             self.detect_model.to(self.device)
+            print(f"--> DETECTOR (yolo11n) loaded", flush=True)
         except Exception as e:
             print(f"Detector load failed: {e}. Will use Classify Model for detection.", flush=True)
             self.detect_model = None
@@ -108,15 +108,12 @@ class Config:
         self.VIDEO_CONF = float(config_data.get("video_conf", 0.25))
         self.STREAM_CONF = float(config_data.get("stream_conf", 0.25))
         
-        # Cấu hình Classifier (V8s) - Inference Conf cực thấp để lấy kết quả
         self.CLASS_CONF = float(config_data.get("class_conf", 0.1)) 
         
-        # Ngưỡng Logic Python ("Tòa Án")
-        self.BREED_CONF_THRESHOLD = 0.45      # Tin tưởng kết quả giống chó
-        self.OVERRIDE_CONF_THRESHOLD = 0.65   # Lật kèo (VD: Ngựa -> Chó)
+        self.BREED_CONF_THRESHOLD = 0.45      
+        self.OVERRIDE_CONF_THRESHOLD = 0.65 
         
-        # Xử lý IOU (Convert string từ DB sang float)
-        iou_val = config_data.get("iou", 0.45) # 0.45 để lọc box chồng chéo
+        iou_val = config_data.get("iou", 0.45) 
         try:
             self.IOU = float(iou_val)
         except:
@@ -152,11 +149,9 @@ class Config:
             print(f"--> Loading CLASSIFIER: {self.MODEL_PATH}...", flush=True)
             self.classify_model = YOLO(self.MODEL_PATH)
             
-            # Chỉ gọi .to() nếu là model PyTorch (.pt)
             if self.MODEL_PATH.endswith(".pt"):
                 self.classify_model.to(self.device)
             
-            # Warmup
             self.classify_model(np.zeros((640, 640, 3), dtype=np.uint8), verbose=False) 
             print(f"CLASSIFIER loaded ({'ONNX' if self.MODEL_PATH.endswith('.onnx') else 'PyTorch'}).", flush=True)
         except Exception as e:
@@ -534,7 +529,6 @@ async def ws_stream(websocket: WebSocket):
     """
     await websocket.accept()
     
-    # 1. Chỉ dùng đúng model ông yêu cầu
     model = config.classify_model 
     if not model: 
         await websocket.close()
@@ -542,17 +536,16 @@ async def ws_stream(websocket: WebSocket):
     
     print(f"[AI-WS] Client connected. Model: {config.MODEL_PATH}", flush=True)
 
-    # 2. Cấu hình Tracker đầy đủ tham số để không bị lỗi
     tracker_args = SimpleNamespace(
         track_high_thresh=0.25,
         track_low_thresh=0.1,
         new_track_thresh=0.25,
         match_thresh=0.8,
-        track_buffer=30,
+        track_buffer=15,
         mot20=False,
-        conf=0.25,      # Bắt buộc
-        iou=0.7,        # Bắt buộc
-        fuse_score=True # Bắt buộc
+        conf=0.25,      
+        iou=0.6,        
+        fuse_score=True 
     )
     local_tracker = BYTETracker(args=tracker_args, frame_rate=30)
 
@@ -566,7 +559,6 @@ async def ws_stream(websocket: WebSocket):
                     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
                     if frame is None: return None
 
-                    # Detect bằng model chính chủ của ông
                     results = model.predict(
                         frame, 
                         conf=config.STREAM_CONF, 
@@ -575,14 +567,12 @@ async def ws_stream(websocket: WebSocket):
                         imgsz=640
                     )
                     
-                    # FIX QUAN TRỌNG: Truyền object "boxes" (có chứa .conf), không truyền .data
                     if results and len(results[0].boxes) > 0:
                         det = results[0].boxes.cpu() 
                         online_targets = local_tracker.update(det, img=frame)
                     else:
                         online_targets = []
 
-                    # Format kết quả
                     final_dets = []
                     for t in online_targets:
                         final_dets.append({

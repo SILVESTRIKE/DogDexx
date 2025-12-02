@@ -660,6 +660,28 @@ export const bffPredictionController = {
             const isVideo = historyItem.source.includes("video");
             const mimeType = isVideo ? "video/mp4" : "image/jpeg";
             transformedPrediction.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+
+            // [FIX] RE-FETCH DATA FROM DB
+            // Nếu tìm thấy file tạm, nghĩa là Worker đã xong việc.
+            // Nhưng 'historyItem' hiện tại có thể là dữ liệu cũ (lấy trước khi Worker update DB).
+            // Cần lấy lại dữ liệu mới nhất để đảm bảo có 'predictions'.
+            try {
+              const freshHistoryItem = await predictionHistoryService.getHistoryById(historyId);
+              if (freshHistoryItem && freshHistoryItem.predictions && freshHistoryItem.predictions.length > 0) {
+                logger.info(`[BFF] Re-fetched fresh history for ${historyId}. Predictions count: ${freshHistoryItem.predictions.length}`);
+                // Cập nhật lại historyItem và transformedPrediction
+                historyItem = freshHistoryItem;
+                // Merge lại URL ảnh tạm vào item mới (vì item mới trong DB vẫn đang là "processing")
+                const freshTransformed = transformMediaURLs(req, freshHistoryItem);
+                freshTransformed.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+
+                // Gán lại để logic phía dưới dùng dữ liệu mới
+                Object.assign(transformedPrediction, freshTransformed);
+              }
+            } catch (refetchError) {
+              logger.warn(`[BFF] Failed to re-fetch fresh history for ${historyId}`, refetchError);
+            }
+
           } else {
             // [FIX] Nếu DB bảo đang processing mà không thấy file tạm
             // Chỉ báo failed nếu job đã tạo quá lâu (ví dụ: > 2 phút)

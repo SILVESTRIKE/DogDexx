@@ -15,6 +15,7 @@ import { UserDoc } from "../models/user.model";
 import { BadRequestError } from "../errors";
 import { logger } from "../utils/logger.util";
 import { cloudinary } from "../config/cloudinary.config";
+import { uploadFileToCloudinary } from "../utils/media.util";
 import { batchProcessor } from "../utils/BatchProcessor.util";
 import { uploadQueue, UploadJobData } from "../utils/UploadQueue.util";
 import { analyticsService } from "./analytics.service";
@@ -114,12 +115,16 @@ if (!FFMPEG_AVAILABLE) {
 }
 
 // Optimize image: Resize & Compress
-const optimizeImageBuffer = async (buffer: Buffer): Promise<Buffer> => {
-  const image = sharp(buffer);
+const optimizeImage = async (filePath: string): Promise<Buffer> => {
+  // Truyền filePath vào sharp() thay vì buffer
+  const image = sharp(filePath);
   const metadata = await image.metadata();
 
-  if ((metadata.width && metadata.width > MAX_IMAGE_DIMENSION) || (metadata.height && metadata.height > MAX_IMAGE_DIMENSION)) {
-    image.resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, { fit: 'inside', withoutEnlargement: true });
+  // Resize xuống 1024px như bạn yêu cầu (hoặc 1500px tùy chọn)
+  const MAX_DIMENSION = 1024;
+
+  if ((metadata.width && metadata.width > MAX_DIMENSION) || (metadata.height && metadata.height > MAX_DIMENSION)) {
+    image.resize(MAX_DIMENSION, MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true });
   }
 
   return image.jpeg({ quality: 85 }).toBuffer();
@@ -232,11 +237,13 @@ export const predictionService = {
     const { predictionId, mediaId, userId, directoryId, filePath, fileOriginalName, fileType, modelName, startTime, analyticsData } = data;
     try {
       // 1. Optimize Video
-      const fileBuffer = await fs.promises.readFile(filePath);
       let optimizedBuffer: Buffer;
-      if (fileType === 'image') optimizedBuffer = await optimizeImageBuffer(fileBuffer);
-      else optimizedBuffer = await optimizeVideoFile(filePath);
-
+      if (fileType === 'image') {
+        // Gọi hàm mới với filePath
+        optimizedBuffer = await optimizeImage(filePath);
+      } else {
+        optimizedBuffer = await optimizeVideoFile(filePath);
+      }
       // 2. Gọi AI
       const batchItem = {
         id: predictionId,
@@ -248,20 +255,20 @@ export const predictionService = {
       };
       const predictionResult = await batchProcessor.add(batchItem);
 
-      // 3. [QUAN TRỌNG] Lưu file tạm vào đúng chỗ Controller có thể đọc
-      // Đường dẫn này phải khớp với TEMP_UPLOAD_DIR trong Controller
-      const TEMP_UPLOAD_DIR = os.tmpdir();
-      const processedMediaPathTemp = path.join(TEMP_UPLOAD_DIR, `processed_${predictionId}.txt`);
-      logger.info(`[PredictionService] Writing temp file to: ${processedMediaPathTemp}`);
-      await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
-
-      // 4. [MỚI] Update DB NGAY LẬP TỨC để Frontend hiển thị được luôn
+      // 3. Update DB NGAY LẬP TỨC để Frontend hiển thị được luôn
       await PredictionHistoryModel.findByIdAndUpdate(predictionId, {
         predictions: predictionResult.predictions,
         processedMediaPath: "processing"
       });
 
-      // [THÊM ĐOẠN NÀY] Cập nhật User Collection & Achievements
+      // 4. Lưu file tạm vào đúng chỗ Controller có thể đọc
+      const TEMP_UPLOAD_DIR = os.tmpdir();
+      const processedMediaPathTemp = path.join(TEMP_UPLOAD_DIR, `processed_${predictionId}.txt`);
+      logger.info(`[PredictionService] Writing temp file to: ${processedMediaPathTemp}`);
+      await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
+
+
+      // Cập nhật User Collection & Achievements
       if (userId) {
         try {
           const lang = data.lang || 'en';
@@ -297,7 +304,7 @@ export const predictionService = {
       // 5. Đẩy sang UploadQueue (để upload Cloudinary sau)
       await uploadQueue.add('upload-job', {
         predictionId,
-        mediaId: mediaId, // <--- SỬA CHỖ NÀY (trước là mediaId: "")
+        mediaId: mediaId,
         predictionHistoryId: predictionId,
         userId,
         directoryId,
@@ -331,7 +338,6 @@ export const predictionService = {
       logger.info(`[PredictionService] Starting background upload & save for ID: ${predictionId}`);
 
       // Read file from disk again (since we cannot pass buffer to Redis)
-      const fileBuffer = await fs.promises.readFile(filePath);
       const filenameWithoutExt = `${path.parse(fileOriginalName).name}_${startTime}`;
 
       // Read processed media Base64 from temp file if available
@@ -350,7 +356,7 @@ export const predictionService = {
       }
 
       const [originalPath, processedPath] = await Promise.all([
-        uploadBufferToCloudinary(fileBuffer, filenameWithoutExt, `public/uploads/${fileType}s`, fileType)
+        uploadFileToCloudinary(filePath, filenameWithoutExt, `public/uploads/${fileType}s`, fileType) // <-- Dùng filePath
           .then(res => `${res.public_id}.${res.format}`),
         uploadBase64ToCloudinary(
           processedMediaBase64,

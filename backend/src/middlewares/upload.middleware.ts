@@ -64,6 +64,6 @@ export const uploadAvatar = multer({
 
 // Upload model vẫn dùng memoryStorage hoặc disk tùy nhu cầu (Model file lớn nên dùng disk sẽ tốt hơn, nhưng hiện tại giữ nguyên nếu code cũ xử lý buffer)
 export const uploadModelFiles = multer({
-  storage: multer.memoryStorage(),
+  storage: diskStorage,
   limits: { fileSize: 500 * 1024 * 1024 },
 }).single('modelFile');

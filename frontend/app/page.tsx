@@ -165,6 +165,11 @@ export default function Home() {
     if ((selectedFile && previewUrl) || (activeTab === "url" && urlInput)) {
       setIsDetecting(true);
       setError(null);
+
+      // [FIX] Reset previous result state to avoid UI glitches
+      setDetectionStatusMessage("");
+      setUploadProgress(0);
+
       runDetectionSimulation();
       try {
         const onProgress = (progress: number) =>

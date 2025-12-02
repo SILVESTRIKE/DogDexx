@@ -24,6 +24,14 @@ export const uploadToCloudinary = (buffer: Buffer, folder: string, resource_type
     });
 };
 
+export const uploadFileToCloudinary = (filePath: string, public_id_without_ext: string, folder: string, resource_type: 'image' | 'video' = 'image'): Promise<UploadApiResponse> => {
+    return cloudinary.uploader.upload(filePath, {
+        folder: folder,
+        public_id: public_id_without_ext,
+        resource_type: resource_type,
+    });
+};
+
 const transformPaths = (req: Request, data: any): any => {
     if (data === null || typeof data !== 'object' || data instanceof Date || data instanceof Types.ObjectId) return data;
     if (Array.isArray(data)) return data.map(item => transformPaths(req, item));

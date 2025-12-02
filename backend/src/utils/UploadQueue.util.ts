@@ -56,7 +56,7 @@ const worker = new Worker<UploadJobData>('upload-queue', async (job: Job<UploadJ
     }
 }, {
     connection: new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', redisConfig), // <--- Connection riêng
-    concurrency: 5
+    concurrency: 2
 });
 worker.on('error', err => {
     logger.error(`[UploadWorker] Worker error: ${err.message}`);

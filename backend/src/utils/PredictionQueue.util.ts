@@ -43,5 +43,5 @@ const worker = new Worker<PredictionJobData>('prediction-queue', async (job) => 
     await predictionService.processAsyncPrediction(job.data);
 }, {
     connection: new IORedis(process.env.REDIS_URL || 'redis://localhost:6379', redisConfig),
-    concurrency: 2 // GIỚI HẠN SỐ LƯỢNG XỬ LÝ ĐỂ KHÔNG SẬP SERVER
+    concurrency: 1 // GIỚI HẠN SỐ LƯỢNG XỬ LÝ ĐỂ KHÔNG SẬP SERVER
 });
