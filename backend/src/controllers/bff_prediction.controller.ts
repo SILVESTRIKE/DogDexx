@@ -28,7 +28,6 @@ import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PREDICTION_SOURCES } from "../constants/prediction.constants";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
-
 interface PredictionItem {
   class: string;
   confidence: number;
@@ -228,6 +227,13 @@ export const bffPredictionController = {
 
       // Thêm đoạn kiểm tra này (giống predictVideo)
       if (result.status === 'processing') {
+        await deductTokensForRequest(
+          req,
+          res,
+          tokenConfig.costs.imagePrediction,
+          "single"
+        );
+
         // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
         res.status(202).json({
           predictionId: result.predictionId,
@@ -278,7 +284,13 @@ export const bffPredictionController = {
 
       // Kiểm tra nếu đang xử lý ngầm (Async)
       if (result.status === 'processing') {
-        // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
+        await deductTokensForRequest(
+          req,
+          res,
+          tokenConfig.costs.videoPrediction,
+          "single"
+        );
+
         res.status(202).json({
           predictionId: result.predictionId,
           status: 'processing',
@@ -287,12 +299,9 @@ export const bffPredictionController = {
         return;
       }
 
-      // Logic cũ (nếu status != processing, tức là xử lý xong ngay - thường là ảnh)
-      // Lưu ý: Với code mới của prediction.service, video luôn trả về 'processing'.
-      // Đoạn dưới này chỉ chạy nếu bạn áp dụng logic cũ cho ảnh hoặc trường hợp đồng bộ.
       const data = await handlePredictionAndEnrichment(
         req,
-        Promise.resolve(result), // Wrap result vào Promise vì handlePredictionAndEnrichment mong đợi Promise
+        Promise.resolve(result),
         PREDICTION_SOURCES.VIDEO_UPLOAD,
         userId?.toString()
       );

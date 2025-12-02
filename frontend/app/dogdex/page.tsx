@@ -15,7 +15,7 @@ export default function DogDexPage() {
   const { collectionStats, refreshCollection } = useCollection();
 
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || "");
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || "name-asc");
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('highlight') ? "collectedAt-desc" : "name-asc"));
   const [filterBy, setFilterBy] = useState(searchParams.get('filter') || "all");
 
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
@@ -84,7 +84,7 @@ export default function DogDexPage() {
           sort={sortBy}
           filter={filterBy}
           locale={locale}
-          onTotalCountChange={() => {}}
+          onTotalCountChange={() => { }}
         />
       </div>
     </main>
