@@ -1,5 +1,6 @@
 import { CommunityPost, CommunityPostDoc, PostType, PostStatus } from "../models/community_post.model";
 import { NotFoundError, NotAuthorizedError } from "../errors";
+import logger from "../utils/logger";
 // import { PredictionService } from "../services/prediction.service"; // Giả sử bạn có service này để gọi AI
 
 interface CreatePostDTO {
@@ -74,7 +75,7 @@ export class PostService {
                 };
 
             } catch (error) {
-                console.error("AI Verification Failed:", error);
+                logger.error("AI Verification Failed:", error);
                 // Không fail việc tạo post nếu AI lỗi, chỉ đơn giản là không có verified tag
             }
         }

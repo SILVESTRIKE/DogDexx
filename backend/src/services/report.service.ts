@@ -118,9 +118,6 @@ export class ReportService {
     };
   }
 
-  /**
-   * Tạo báo cáo Excel.
-   */
   public async generateExcelReport(range: ReportDateRange): Promise<ExcelJS.Buffer> {
     const data = await this.getReportData(range);
     const workbook = new ExcelJS.Workbook();

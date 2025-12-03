@@ -17,15 +17,8 @@ import { FeedbackModel } from "../models/feedback.model";
 import { PlanModel } from "../models/plan.model";
 import { logger } from "../utils/logger.util"
 import { uploadToCloudinary } from "../utils/media.util";
-// Định nghĩa kiểu dữ liệu cho user đã được làm giàu
 export type EnrichedUser = UserDoc & { tokenAllotment: number };
 
-/**
- * @private
- * Hàm helper nội bộ để làm giàu dữ liệu user với thông tin từ PlanModel.
- * @param user - Đối tượng user (plain object hoặc Mongoose document)
- * @returns Đối tượng user đã được làm giàu hoặc null.
- */
 async function _enrich(user: UserDoc | null): Promise<EnrichedUser | null> {
   if (!user) return null;
   const userPlan = await PlanModel.findOne({ slug: user.plan }).lean();
@@ -100,33 +93,25 @@ export const userService = {
   async createUser(data: RegisterType, avatarFile?: Express.Multer.File): Promise<EnrichedUser> {
     logger.info('[USER_SERVICE] Bắt đầu tạo user mới.');
 
-    // 1. Kiểm tra Email và Username trong DB
     const existingUserByEmail = await UserModel.findOne({ email: data.email });
     const existingUserByUsername = await UserModel.findOne({ username: data.username });
 
-    // 2. Lấy Free Plan để gán mặc định
     const freePlan = await PlanModel.findOne({ slug: 'free' }).lean();
     if (!freePlan) throw new Error("Lỗi hệ thống: Không tìm thấy gói cước mặc định.");
 
-    // === TRƯỜNG HỢP 1: EMAIL ĐÃ TỒN TẠI ===
     if (existingUserByEmail) {
-      // A. Nếu đã xác thực -> Báo lỗi chuẩn
       if (existingUserByEmail.verify) {
         throw new BadRequestError("Email này đã được đăng ký.");
       }
 
-      // B. Nếu CHƯA xác thực -> Đây là "Zombie Account" -> GHI ĐÈ
       logger.info(`[USER_SERVICE] Phát hiện tài khoản chưa xác thực: ${data.email}. Tiến hành ghi đè.`);
 
-      // Kiểm tra Username mới có trùng với người KHÁC không
       if (existingUserByUsername && existingUserByUsername._id.toString() !== existingUserByEmail._id.toString()) {
         throw new BadRequestError("Tên người dùng này đã được sử dụng bởi người khác.");
       }
 
-      // Hash mật khẩu mới
       const hashedPassword = await bcrypt.hash(data.password, 10);
 
-      // Cập nhật thông tin mới vào document cũ
       existingUserByEmail.username = data.username;
       existingUserByEmail.password = hashedPassword;
       existingUserByEmail.firstName = data.firstName;
@@ -161,7 +146,6 @@ export const userService = {
 
       await existingUserByEmail.save();
 
-      // Gửi lại OTP mới
       await this.sendOtp(existingUserByEmail.email);
 
       const enriched = await _enrich(existingUserByEmail);
@@ -169,7 +153,6 @@ export const userService = {
       return enriched!;
     }
 
-    // === TRƯỜNG HỢP 2: TẠO MỚI HOÀN TOÀN ===
     if (existingUserByUsername) {
       throw new BadRequestError("Tên người dùng đã tồn tại.");
     }
@@ -213,8 +196,6 @@ export const userService = {
       await this.sendOtp(user.email);
     } catch (error) {
       logger.error(`[USER_SERVICE] Failed to send OTP during registration for ${user.email}:`, error);
-      // Không throw error để tránh rollback user đã tạo. 
-      // User sẽ nhận được thông báo thành công nhưng cần resend OTP khi login.
     }
 
     const enrichedUser = await _enrich(user);

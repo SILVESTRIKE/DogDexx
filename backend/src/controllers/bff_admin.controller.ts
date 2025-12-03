@@ -8,11 +8,6 @@ import * as ExcelJS from 'exceljs';
 import { userController } from './user.controller';
 import { DatabaseService } from '../services/database.service';
 
-
-/**
- * Hàm transform để định dạng lại dữ liệu feedback cho admin.
- * @description Hàm này nằm ở controller vì nó cần `req` để tạo URL đầy đủ.
- */
 function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
   if (!feedbackDoc) return null;
   const prediction = feedbackDoc.prediction_id;
@@ -44,10 +39,6 @@ function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
   };
 }
 
-/**
- * Hàm transform để định dạng lại dữ liệu lịch sử cho admin.
- * @description Hàm này nằm ở controller vì nó cần `req` để tạo URL đầy đủ.
- */
 function transformHistoryForAdmin(req: Request, historyDoc: any) {
   if (!historyDoc) return null;
   const user = historyDoc.user;
@@ -72,10 +63,6 @@ function transformHistoryForAdmin(req: Request, historyDoc: any) {
   };
 }
 
-/**
- * Hàm transform để định dạng lại dữ liệu media cho admin.
- * @description Hàm này nằm ở controller vì nó cần `req` để tạo URL đầy đủ.
- */
 function transformMediaForAdmin(req: Request, mediaDoc: any) {
   if (!mediaDoc) return null;
   const transformedMedia = transformMediaURLs(req, mediaDoc.toObject ? mediaDoc.toObject() : mediaDoc);
@@ -120,7 +107,7 @@ export const approveFeedback = async (req: Request, res: Response, next: NextFun
   try {
     const { id } = req.params;
     const adminId = (req as any).user._id;
-    const { correctedLabel } = req.body; // Lấy correctedLabel từ body
+    const { correctedLabel } = req.body;
     const result = await adminBffService.approveFeedback(id, adminId, { correctedLabel });
     res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
   } catch (error) {
@@ -132,7 +119,7 @@ export const rejectFeedback = async (req: Request, res: Response, next: NextFunc
   try {
     const { id } = req.params;
     const adminId = (req as any).user._id;
-    const { reason } = req.body; // Lấy reason từ body
+    const { reason } = req.body;
     const result = await adminBffService.rejectFeedback(id, adminId, { reason });
     res.status(200).json({ ...result, data: transformFeedbackForAdmin(req, result.data) });
   } catch (error) {
@@ -251,8 +238,6 @@ export const browseHistories = async (req: Request, res: Response, next: NextFun
 
 export const updateModelConfig = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // modelId không còn được quản lý ở đây, nó được xử lý bởi activateAIModel.
-    // Hàm này chỉ cập nhật các cấu hình khác như device, thresholds.
     const result = await adminBffService.updateModelConfig(undefined, req.body);
     res.status(200).json(result);
   } catch (error) {
@@ -305,7 +290,6 @@ export const browseDatasets = async (req: Request, res: Response, next: NextFunc
 
 export const downloadDataset = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Lấy URL tải về có chữ ký từ service
     const downloadUrl = await adminBffService.downloadDataset();
 
     res.status(200).json({ downloadUrl });
@@ -411,7 +395,6 @@ export const deleteWikiBreed = async (req: Request, res: Response, next: NextFun
   }
 };
 
-// --- BFF wrapper for admin deleting a user (for frontend admin UI)
 export const deleteUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
     return userController.adminDeleteUser(req as any, res as any);
@@ -420,9 +403,6 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-/**
- * [Admin] Lấy danh sách các GIAO DỊCH (Transactions).
- */
 export const getTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
@@ -442,9 +422,6 @@ export const getTransactions = async (req: Request, res: Response, next: NextFun
   }
 };
 
-/**
- * [Admin] Lấy danh sách các ĐĂNG KÝ (Subscriptions).
- */
 export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
@@ -469,7 +446,6 @@ export const getSubscriptions = async (req: Request, res: Response, next: NextFu
 export const getAIModels = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await adminBffService.getAIModels();
-    // Trả về mảng data trực tiếp để tương thích với frontend
     res.status(200).json(result.data);
   } catch (error) {
     next(error);
@@ -537,9 +513,6 @@ export const exportReport = async (req: Request, res: Response, next: NextFuncti
 
 const databaseService = new DatabaseService();
 
-/**
- * [Admin] Tạo backup database và gửi file về client
- */
 export const backupDatabase = async (req: Request, res: Response, next: NextFunction) => {
   try {
     logger.info('[Admin] Starting database backup...');
@@ -547,7 +520,6 @@ export const backupDatabase = async (req: Request, res: Response, next: NextFunc
     const backupPath = await databaseService.createBackup();
     const fileName = backupPath.split(/[/\\]/).pop() || 'backup.archive';
 
-    // Đọc file backup và gửi về client
     const fs = require('fs');
     const fileBuffer = fs.readFileSync(backupPath);
 
@@ -560,7 +532,6 @@ export const backupDatabase = async (req: Request, res: Response, next: NextFunc
 
     logger.info(`[Admin] Database backup sent to client: ${fileName}`);
 
-    // Cleanup old backups (keep last 10)
     databaseService.cleanOldBackups(10).catch(err => {
       logger.warn('Failed to clean old backups:', err);
     });
@@ -570,9 +541,6 @@ export const backupDatabase = async (req: Request, res: Response, next: NextFunc
   }
 };
 
-/**
- * [Admin] Khôi phục database từ file upload
- */
 export const restoreDatabase = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const file = req.file;
@@ -583,7 +551,6 @@ export const restoreDatabase = async (req: Request, res: Response, next: NextFun
 
     logger.info(`[Admin] Starting database restore from: ${file.originalname}`);
 
-    // Restore từ file đã upload
     await databaseService.restoreFromBackup(file.path);
 
     logger.info('[Admin] Database restore completed successfully');

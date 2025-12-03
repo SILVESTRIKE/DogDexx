@@ -2,14 +2,6 @@ import { Request, Response, NextFunction } from "express";
 import { ZodError, ZodObject } from "zod";
 import { ValidationError } from "../errors/ValidationError";
 
-/**
- * Middleware to validate request data against a Zod schema.
- *
- * @param schema - The Zod schema to validate against.
- * @param type - The type of request data to validate (body, query, params).
- * @param path - Optional path to a specific property in the request data.
- */
-
 export const validateData = (
   schema: ZodObject<any, any>,
   type: "body" | "query" | "params",

@@ -1,20 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import dotenv from "dotenv";
-import { redisClient } from "../utils/redis.util"; // Import Redis client
+import { redisClient } from "../utils/redis.util";
 import { tokenConfig } from "../config/token.config";
 import { REDIS_KEYS } from "../constants/redis.constants";
-// import {
-//   Builder,
-//   By,
-//   until,
-//   WebDriver,
-//   Capabilities,
-// } from "selenium-webdriver";
-// import chrome from "selenium-webdriver/chrome";
-// import "chromedriver";
+
 dotenv.config();
 
-// 1. Kiểm tra API Key ngay từ đầu để báo lỗi sớm
 const apiKey = process.env.GOOGLE_API_KEY;
 const healthApiKey = process.env.GOOGLE_API_KEY_HealthRec;
 const proApiKey = process.env.GOOGLE_API_KEY_ProRec;
@@ -32,9 +23,8 @@ const genAI = new GoogleGenerativeAI(apiKey);
 const healthAI = new GoogleGenerativeAI(healthApiKey);
 const proRecAI = new GoogleGenerativeAI(proApiKey);
 
-const SHOPEE_CAMPAIGN_ID = "128"; // ID chiến dịch của Shopee trên AccessTrade
+const SHOPEE_CAMPAIGN_ID = "128";
 
-// 2. Khởi tạo model một lần duy nhất để tái sử dụng
 const model = genAI.getGenerativeModel({ model: "gemini-flash-latest" });
 const healthModel = healthAI.getGenerativeModel({
   model: "gemini-flash-latest",
@@ -47,7 +37,6 @@ interface RedisChatSession {
   history: { role: string; parts: { text: string }[] }[];
 }
 
-// Hàm tạo khóa Redis cho phiên chat
 function getChatRedisKey(
   userId: string | undefined,
   guestIdentifier: string | undefined,
@@ -59,13 +48,8 @@ function getChatRedisKey(
   if (guestIdentifier) {
     return `${REDIS_KEYS.CHAT_SESSION_PREFIX}guest:${guestIdentifier}:${breedSlug}`;
   }
-  // Trường hợp dự phòng, không nên xảy ra nếu logic xác định người dùng/khách là mạnh mẽ
   return `${REDIS_KEYS.CHAT_SESSION_PREFIX}anon:${breedSlug}`;
 }
-
-/**
- * Lấy lịch sử chat từ Redis.
- */
 export async function getChatHistory(
   userId: string | undefined,
   guestIdentifier: string | undefined,
@@ -331,107 +315,6 @@ interface ShopeeProduct {
   imageUrl: string;
   productUrl: string;
 }
-// async function scrapeFirstShopeeProduct(
-//   keyword: string
-// ): Promise<ShopeeProduct | null> {
-//   const encodedKeyword = encodeURIComponent(keyword);
-//   const searchUrl = `https://shopee.vn/search?keyword=${encodedKeyword}`;
-
-//   const options = new chrome.Options();
-//   options.addArguments(
-//     "--headless=new",
-//     "--no-sandbox",
-//     "--disable-dev-shm-usage",
-//     "--start-maximized",
-//     "--disable-blink-features=AutomationControlled",
-//     "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-//   );
-//   options.excludeSwitches("enable-automation");
-
-//   let driver: WebDriver | null = null;
-
-//   try {
-//     driver = await new Builder()
-//       .forBrowser("chrome")
-//       .setChromeOptions(options)
-//       .build();
-
-//     await driver.executeScript(
-//       "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"
-//     );
-
-//     await driver.get(searchUrl);
-
-//     try {
-//       const popupCloseButton = await driver.wait(
-//         until.elementLocated(By.css("div.shopee-popup__close-btn")),
-//         5000
-//       );
-//       await driver.executeScript("arguments[0].click();", popupCloseButton);
-//       await sleep(1000);
-//     } catch (error) { }
-
-//     await driver.executeScript(
-//       "window.scrollTo(0, document.body.scrollHeight);"
-//     );
-//     await sleep(1000);
-//     await driver.executeScript("window.scrollTo(0, 0);");
-//     await sleep(500);
-
-//     const resultsContainerSelector = By.css(
-//       "div.shopee-search-item-result__items"
-//     );
-
-//     const resultsContainer = await driver.wait(
-//       until.elementLocated(resultsContainerSelector),
-//       30000
-//     );
-
-//     const productXPathSelector = ".//a[contains(@href, '-i.')]";
-//     const firstProductElement = await resultsContainer.findElement(
-//       By.xpath(productXPathSelector)
-//     );
-
-//     const productUrl = await firstProductElement.getAttribute("href");
-//     const name =
-//       (await firstProductElement
-//         .findElement(By.css('div[data-sqe="name"]'))
-//         .getText()) || keyword;
-//     const imageUrl = await firstProductElement
-//       .findElement(By.css("img.shopee-search-item-result__item-image-img"))
-//       .getAttribute("src");
-
-//     return { name, imageUrl, productUrl };
-//   } catch (error) {
-//     if (driver) {
-//       const image = await driver.takeScreenshot();
-//       const safeKeyword = keyword
-//         .replace(/[\\/:*?"<>|]/g, "_")
-//         .substring(0, 100);
-//       const screenshotPath = `selenium_error_${safeKeyword}.png`;
-//       require("fs").writeFileSync(screenshotPath, image, "base64");
-//     }
-//     return null;
-//   } finally {
-//     if (driver) {
-//       await driver.quit();
-//     }
-//   }
-// }
-// async function createAffiliateLinkManually(
-//   destinationUrl: string
-// ): Promise<string | null> {
-//   const affiliateId = process.env.ACCESSTRADE_API_KEY;
-//   if (!affiliateId) {
-//     return null;
-//   }
-
-//   const encodedDestinationUrl = encodeURIComponent(destinationUrl);
-
-//   const affiliateLink = `https://fast.accesstrade.com.vn/deep_link/v6?aff_id=${affiliateId}&campaign_id=${SHOPEE_CAMPAIGN_ID}&url=${encodedDestinationUrl}`;
-
-//   return affiliateLink;
-// }
 
 export async function getRecommendedProducts(
   breed: string,

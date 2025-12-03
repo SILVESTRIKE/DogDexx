@@ -6,7 +6,7 @@ import { UserModel, UserDoc } from '../models/user.model';
 import { emailService } from './email.service';
 import path from 'path';
 import { MediaModel } from '../models/medias.model';
-import { cloudinary } from '../config/cloudinary.config'; // Import cloudinary
+import { cloudinary } from '../config/cloudinary.config';
 import { slugify } from '../utils/slugify.util';
 import { PREDICTION_SOURCES } from '../constants/prediction.constants';
 import { logger } from '../utils/logger.util';
@@ -125,28 +125,21 @@ export const feedbackService = {
     return { data: feedbacks, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
 
-  /**
-   * [Admin] Lấy toàn bộ dữ liệu cho trang quản lý feedback, bao gồm danh sách, thống kê tổng quan và thống kê người dùng.
-   */
   async getAdminFeedbackPageData(filters: QueryFilters, pagination: { page: number; limit: number; }) {
 
     const [
       feedbackResult,
       statsResult,
     ] = await Promise.all([
-      // 1. Lấy danh sách feedback có phân trang
       this.getFeedbacks(filters, pagination),
 
-      // 2. Gộp các truy vấn thống kê
       FeedbackModel.aggregate([
         {
           $facet: {
-            // Thống kê tổng quan theo status
             overallStats: [
               { $match: { isDeleted: false } },
               { $group: { _id: "$status", count: { $sum: 1 } } }
             ],
-            // Thống kê top người dùng gửi feedback
             userStats: [
               { $match: { isDeleted: false } },
               { $group: { _id: "$user_id", total: { $sum: 1 }, approved: { $sum: { $cond: [{ $eq: ["$status", "approved_for_training"] }, 1, 0] } }, rejected: { $sum: { $cond: [{ $eq: ["$status", "rejected"] }, 1, 0] } } } },
@@ -161,7 +154,6 @@ export const feedbackService = {
       ])
     ]);
 
-    // Định dạng lại overallStats
     const stats = {
       pending_review: 0,
       approved_for_training: 0,
@@ -222,7 +214,7 @@ export const feedbackService = {
           } else {
             to_public_id = `dataset/approved/${breedName}/${fileName}`;
           }
-        } else { // 'rejected'
+        } else {
           to_public_id = `dataset/rejected/${fileName}`;
         }
 
@@ -261,14 +253,10 @@ export const feedbackService = {
     return feedback;
   },
 
-  // ... (các hàm còn lại không đổi)
   async deleteFeedback(id: string, force: boolean = false) {
     const feedback = await FeedbackModel.findById(id);
     if (!feedback) throw new NotFoundError('Không tìm thấy feedback.');
-
-    // Logic xóa cứng
     if (force) {
-      // Xóa file trên Cloudinary nếu tồn tại
       try {
         if (feedback.file_path && feedback.file_path.startsWith('dataset/')) {
           const public_id = feedback.file_path.substring(0, feedback.file_path.lastIndexOf('.')) || feedback.file_path;
@@ -276,7 +264,7 @@ export const feedbackService = {
           await cloudinary.uploader.destroy(public_id);
         }
       } catch (error: any) {
-        if (error.http_code !== 404) { // Ignore if not found
+        if (error.http_code !== 404) {
           logger.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
         }
       }
@@ -285,15 +273,11 @@ export const feedbackService = {
       return { message: 'Feedback đã được xóa vĩnh viễn.' };
     }
 
-    // Logic xóa mềm (mặc định)
     feedback.isDeleted = true;
     await feedback.save();
     return { message: 'Feedback đã được xóa mềm.' };
   },
 
-  /**
-   * [Admin] Duyệt một feedback.
-   */
   async approveFeedback(id: string, adminId: Types.ObjectId, correctedLabel?: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id);
 
@@ -331,9 +315,6 @@ export const feedbackService = {
     return updatedFeedback;
   },
 
-  /**
-   * [Admin] Từ chối một feedback.
-   */
   async rejectFeedback(id: string, adminId: Types.ObjectId, reason?: string): Promise<FeedbackDoc> {
     const feedback = await this.getFeedbackById(id);
 

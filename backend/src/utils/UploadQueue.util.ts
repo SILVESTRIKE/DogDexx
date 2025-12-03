@@ -31,9 +31,8 @@ export interface UploadJobData {
     fileType: "image" | "video";
     predictionResult: {
         predictions: any[];
-        // processed_media_base64: string; // REMOVED: Too large for Redis
     };
-    processedMediaPathTemp?: string; // ADDED: Path to temp file containing Base64
+    processedMediaPathTemp?: string;
     modelName: string;
     startTime: number;
     analyticsData: any;

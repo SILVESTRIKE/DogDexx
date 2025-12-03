@@ -29,7 +29,7 @@ export const startSchedulers = () => {
     }
   ));
 
-  // [MỚI] Chạy vào 00:00 hàng ngày để kiểm tra gói hết hạn
+  // Chạy vào 00:00 hàng ngày để kiểm tra gói hết hạn
   tasks.push(cron.schedule(
     "0 0 * * *",
     () => {

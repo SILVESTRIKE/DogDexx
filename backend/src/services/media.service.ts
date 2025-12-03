@@ -16,8 +16,8 @@ export interface FindMediasOptions {
   search?: string;
   type?: string;
   directory_id?: string | null;
-  startDate?: string; // Định dạng YYYY-MM-DD
-  endDate?: string; // Định dạng YYYY-MM-DD
+  startDate?: string;
+  endDate?: string;
 }
 
 export interface PaginatedMediaResult {
@@ -55,12 +55,6 @@ export class MediaService {
     return media;
   }
 
-  /**
-   * Di chuyển một media sang một thư mục logic khác, đồng thời di chuyển file trên Cloudinary.
-   * @param mediaId ID của media cần di chuyển.
-   * @param newDirectoryId ID của thư mục đích (có thể là null để chuyển ra thư mục gốc).
-   * @returns Media đã được cập nhật hoặc null nếu không tìm thấy.
-   */
   static async moveMedia(
     mediaId: string,
     newDirectoryId: string | null,
@@ -75,9 +69,8 @@ export class MediaService {
     const fileExtension = path.extname(oldPublicIdWithExt);
     const fileName = path.basename(oldPublicId);
 
-    // Hàm đệ quy để xây dựng đường dẫn đầy đủ từ directoryId
     const buildFullPath = async (dirId: string | null): Promise<string> => {
-      if (!dirId) return 'public/uploads'; // Thư mục gốc cho media của người dùng
+      if (!dirId) return 'public/uploads';
       let current = await DirectoryModel.findById(dirId);
       if (!current) return 'public/uploads';
       let parts = [current.name];
@@ -91,33 +84,28 @@ export class MediaService {
     const newFolderPath = await buildFullPath(newDirectoryId);
     const newPublicId = `${newFolderPath}/${fileName}`;
 
-    // Chỉ di chuyển nếu đường dẫn thay đổi
     if (oldPublicId !== newPublicId) {
       try {
         logger.info(`[Media Service] Moving Cloudinary resource from '${oldPublicId}' to '${newPublicId}' and updating asset_folder.`);
-        // GIẢI PHÁP: Rename trước, sau đó dùng explicit để cập nhật asset_folder.
         const renameResult = await cloudinary.uploader.rename(oldPublicId, newPublicId, { overwrite: true });
-        
+
         await cloudinary.uploader.explicit(renameResult.public_id, {
           type: 'upload',
-          asset_folder: newFolderPath // newFolderPath đã được build ở trên
+          asset_folder: newFolderPath
         });
       } catch (error: any) {
-        // Nếu file đã tồn tại ở đích, ta vẫn tiếp tục và cập nhật DB
-        if (error.http_code !== 422) { // 422: "Resource with public_id ... already exists"
-          logger.error(`[Media Service] Failed to move Cloudinary file:`, error.message);
-          throw error; // Ném lỗi nếu không phải lỗi "đã tồn tại"
+        if (error.http_code !== 422) {
+          throw error;
         }
         logger.warn(`[Media Service] Destination '${newPublicId}' already exists. Proceeding to update DB record.`);
       }
     }
 
-    // Cập nhật lại media trong DB
     media.directory_id = newDirectoryId as any;
     media.mediaPath = `${newPublicId}${fileExtension}`;
     return media.save();
   }
-  
+
   static async findAndPaginate(
     options: FindMediasOptions
   ): Promise<{ data: MediaDoc[]; pagination: any }> {
@@ -179,7 +167,6 @@ export class MediaService {
     return result;
   }
 
-  // --- CÁC HÀM TRUY XUẤT VẬT LÝ ---
   static async getFileTypeFolders(): Promise<string[]> {
     const UPLOADS_DIR = path.join(process.cwd(), "uploads");
     try {
@@ -190,9 +177,6 @@ export class MediaService {
     }
   }
 
-  /**
-   * Lấy danh sách các thư mục năm trong một thư mục loại file.
-   */
   static async getYearFolders(fileType: string): Promise<string[]> {
     const typePath = path.join(process.cwd(), "uploads", fileType);
     try {
@@ -206,9 +190,6 @@ export class MediaService {
     }
   }
 
-  /**
-   * Lấy danh sách các thư mục tháng trong một thư mục năm/loại file.
-   */
   static async getMonthFolders(
     fileType: string,
     year: string

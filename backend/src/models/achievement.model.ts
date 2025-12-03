@@ -1,14 +1,12 @@
-// Achievement model
 import { Schema, model, Document } from 'mongoose';
 
-// Schema con cho các trường đa ngôn ngữ
 const i18nStringSchema = new Schema({
   en: { type: String, required: true },
   vi: { type: String, required: true },
 }, { _id: false });
 
 export interface IAchievement extends Document {
-  key: string; // unique achievement key
+  key: string;
   name: { en: string; vi: string };
   description: { en: string; vi: string };
   condition: {

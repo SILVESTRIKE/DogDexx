@@ -23,7 +23,6 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     if (!isCaptchaValid) throw new BadRequestError("Invalid CAPTCHA. Please try again.");
 
     const { user, accessToken, refreshToken } = await authService.login(email, password);
-    // authService -> userService đã trả về user được làm giàu
     const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
     const collection = await collectionService.getUserCollection(new Types.ObjectId(user.id), lang);
     res.status(200).json({
@@ -33,22 +32,15 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       collection,
     });
   } catch (error) {
-    next(error); // Chuyển lỗi cho middleware xử lý lỗi chung
+    next(error);
   }
 };
 
 export const getProfile = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as any).user!._id;
-    // Tối ưu: Chỉ lấy thông tin user cần thiết cho profile header/dropdown.
-    // Các dữ liệu khác như collection, history sẽ được fetch ở các trang tương ứng.
     const user = await userService.getById(userId.toString());
-    /*
-    const [user, collection] = await Promise.all([
-      userService.getById(userId.toString()),
-      collectionService.getUserCollection(userId, lang),
-    ]);
-    */
+
     if (!user) {
       return next(new NotFoundError("Không tìm thấy thông tin người dùng."));
     }
@@ -113,7 +105,6 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     const validationResult = RegisterSchema.shape.body.safeParse(req.body);
     if (!validationResult.success) {
       const errorMessage = validationResult.error.errors.map(e => e.message).join(', ');
-      // Ném lỗi để middleware xử lý lỗi chung có thể bắt được
       throw new BadRequestError(errorMessage);
     }
 
@@ -235,10 +226,8 @@ export const handleMomoIpn = async (req: Request, res: Response, next: NextFunct
 
 }
 
-// --- BFF wrappers for forgot/reset password (forward to existing user controller)
 export const forgotPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Gọi trực tiếp service thay vì gọi controller khác
     const result = await authService.forgotPassword(req.body.email);
     res.status(200).json(result);
   } catch (error) {
@@ -248,7 +237,6 @@ export const forgotPassword = async (req: Request, res: Response, next: NextFunc
 
 export const resetPassword = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Gọi trực tiếp service
     const result = await authService.resetPassword(req.body.email, req.body.otp, req.body.password);
     res.status(200).json(result);
   } catch (error) {
@@ -258,13 +246,11 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
 
 export const deleteCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    // Gọi trực tiếp service
     const userId = (req as any).user!._id.toString();
     await userService.deleteUser(userId);
     res.status(200).json({ message: "Tài khoản của bạn đã được xóa thành công." });
     const { password } = req.body;
 
-    // Gọi service xác thực và xóa
     await authService.deleteUserWithPasswordVerification(userId, password);
     res.status(200).json({ message: "Tài khoản và tất cả dữ liệu liên quan đã được xóa thành công." });
   } catch (error) {

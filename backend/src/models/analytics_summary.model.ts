@@ -3,10 +3,8 @@ import { AnalyticsEventName } from "../constants/analytics.constants";
 
 export interface AnalyticsSummaryDoc extends Document {
   eventName: AnalyticsEventName;
-  // Tổng hợp theo tháng và năm
-  month: number; // 1-12
+  month: number;
   year: number;
-  // Tổng số lượng sự kiện trong tháng đó
   totalCount: number;
 }
 
@@ -23,7 +21,6 @@ const analyticsSummarySchema = new Schema(
   }
 );
 
-// Index để upsert hiệu quả
 analyticsSummarySchema.index({ eventName: 1, year: 1, month: 1 }, { unique: true });
 
 export const AnalyticsSummaryModel = mongoose.model<AnalyticsSummaryDoc>(

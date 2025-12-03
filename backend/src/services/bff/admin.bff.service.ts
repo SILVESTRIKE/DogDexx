@@ -17,11 +17,6 @@ import { ReportDateRange, ReportService } from '../report.service';
 import * as ExcelJS from 'exceljs';
 import { MediaDoc } from '../../models/medias.model';
 import { logger } from '../..//utils/logger.util';
-/**
- * Lớp này chứa toàn bộ logic nghiệp vụ cho trang Admin.
- * Nó tổng hợp logic từ các service lõi (AdminService, FeedbackService, UserService, v.v.)
- * và trả về dữ liệu thô để controller làm giàu (ví dụ: transform media URL).
- */
 export class AdminBffService {
   private adminService: AdminService;
   private configService: ConfigService;
@@ -33,12 +28,9 @@ export class AdminBffService {
     this.reportService = new ReportService();
   }
 
-  // --- Dashboard ---
   public async getDashboardData() {
     return this.adminService.getDashboardData();
   }
-
-  // --- Feedback Management ---
   public async getAdminFeedback(filters: any, pagination: { page: number; limit: number; }) {
     return feedbackService.getAdminFeedbackPageData(filters, pagination);
   }
@@ -53,7 +45,6 @@ export class AdminBffService {
     return { message: 'Feedback đã bị từ chối.', data: updatedFeedback };
   }
 
-  // --- User Management ---
   public async getEnrichedUsers(options: { page?: number, limit?: number, search?: string } = {}): Promise<{ pagination: any; users: any[] }> {
     return this.adminService.getEnrichedUsers(options);
   }
@@ -81,37 +72,28 @@ export class AdminBffService {
     };
   }
 
-  // --- Media & History Browsing ---
   public async browseMedia(path: string): Promise<{ directories: DirectoryItem[], media: MediaDoc[] }> {
-    // --- LOGGING: Bắt đầu xử lý ---
     logger.info(`\n[BFF_SERVICE] Bắt đầu browseMedia với path: "${path}"`);
 
     const parts = path.split('/').filter(Boolean);
     const lastPart = parts.length > 0 ? parts[parts.length - 1] : null;
 
-    // --- LOGGING: Phân tích path ---
     logger.info(`[BFF_SERVICE] Phân tích path: parts=${JSON.stringify(parts)}, lastPart="${lastPart}"`);
 
-    // TRƯỜNG HỢP 1: Đang yêu cầu nội dung của một thư mục ảo ('images' hoặc 'videos')
     if (lastPart === 'images' || lastPart === 'videos') {
-      const mediaTypeToFilter = lastPart.slice(0, -1); // 'image' hoặc 'video'
+      const mediaTypeToFilter = lastPart.slice(0, -1);
       const realDirectoryId = parts.slice(0, -1).join('/');
 
-      // --- LOGGING: Vào nhánh "Thư mục ảo" ---
       logger.info(`[BFF_SERVICE] -> Nhánh THƯ MỤC ẢO. Lọc theo type: "${mediaTypeToFilter}", ID thư mục thật: "${realDirectoryId}"`);
 
       const coreResult = await this.adminService.browseMediaByLogic(realDirectoryId);
-
-      // --- LOGGING: Kết quả nhận được từ Core Service (TRƯỚC KHI LỌC) ---
       logger.info(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
-      // In ra vài media item để kiểm tra type
       if (coreResult.media.length > 0) {
         logger.info(`[BFF_SERVICE] Ví dụ media type: "${coreResult.media[0].type}"`);
       }
 
       const filteredMedia = coreResult.media.filter((m: MediaDoc) => m.type?.startsWith(mediaTypeToFilter));
 
-      // --- LOGGING: Kết quả SAU KHI LỌC ---
       logger.info(`[BFF_SERVICE] Sau khi lọc, còn lại: ${filteredMedia.length} media files.`);
 
       const finalResult = {
@@ -122,22 +104,17 @@ export class AdminBffService {
       return finalResult;
     }
 
-    // TRƯỜNG HỢP 2: Đang yêu cầu nội dung của một thư mục thật (hoặc thư mục gốc)
     const realDirectoryId = path;
-
-    // --- LOGGING: Vào nhánh "Thư mục thật" ---
     logger.info(`[BFF_SERVICE] -> Nhánh THƯ MỤC THẬT. ID: "${realDirectoryId}"`);
 
     const coreResult = await this.adminService.browseMediaByLogic(realDirectoryId);
 
-    // --- LOGGING: Kết quả nhận được từ Core Service ---
     logger.info(`[BFF_SERVICE] Core Service trả về: ${coreResult.directories.length} thư mục con, ${coreResult.media.length} media files.`);
 
     const virtualDirectories: DirectoryItem[] = [];
     const hasImages = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('image'));
     const hasVideos = coreResult.media.some((m: MediaDoc) => m.type?.startsWith('video'));
 
-    // --- LOGGING: Kiểm tra sự tồn tại của media để tạo thư mục ảo ---
     logger.info(`[BFF_SERVICE] Kiểm tra media: có ảnh? ${hasImages}, có video? ${hasVideos}`);
 
     if (hasImages) {
@@ -220,13 +197,11 @@ export class AdminBffService {
     return { message: "Model uploaded and created successfully.", data: newModel };
   }
 
-  // --- Alerts ---
   public async getAlerts() {
     const alerts = await this.adminService.getSystemAlerts();
     return { alerts };
   }
 
-  // --- Plan Management ---
   public async getPlans(options: { page?: number; limit?: number; search?: string; }) {
     return PlanService.getAllPaginated(options);
   }
@@ -249,7 +224,6 @@ export class AdminBffService {
     return { message: "Yêu cầu xóa gói cước đã được xử lý." };
   }
 
-  // --- Wiki Management ---
   public async getWikiBreeds(options: { page?: number; limit?: number; search?: string; lang?: 'vi' | 'en'; }) {
     return wikiService.getAllBreeds(options as any);
   }
@@ -271,7 +245,6 @@ export class AdminBffService {
     return { message: "Giống chó đã được xóa (mềm)." };
   }
 
-  // --- Transaction & Subscription Management ---
   public async getTransactions(options: { page: number; limit: number; search?: string; status?: string; planId?: string; }) {
     return subscriptionService.getAllTransactions(options);
   }
@@ -294,12 +267,10 @@ export class AdminBffService {
     if (!activatedModel) {
       throw new NotFoundError("Không tìm thấy model để kích hoạt.");
     }
-    // Sau khi kích hoạt model, trigger AI service để tải lại cấu hình
     await this.configService.reloadAiService();
     return { message: "Model đã được kích hoạt và AI service đã được yêu cầu tải lại.", data: activatedModel };
   }
   public async getReportPreview(range: ReportDateRange) {
-    // Gọi hàm getReportData (giờ đã là public) để lấy JSON
     return this.reportService.getReportData(range);
   }
 

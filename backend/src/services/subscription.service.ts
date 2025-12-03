@@ -10,9 +10,7 @@ import { PlanService } from "./plan.service";
 import { FilterQuery, Types } from 'mongoose';
 
 export const subscriptionService = {
-  /**
-   * Lấy danh sách tất cả các gói cước công khai có sẵn.
-   */
+
   async getAvailablePlans(): Promise<PlanDoc[]> {
     const plans = await PlanService.getPublicPlans();
     if (!plans || plans.length === 0) {
@@ -56,8 +54,8 @@ export const subscriptionService = {
 
     await TransactionModel.create({
       orderId,
-      user: user._id, // Model Transaction dùng field 'user'
-      plan: plan._id, // Model Transaction dùng field 'plan'
+      user: user._id,
+      plan: plan._id,
       planSlug: plan.slug,
       amount,
       billingPeriod,
@@ -70,9 +68,6 @@ export const subscriptionService = {
     return { payUrl: momoResponse.payUrl, deeplink: momoResponse.deeplink };
   },
 
-  /**
-   * [Admin] Lấy danh sách các GIAO DỊCH (Transactions)
-   */
   async getAllTransactions(options: { page: number; limit: number; search?: string; status?: string; planId?: string; }) {
     const { page = 1, limit = 10, search, status, planId } = options;
     const skip = (page - 1) * limit;
@@ -99,7 +94,6 @@ export const subscriptionService = {
 
     const [transactions, total] = await Promise.all([
       TransactionModel.find(query)
-        // Populate 'user' vì Frontend TransactionPage cần 'username' và 'email'
         .populate('user', 'username email name')
         .populate('plan', 'name')
         .sort({ createdAt: -1 })
@@ -113,9 +107,6 @@ export const subscriptionService = {
     return { data: transactions, pagination: { total, page, limit, totalPages } };
   },
 
-  /**
-   * [Admin] Lấy danh sách các ĐĂNG KÝ (Subscriptions)
-   */
   async getAllSubscriptions(options: { page: number; limit: number; search?: string; status?: SubscriptionDoc['status']; planId?: string; }) {
     const { page = 1, limit = 10, search, status, planId } = options;
     const skip = (page - 1) * limit;
@@ -130,7 +121,7 @@ export const subscriptionService = {
         $or: [
           { username: { $regex: search, $options: 'i' } },
           { email: { $regex: search, $options: 'i' } },
-          { name: { $regex: search, $options: 'i' } } // Tìm cả tên nếu có
+          { name: { $regex: search, $options: 'i' } }
         ]
       }).select('_id');
 
@@ -187,7 +178,7 @@ export const subscriptionService = {
       return;
     }
 
-    if (resultCode === 0) { // Success
+    if (resultCode === 0) {
       const [user, plan] = await Promise.all([
         UserModel.findById(transaction.user),
         PlanModel.findById(transaction.plan)
@@ -246,7 +237,7 @@ export const subscriptionService = {
       });
 
       logger.info(`[MoMo IPN] Upgrade success for user ${user.id}.`);
-    } else { // Failed
+    } else {
       transaction.status = 'failed';
       transaction.rawIpnResponse = JSON.stringify(ipnPayload);
       await transaction.save();
@@ -254,18 +245,10 @@ export const subscriptionService = {
     }
   },
 
-  /**
-   * [CRON JOB] Kiểm tra và xử lý các gói đăng ký đã hết hạn.
-   * Logic:
-   * 1. Tìm các subscription có status = 'active' VÀ currentPeriodEnd < now.
-   * 2. Chuyển status -> 'expired'.
-   * 3. Reset user về gói Free.
-   */
   async checkExpiredSubscriptions() {
     logger.info("[SubscriptionCron] Checking for expired subscriptions...");
     const now = new Date();
 
-    // Tìm các gói đã hết hạn
     const expiredSubs = await SubscriptionModel.find({
       status: 'active',
       currentPeriodEnd: { $lt: now }
@@ -286,16 +269,14 @@ export const subscriptionService = {
 
     for (const sub of expiredSubs) {
       try {
-        // 1. Cập nhật trạng thái subscription
         sub.status = 'expired';
         await sub.save();
 
-        // 2. Downgrade user về gói Free
         await UserModel.findByIdAndUpdate(sub.userId, {
           $set: {
             plan: 'free',
             remainingTokens: freePlan.tokenAllotment,
-            subscriptionId: null // Xóa liên kết subscription
+            subscriptionId: null
           }
         });
 
@@ -306,9 +287,6 @@ export const subscriptionService = {
     }
   },
 
-  /**
-   * [User] Hủy gói đăng ký (Cancel at period end)
-   */
   async cancelSubscription(userId: string) {
     const sub = await SubscriptionModel.findOne({
       userId: userId,
@@ -319,7 +297,6 @@ export const subscriptionService = {
       throw new BadRequestError("Bạn không có gói đăng ký nào đang hoạt động.");
     }
 
-    // Nếu đã đánh dấu hủy rồi thì báo lỗi hoặc trả về luôn
     if (sub.cancelAtPeriodEnd) {
       throw new BadRequestError("Gói đăng ký của bạn đã được lên lịch hủy vào cuối kỳ.");
     }

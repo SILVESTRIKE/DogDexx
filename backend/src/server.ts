@@ -25,10 +25,10 @@ const startServer = async () => {
     await mongoose.connect(process.env.MONGO_URI);
     logger.info("[MongoDB] Connected on " + process.env.MONGO_URI + "");
 
-    console.log("--> Đang xóa queue cũ...");
+    logger.info("--> Đang xóa queue cũ...");
     await uploadQueue.drain();
     await uploadQueue.obliterate({ force: true });
-    console.log("--> Đã xóa sạch queue!");
+    logger.info("--> Đã xóa sạch queue!");
   } catch (error) {
     logger.error("[MongoDB] Connection error:", error);
     process.exit(1);

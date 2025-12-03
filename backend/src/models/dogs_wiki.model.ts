@@ -2,12 +2,12 @@ import mongoose, { Schema, Document } from 'mongoose';
 import { logger } from '../utils/logger.util';
 
 export interface DogBreedWikiDoc extends Document {
-  slug: string; // Key chính, ví dụ: "boxer"  
-  breed: string; // Tên hiển thị theo ngôn ngữ, ví dụ: "Affenpinscher" hoặc "Chó Affenpinscher"
-  pokedexNumber?: number; // Số thứ tự trong DogDex
-  group?: string; // Nhóm chó, ví dụ: "Working"
-  origin?: string; // Nguồn gốc, ví dụ: "Germany"
-  mediaPath?: string; // Đường dẫn ảnh đại diện
+  slug: string;
+  breed: string;
+  pokedexNumber?: number;
+  group?: string;
+  origin?: string;
+  mediaPath?: string;
   coat_type?: string;
   coat_colors?: string[];
   description: string;
@@ -17,16 +17,16 @@ export interface DogBreedWikiDoc extends Document {
   weight?: string;
   favorite_foods?: string[];
   common_health_issues?: string[];
-  energy_level?: number; // thang 1-5
-  trainability?: number; // thang 1-5
-  shedding_level?: number; // thang 1-5
-  rarity_level?: number; // thang 1-5
+  energy_level?: number;
+  trainability?: number;
+  shedding_level?: number;
+  rarity_level?: number;
   good_with_children?: boolean;
   good_with_other_pets?: boolean;
   suitable_for?: string[];
   unsuitable_for?: string[];
   climate_preference?: string;
-  maintenance_difficulty?: number; // thang 1-5
+  maintenance_difficulty?: number;
   trainable_skills?: string[];
   fun_fact?: string;
   isDeleted: boolean;
@@ -84,22 +84,9 @@ const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
 
 dogBreedWikiSchema.index({ group: 1, energy_level: 1, trainability: 1 });
 
-/**
- * Model cho collection tiếng Anh.
- */
 export const DogBreedWikiModel = mongoose.model<DogBreedWikiDoc>('DogBreedWiki', dogBreedWikiSchema);
 
-/**
- * Model cho collection tiếng Việt.
- * Sử dụng cùng schema nhưng trỏ đến collection 'dog_breed_wikis_vi'.
- */
 export const DogBreedWikiViModel = mongoose.model<DogBreedWikiDoc>('DogBreedWikiVi', dogBreedWikiSchema, 'dog_breed_wikis_vi');
-
-/**
- * Factory function để lấy model dựa trên ngôn ngữ.
- * @param lang Ngôn ngữ ('vi' hoặc 'en')
- * @returns Model Mongoose tương ứng.
- */
 export const getDogBreedWikiModel = (lang: 'vi' | 'en' = 'en') => {
   if (lang === 'vi') {
     return DogBreedWikiViModel;

@@ -1,17 +1,17 @@
 import { Schema, model, Document, Types } from 'mongoose';
 
 export interface TransactionDoc extends Document {
-  orderId: string; // Unique ID for this transaction, sent to MoMo
+  orderId: string;
   user: Types.ObjectId;
   plan: Types.ObjectId;
-  subscriptionId?: Types.ObjectId; // ID của subscription mà giao dịch này thuộc về (cho việc gia hạn)
+  subscriptionId?: Types.ObjectId;
   planSlug: string;
   amount: number;
   billingPeriod: 'monthly' | 'yearly';
   status: 'pending' | 'completed' | 'failed';
   paymentGateway: 'momo';
-  gatewayTransactionId?: string; // ID from MoMo after completion
-  rawIpnResponse?: string; // Store raw IPN response for debugging
+  gatewayTransactionId?: string;
+  rawIpnResponse?: string;
 }
 
 const transactionSchema = new Schema<TransactionDoc>({

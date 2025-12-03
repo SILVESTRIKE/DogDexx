@@ -4,7 +4,7 @@ import { DirectoryDoc } from "./directory.model";
 export type MediaDoc = mongoose.Document & {
   _id: mongoose.Types.ObjectId;
   name: string;
-  mediaPath: string; // Đường dẫn vật lý của file trên server/cloud
+  mediaPath: string;
   description: string | null;
   type: string | null;
   creator_id?: mongoose.Types.ObjectId;

@@ -49,7 +49,7 @@ const refreshTokenSchema = new Schema<RefreshTokenDoc>(
         delete ret._id;
         delete ret.__v;
         delete ret.isDeleted;
-        delete ret.token; // Không bao giờ trả về token đã hash
+        delete ret.token;
       }
     },
     toObject: {

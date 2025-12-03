@@ -86,11 +86,6 @@ export const momoService = {
     });
   },
 
-  /**
-   * Verifies the signature of a MoMo IPN (Instant Payment Notification).
-   * @param ipnPayload The payload received from MoMo's IPN request.
-   * @returns True if the signature is valid, false otherwise.
-   */
   verifyIpnSignature(ipnPayload: any): boolean {
     const { signature, ...payload } = ipnPayload;
     if (!signature) {

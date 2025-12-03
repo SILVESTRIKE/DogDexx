@@ -11,7 +11,6 @@ const exec = promisify(_exec);
 const cleanupOrphanedFiles = async () => {
     logger.info('--- [CRON JOB] Starting orphaned files cleanup task ---');
     try {
-        // Optional: create full DB backup before cleanup if enabled
         if (process.env.ENABLE_CLEANUP_DB_BACKUP === 'true') {
             const backupDir = process.env.DB_BACKUP_DIR || path.join(process.cwd(), 'backups');
             const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -31,12 +30,12 @@ const cleanupOrphanedFiles = async () => {
                         logger.info('[CRON JOB] DB backup completed.');
                     } catch (dumpErr: any) {
                         logger.error('[CRON JOB] DB backup failed (mongodump). Skipping cleanup. Error:', dumpErr?.message || dumpErr);
-                        return; // abort cleanup to avoid data loss
+                        return;
                     }
                 }
             } catch (err) {
                 logger.error('[CRON JOB] Failed to prepare backup directory:', err);
-                return; // abort to avoid cleanup without backup
+                return;
             }
         }
 
@@ -58,17 +57,14 @@ const cleanupOrphanedFiles = async () => {
 
         for (const media of mediasToDelete) {
             try {
-                // Xóa file trên Cloudinary
                 if (media.mediaPath) {
                     const public_id = media.mediaPath.substring(0, media.mediaPath.lastIndexOf('.')) || media.mediaPath;
                     logger.info(`[CRON JOB] Deleting Cloudinary resource: ${public_id}`);
                     await cloudinary.uploader.destroy(public_id);
                 }
-                // Xóa bản ghi trong DB
                 await MediaModel.deleteOne({ _id: media._id });
                 logger.info(`[CRON JOB] Successfully deleted Cloudinary file and DB record for media ID: ${media._id}`);
             } catch (err: any) {
-                // Nếu file không tìm thấy trên Cloudinary (http_code 404), vẫn xóa bản ghi DB
                 if (err.http_code === 404) {
                     logger.warn(`[CRON JOB] Cloudinary file not found, deleting DB record only for media ID: ${media._id}`);
                     await MediaModel.deleteOne({ _id: media._id });

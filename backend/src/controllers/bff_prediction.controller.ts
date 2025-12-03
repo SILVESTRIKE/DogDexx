@@ -145,8 +145,8 @@ async function handlePredictionAndEnrichment(
         group: "Object / Other",
         description:
           lang === "vi"
-            ? `Hệ thống nhận diện đây là __STRING_1_40__. Đây không phải là một giống chó trong cơ sở dữ liệu.`
-            : `System identified this as __STRING_1_41__. This is not a dog breed in our database.`,
+            ? `Hệ thống nhận diện đây là "${p.class}". Đây không phải là một giống chó trong cơ sở dữ liệu.`
+            : `System identified this as "${p.class}". This is not a dog breed in our database.`,
         life_expectancy: "N/A",
         temperament: ["Non-Dog"],
         energy_level: null,
@@ -225,7 +225,6 @@ export const bffPredictionController = {
         req
       );
 
-      // Thêm đoạn kiểm tra này (giống predictVideo)
       if (result.status === 'processing') {
         await deductTokensForRequest(
           req,
@@ -234,7 +233,6 @@ export const bffPredictionController = {
           "single"
         );
 
-        // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
         res.status(202).json({
           predictionId: result.predictionId,
           status: 'processing',
@@ -243,14 +241,12 @@ export const bffPredictionController = {
         return;
       }
 
-      // Logic cũ (để dự phòng)
       const data = await handlePredictionAndEnrichment(
         req,
         Promise.resolve(result),
         PREDICTION_SOURCES.IMAGE_UPLOAD,
         userId?.toString()
       );
-      // [KẾT THÚC SỬA]
 
       const duration = Date.now() - startTime;
       logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
@@ -282,7 +278,6 @@ export const bffPredictionController = {
         req
       );
 
-      // Kiểm tra nếu đang xử lý ngầm (Async)
       if (result.status === 'processing') {
         await deductTokensForRequest(
           req,
@@ -346,7 +341,6 @@ export const bffPredictionController = {
       const duration = Date.now() - startTime;
       logger.info(`[PERF] BFF | Type: url | Total: ${duration}ms`);
 
-      // Tính phí token (ví dụ: giống image prediction)
       await deductTokensForRequest(
         req,
         res,
@@ -606,7 +600,6 @@ export const bffPredictionController = {
         try {
           historyItem = await predictionHistoryService.getHistoryById(historyId);
         } catch (error) {
-          // Ignore error and retry if not found
         }
         if (!historyItem) {
           attempts++;
@@ -630,7 +623,6 @@ export const bffPredictionController = {
       } catch (error) { }
       const transformedPrediction = transformMediaURLs(req, historyItem);
 
-      // --- FALLBACK LOGIC: Nếu đang xử lý (processing), đọc ảnh tạm từ disk ---
       if (
         transformedPrediction.processedMediaUrl === "processing" ||
         (transformedPrediction.processedMediaUrl &&
@@ -648,34 +640,18 @@ export const bffPredictionController = {
               processedMediaPathTemp,
               "utf-8"
             );
-            // Giả sử là ảnh JPEG, nếu video thì cần logic phức tạp hơn chút hoặc chấp nhận ảnh thumbnail
-            // Tuy nhiên, prediction.service lưu base64 của ảnh/video đã vẽ bounding box.
-            // Với video, AI service trả về base64 của video (mp4) hoặc ảnh (jpg) tùy logic.
-            // Ở đây ta cứ gán vào, frontend sẽ hiển thị.
-            // Lưu ý: AI service trả về "processed_media_base64" là chuỗi raw base64.
-            // Cần xác định mime type.
-            // Trong prediction.service, ta thấy:
-            // const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
-            // Ta cần check source để biết là video hay ảnh.
             const isVideo = historyItem.source.includes("video");
             const mimeType = isVideo ? "video/mp4" : "image/jpeg";
             transformedPrediction.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
 
-            // [FIX] RE-FETCH DATA FROM DB
-            // Nếu tìm thấy file tạm, nghĩa là Worker đã xong việc.
-            // Nhưng 'historyItem' hiện tại có thể là dữ liệu cũ (lấy trước khi Worker update DB).
-            // Cần lấy lại dữ liệu mới nhất để đảm bảo có 'predictions'.
             try {
               const freshHistoryItem = await predictionHistoryService.getHistoryById(historyId);
               if (freshHistoryItem && freshHistoryItem.predictions && freshHistoryItem.predictions.length > 0) {
                 logger.info(`[BFF] Re-fetched fresh history for ${historyId}. Predictions count: ${freshHistoryItem.predictions.length}`);
-                // Cập nhật lại historyItem và transformedPrediction
                 historyItem = freshHistoryItem;
-                // Merge lại URL ảnh tạm vào item mới (vì item mới trong DB vẫn đang là "processing")
                 const freshTransformed = transformMediaURLs(req, freshHistoryItem);
                 freshTransformed.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
 
-                // Gán lại để logic phía dưới dùng dữ liệu mới
                 Object.assign(transformedPrediction, freshTransformed);
               }
             } catch (refetchError) {
@@ -683,16 +659,12 @@ export const bffPredictionController = {
             }
 
           } else {
-            // [FIX] Nếu DB bảo đang processing mà không thấy file tạm
-            // Chỉ báo failed nếu job đã tạo quá lâu (ví dụ: > 2 phút)
-            // Để tránh trường hợp vừa tạo xong chưa kịp ghi file đã bị báo lỗi
             const jobAge = Date.now() - new Date(historyItem.createdAt).getTime();
             if (jobAge > 5 * 60 * 1000) { // 5 phút
               logger.warn(`[BFF] Temp file missing for STALE processing job ${historyId} (${jobAge}ms). Marking as failed.`);
               transformedPrediction.processedMediaUrl = "failed";
             } else {
-              // Nếu mới tạo thì cứ để processing, chờ worker ghi file
-              // Frontend sẽ tiếp tục polling
+
             }
           }
         } catch (e) {
@@ -700,10 +672,8 @@ export const bffPredictionController = {
             `[BFF] Could not read temp file for history ${historyId}:`,
             e
           );
-          // Không set failed ở đây để tránh lỗi đọc file tạm thời
         }
       }
-      // -----------------------------------------------------------------------
 
       const detections = transformedPrediction.predictions.map((p: any) => {
         const slug = p.class.toLowerCase().replace(/\s+/g, "-");

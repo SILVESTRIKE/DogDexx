@@ -21,7 +21,6 @@ export const leaderboardService = {
     value: string | null = null,
     limit: number = 50
   ): Promise<LeaderboardEntry[]> {
-    // 1. Tạo Cache Key
     const cleanValue = value ? value.trim().toUpperCase().replace(/\s+/g, '_') : 'ALL';
     const cacheKey = `leaderboard:${scope}:${cleanValue}:top${limit}`;
 
@@ -30,7 +29,6 @@ export const leaderboardService = {
       if (cached) return JSON.parse(cached);
     }
 
-    // 2. Pipeline Aggregation
     const pipeline: any[] = [];
     pipeline.push({ $match: { isDeleted: { $ne: true } } });
     pipeline.push({ $addFields: { collectionSize: { $size: "$collectedBreeds" } } });
@@ -41,15 +39,13 @@ export const leaderboardService = {
     });
     pipeline.push({ $unwind: "$userInfo" });
     pipeline.push({ $match: { "userInfo.isDeleted": false } });
-    
-    // Lọc bỏ người dùng có vai trò 'admin' hoặc 'dev'
+
     pipeline.push({ $match: { "userInfo.role": { $nin: ["admin", "dev"] } } });
 
-    // Lọc theo Country/City
     if (scope === 'country' && value) {
-        pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
     } else if (scope === 'city' && value) {
-        pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
     }
 
     pipeline.push({ $sort: { collectionSize: -1, updatedAt: 1 } });
@@ -107,7 +103,7 @@ export const leaderboardService = {
       { $unwind: "$userInfo" },
       { $match: { "userInfo.isDeleted": false } },
       { $group: { _id: type === 'country' ? "$userInfo.country" : "$userInfo.city" } },
-      { $match: { _id: { $ne: null} } },
+      { $match: { _id: { $ne: null } } },
       { $sort: { _id: 1 } }
     ]);
 

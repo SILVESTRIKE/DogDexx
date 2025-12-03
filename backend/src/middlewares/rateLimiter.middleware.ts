@@ -13,7 +13,6 @@ export const apiLimiter = rateLimit({
 
   skip: (req: Request): boolean => {
     const user = (req as any).user;
-    // Skip rate limiting for prediction status polling
     if (req.path.includes('/predictions') && req.path.includes('/status') && req.method === 'GET') {
       return true;
     }

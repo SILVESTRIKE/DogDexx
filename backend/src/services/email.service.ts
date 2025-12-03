@@ -10,19 +10,19 @@ async function sendGenericEmail(
 ): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY; // Nhớ cấu hình biến này trên Render
   const senderEmail = process.env.EMAIL_FROM || "ctytest8@gmail.com";
-  
+
   if (!apiKey) {
     throw new Error("Thiếu cấu hình BREVO_API_KEY");
   }
 
   const url = "https://api.brevo.com/v3/smtp/email";
-  
+
   // Brevo API Body
   const body = {
     sender: { name: "DOGDEX siu cấp vjp pro", email: senderEmail },
     to: [{ email: to }],
     subject: subject,
-    htmlContent: `<html><body>${content}</body></html>`, 
+    htmlContent: `<html><body>${content}</body></html>`,
   };
 
   try {
@@ -51,7 +51,6 @@ async function sendGenericEmail(
   }
 }
 
-// Giữ nguyên hàm này, chỉ thay đổi cách gọi bên trong
 interface ContactFormPayload {
   fromEmail: string;
   message: string;
@@ -59,7 +58,7 @@ interface ContactFormPayload {
 
 async function sendContactFormEmail(payload: ContactFormPayload): Promise<void> {
   const { fromEmail, message } = payload;
-  const receiverEmail = process.env.EMAIL_FROM; 
+  const receiverEmail = process.env.EMAIL_FROM;
 
   if (!receiverEmail) return;
 

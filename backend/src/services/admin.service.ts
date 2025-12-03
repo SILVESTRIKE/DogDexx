@@ -18,9 +18,6 @@ import { PlanModel } from "../models/plan.model";
 import { cloudinary } from "../config/cloudinary.config";
 import { logger } from "../utils/logger.util";
 export class AdminService {
-  /**
-   * Tổng hợp dữ liệu cho trang Dashboard của Admin.
-   */
   public async getDashboardData() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -123,9 +120,6 @@ export class AdminService {
     };
   }
 
-  /**
-   * Duyệt hệ thống file ảo để quản lý media.
-   */
   async browseDirectory(path: string, query: any): Promise<BrowseResult> {
     const parts = path.split("/").filter(Boolean);
     const { startDate, endDate } = query;
@@ -258,9 +252,6 @@ export class AdminService {
     throw new NotFoundError(`Path not found: ${path}`);
   }
 
-  /**
-   * Duyệt hệ thống file media ảo cho trang quản lý media.
-   */
   async browseMediaByLogic(
     path: string
   ): Promise<{ directories: DirectoryItem[]; media: MediaDoc[] }> {
@@ -293,9 +284,6 @@ export class AdminService {
     return { directories: directoryItems, media: mediaFiles };
   }
 
-  /**
-   * [Admin] Xóa vĩnh viễn một media file và các bản ghi liên quan.
-   */
   async deleteMedia(mediaId: string): Promise<{ message: string }> {
     const media = await MediaModel.findById(mediaId);
     if (!media) throw new NotFoundError("Không tìm thấy media.");

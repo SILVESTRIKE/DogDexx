@@ -41,15 +41,10 @@ export class AIModelController {
     const activatedModel = await AIModelService.activateModel(modelId);
     if (!activatedModel) throw new NotFoundError("Model not found");
 
-    // Trigger AI service to reload
     await configService.reloadAiService();
 
     res.status(200).json({ message: "Model activated successfully and AI service reload triggered.", data: activatedModel });
   }
-
-  /**
-   * (Admin) Nhận file model và metadata, sau đó gọi service để upload và tạo bản ghi.
-   */
 
   static async uploadModel(req: Request, res: Response, next: NextFunction) {
     const file = req.file;

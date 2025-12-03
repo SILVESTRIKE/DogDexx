@@ -17,9 +17,6 @@ export interface DogDexBreed {
 }
 
 export const collectionService = {
-  /**
-   * Thêm hoặc cập nhật nhiều giống chó vào bộ sưu tập của người dùng từ một lần dự đoán.
-   */
   async addOrUpdateManyCollections(userId: Types.ObjectId, breedSlugs: string[], predictionId: Types.ObjectId, lang: 'vi' | 'en' = 'en') {
     const uniqueSlugs = [...new Set(breedSlugs)];
     if (uniqueSlugs.length === 0) return;
@@ -27,24 +24,20 @@ export const collectionService = {
     const breeds = await WikiModel.find({ slug: { $in: uniqueSlugs } }).select('_id').lean();
     if (breeds.length === 0) return;
 
-    // 1. Ensure document exists (Atomic Upsert)
     await UserCollectionModel.updateOne(
       { user_id: userId },
       { $setOnInsert: { collectedBreeds: [] } },
       { upsert: true }
     );
 
-    // 2. Process each breed atomically (Parallel)
     await Promise.all(breeds.map(async (breed) => {
       const breedId = breed._id;
 
-      // Try to increment existing
       const updateResult = await UserCollectionModel.updateOne(
         { user_id: userId, "collectedBreeds.breed_id": breedId },
         { $inc: { "collectedBreeds.$.collection_count": 1 } }
       );
 
-      // If not found, push new (Atomic Push if not exists)
       if (updateResult.modifiedCount === 0) {
         await UserCollectionModel.updateOne(
           { user_id: userId, "collectedBreeds.breed_id": { $ne: breedId } },
@@ -62,13 +55,9 @@ export const collectionService = {
     }));
   },
 
-  /**
-   * Cập nhật bộ sưu tập từ một mảng các kết quả dự đoán (dành cho batch).
-   */
   async addOrUpdateFromPredictionResults(userId: Types.ObjectId, predictionResults: PredictionHistoryDoc[], lang: 'vi' | 'en' = 'en') {
     if (!predictionResults || predictionResults.length === 0) return;
 
-    // 1. Ensure document exists
     await UserCollectionModel.updateOne(
       { user_id: userId },
       { $setOnInsert: { collectedBreeds: [] } },
@@ -93,7 +82,6 @@ export const collectionService = {
       });
     });
 
-    // Execute atomic updates in parallel
     await Promise.all(operations.map(async (op) => {
       const { breedId, predictionId } = op;
 
@@ -119,9 +107,6 @@ export const collectionService = {
     }));
   },
 
-  /**
-   * Lấy bộ sưu tập ("DogDex") của một người dùng.
-   */
   async getUserCollection(userId: Types.ObjectId, lang: 'vi' | 'en' = 'en'): Promise<CollectedBreed[]> {
     const WikiModel = getDogBreedWikiModel(lang);
 
@@ -140,9 +125,6 @@ export const collectionService = {
     return userCollection ? userCollection.collectedBreeds : [];
   },
 
-  /**
-   * Lấy các thống kê về bộ sưu tập của người dùng.
-   */
   async getCollectionStats(userId: Types.ObjectId) {
     const userCollection = await UserCollectionModel.findOne({ user_id: userId, isDeleted: { $ne: true } }).populate('collectedBreeds.breed_id', 'breed slug').lean();
     if (!userCollection) {
@@ -159,9 +141,6 @@ export const collectionService = {
     return { totalCollected, totalPredictionsInCollection, topBreeds };
   },
 
-  /**
-   * Lấy một item trong bộ sưu tập của người dùng bằng slug của giống chó.
-   */
   async getCollectionItemBySlug(userId: Types.ObjectId, breedSlug: string, lang: 'vi' | 'en' = 'en') {
     const WikiModel = getDogBreedWikiModel(lang);
     const breed = await WikiModel.findOne({ slug: breedSlug }).select('_id').lean();
@@ -174,9 +153,6 @@ export const collectionService = {
     return userCollection ? userCollection.collectedBreeds.find(cb => (cb.breed_id as any)?._id?.toString() === breed._id.toString()) : null;
   },
 
-  /**
-   * Sắp xếp danh sách DogDex ở tầng ứng dụng.
-   */
   sortDogDex(breeds: DogDexBreed[], sortBy: string): DogDexBreed[] {
     if (sortBy === 'collectedAt-desc') {
       return breeds.sort((a, b) => {

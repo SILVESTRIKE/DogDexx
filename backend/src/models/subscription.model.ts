@@ -8,8 +8,8 @@ export type SubscriptionDoc = Document & {
   userId: Types.ObjectId;
   planId: Types.ObjectId;
   planSlug: string;
-  provider: 'momo' | 'stripe' | 'napas'; // Cổng thanh toán
-  providerSubscriptionId: string; // ID của subscription trên hệ thống của provider
+  provider: 'momo' | 'stripe' | 'napas';
+  providerSubscriptionId: string;
   status: SubscriptionStatus;
   billingPeriod: BillingPeriod;
   currentPeriodStart: Date;

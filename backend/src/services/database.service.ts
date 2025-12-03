@@ -17,16 +17,11 @@ export class DatabaseService {
     this.mongoUri = process.env.MONGO_URI || '';
     this.dbName = process.env.DB_NAME || 'dog_breed_id';
 
-    // Đảm bảo thư mục backup tồn tại
     if (!fs.existsSync(this.backupDir)) {
       fs.mkdirSync(this.backupDir, { recursive: true });
     }
   }
 
-  /**
-   * Tạo backup của database
-   * @returns Đường dẫn đến file backup
-   */
   async createBackup(): Promise<string> {
     try {
       const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
@@ -35,7 +30,6 @@ export class DatabaseService {
 
       logger.info(`Starting database backup: ${backupName}`);
 
-      // Sử dụng mongodump để tạo backup
       const command = `mongodump --uri="${this.mongoUri}" --db=${this.dbName} --archive="${backupPath}.archive" --gzip`;
 
       const { stdout, stderr } = await execAsync(command);
@@ -53,25 +47,18 @@ export class DatabaseService {
     }
   }
 
-  /**
-   * Khôi phục database từ file backup
-   * @param filePath Đường dẫn đến file backup
-   */
   async restoreFromBackup(filePath: string): Promise<void> {
     try {
-      // Kiểm tra file tồn tại
       if (!fs.existsSync(filePath)) {
         throw new AppError('Backup file not found');
       }
 
-      // Kiểm tra định dạng file
       if (!filePath.endsWith('.archive')) {
         throw new AppError('Invalid backup file format. Expected .archive file');
       }
 
       logger.info(`Starting database restore from: ${filePath}`);
 
-      // Sử dụng mongorestore để khôi phục
       const command = `mongorestore --uri="${this.mongoUri}" --db=${this.dbName} --archive="${filePath}" --gzip --drop`;
 
       const { stdout, stderr } = await execAsync(command);
@@ -82,7 +69,6 @@ export class DatabaseService {
 
       logger.info('Database restore completed successfully');
 
-      // Xóa file tạm sau khi restore
       if (filePath.includes('temp-restore')) {
         fs.unlinkSync(filePath);
       }
@@ -92,9 +78,6 @@ export class DatabaseService {
     }
   }
 
-  /**
-   * Lấy danh sách các backup có sẵn
-   */
   async listBackups(): Promise<Array<{ name: string; path: string; size: number; createdAt: Date }>> {
     try {
       const files = fs.readdirSync(this.backupDir);
@@ -119,10 +102,6 @@ export class DatabaseService {
     }
   }
 
-  /**
-   * Xóa các backup cũ (giữ lại N backup gần nhất)
-   * @param keepCount Số lượng backup cần giữ lại
-   */
   async cleanOldBackups(keepCount: number = 10): Promise<void> {
     try {
       const backups = await this.listBackups();
@@ -136,7 +115,6 @@ export class DatabaseService {
       }
     } catch (error: any) {
       logger.error('Failed to clean old backups:', error);
-      // Không throw error, vì đây chỉ là cleanup
     }
   }
 }

@@ -43,7 +43,6 @@ const PREDICTION_SOURCES = {
   URL_INPUT: 'url_input'
 } as const;
 
-// Configure FFmpeg
 let FFMPEG_AVAILABLE = false;
 let FFMPEG_PROBE_MESSAGE = '';
 try {
@@ -114,14 +113,11 @@ if (!FFMPEG_AVAILABLE) {
   logger.info('[PredictionService] ffmpeg configured for video preprocessing.');
 }
 
-// Optimize image: Resize & Compress
 const optimizeImage = async (filePath: string): Promise<Buffer> => {
-  // Truyền filePath vào sharp() thay vì buffer
   const image = sharp(filePath);
   const metadata = await image.metadata();
 
-  // Resize xuống 1024px như bạn yêu cầu (hoặc 1500px tùy chọn)
-  const MAX_DIMENSION = 1024;
+  const MAX_DIMENSION = 1500;
 
   if ((metadata.width && metadata.width > MAX_DIMENSION) || (metadata.height && metadata.height > MAX_DIMENSION)) {
     image.resize(MAX_DIMENSION, MAX_DIMENSION, { fit: 'inside', withoutEnlargement: true });
@@ -148,7 +144,6 @@ const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
 
-      // SỬA: Truyền filePath trực tiếp vào ffmpeg, KHÔNG dùng .input(stream)
       const command = ffmpeg(filePath)
         .videoBitrate(VIDEO_TARGET_BITRATE)
         .withVideoCodec('libx264')
@@ -172,7 +167,6 @@ const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
     try {
       const scaleFilter = `scale=${VIDEO_PREPROCESS_MAX_WIDTH}:-2:force_original_aspect_ratio=decrease`;
 
-      // SỬA: Truyền filePath trực tiếp vào ffmpeg
       const command = ffmpeg(filePath)
         .withVideoCodec('libx264')
         .videoBitrate(VIDEO_PREPROCESS_BITRATE)
@@ -192,7 +186,6 @@ const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
       outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
     } catch (err: any) {
       logger.error('[PredictionService] Exception while trying to preprocess video buffer:', err);
-      // Fallback: đọc file gốc nếu lỗi
       fs.promises.readFile(filePath).then(resolve).catch(reject);
     }
   });
@@ -204,7 +197,6 @@ interface StreamResultPayload {
   detections: IYoloPrediction[];
 }
 
-// Upload Base64 to Cloudinary
 const uploadBase64ToCloudinary = async (base64Data: string, folder: string, resource_type: "image" | "video" = "image"): Promise<string> => {
   const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
   const result = await cloudinary.uploader.upload(dataUri, {
@@ -214,7 +206,6 @@ const uploadBase64ToCloudinary = async (base64Data: string, folder: string, reso
   return `${result.public_id}.${result.format}`;
 };
 
-// Upload Buffer to Cloudinary
 const uploadBufferToCloudinary = async (buffer: Buffer, public_id_without_ext: string, folder: string, resource_type: "image" | "video" = "image"): Promise<UploadApiResponse> => {
   return new Promise<UploadApiResponse>((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
@@ -239,7 +230,6 @@ export const predictionService = {
       // 1. Optimize Video
       let optimizedBuffer: Buffer;
       if (fileType === 'image') {
-        // Gọi hàm mới với filePath
         optimizedBuffer = await optimizeImage(filePath);
       } else {
         optimizedBuffer = await optimizeVideoFile(filePath);
@@ -268,13 +258,11 @@ export const predictionService = {
       await fs.promises.writeFile(processedMediaPathTemp, predictionResult.processed_media_base64);
 
 
-      // Cập nhật User Collection & Achievements
       if (userId) {
         try {
           const lang = data.lang || 'en';
           const breedSlugs = predictionResult.predictions.map((p: IYoloPrediction) => p.class.toLowerCase().replace(/\s+/g, '-'));
 
-          // Update Collection
           await collectionService.addOrUpdateManyCollections(
             new Types.ObjectId(userId),
             breedSlugs,
@@ -282,7 +270,6 @@ export const predictionService = {
             lang
           );
 
-          // Process Achievements
           const [userAfterUpdate, newCollections] = await Promise.all([
             userService.getById(userId),
             collectionService.getUserCollection(new Types.ObjectId(userId))
@@ -312,7 +299,7 @@ export const predictionService = {
         fileOriginalName,
         fileType,
         predictionResult: { predictions: predictionResult.predictions },
-        processedMediaPathTemp, // Truyền path file tạm sang cho UploadQueue dùng
+        processedMediaPathTemp,
         modelName,
         startTime,
         analyticsData
@@ -337,11 +324,9 @@ export const predictionService = {
     try {
       logger.info(`[PredictionService] Starting background upload & save for ID: ${predictionId}`);
 
-      // Read file from disk again (since we cannot pass buffer to Redis)
       const filenameWithoutExt = `${path.parse(fileOriginalName).name}_${startTime}`;
 
-      // Read processed media Base64 from temp file if available
-      let processedMediaBase64: string | undefined; // Khai báo kiểu rõ ràng
+      let processedMediaBase64: string | undefined;
       if (processedMediaPathTemp) {
         try {
           processedMediaBase64 = await fs.promises.readFile(processedMediaPathTemp, 'utf-8');
@@ -350,7 +335,6 @@ export const predictionService = {
         }
       }
 
-      // Kiểm tra nếu không có dữ liệu
       if (!processedMediaBase64) {
         throw new Error("Missing processed media data (Base64) for upload.");
       }
@@ -367,7 +351,6 @@ export const predictionService = {
 
       logger.info(`[Timing] [PredictionService] [${predictionId}] Upload complete. Updating DB.`);
 
-      // Update existing Media record
       await MediaModel.findByIdAndUpdate(mediaId, {
         mediaPath: originalPath,
         type: fileType
@@ -375,14 +358,12 @@ export const predictionService = {
 
       const processingTime = Date.now() - startTime;
 
-      // Update existing PredictionHistory record
       await PredictionHistoryModel.findByIdAndUpdate(predictionHistoryId, {
-        mediaPath: originalPath, // Update with real path
-        processedMediaPath: processedPath, // Update with real path
+        mediaPath: originalPath,
+        processedMediaPath: processedPath,
         processingTime
       });
 
-      // Reconstruct req mock for analytics
       const reqMock = {
         ip: analyticsData.ip,
         headers: { 'user-agent': analyticsData.userAgent }
@@ -401,18 +382,15 @@ export const predictionService = {
       logger.error(`[PredictionService] Background task failed for ID: ${predictionId}`, bgError);
       logger.error(`[Timing] [PredictionService] [${predictionId}] Background task failed:`, bgError);
 
-      // [FIX] Update DB to failed
       await PredictionHistoryModel.findByIdAndUpdate(predictionHistoryId, {
         processedMediaPath: "failed"
       });
     } finally {
-      // CLEANUP: Delete temp file
       try {
         if (fs.existsSync(filePath)) {
           await fs.promises.unlink(filePath);
           logger.info(`[PredictionService] Deleted temp file: ${filePath}`);
         }
-        // Cleanup temp processed media file
         if (processedMediaPathTemp && fs.existsSync(processedMediaPathTemp)) {
           await fs.promises.unlink(processedMediaPathTemp);
           logger.info(`[PredictionService] Deleted temp processed file: ${processedMediaPathTemp}`);
@@ -433,7 +411,7 @@ export const predictionService = {
     req: Request
   ): Promise<PredictionHistoryDoc[]> => {
     if (!files.length) throw new BadRequestError("Không có file nào được cung cấp.");
-    const startTime = Date.now(); // [PERF] Start timer
+    const startTime = Date.now();
 
     try {
       let directory_id: Types.ObjectId | undefined;
@@ -446,12 +424,11 @@ export const predictionService = {
       const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
       const modelName = activeModel ? activeModel.name : 'unknown_model';
 
-      // [PERF] Measure AI Service Call
       const aiStartTime = Date.now();
       const response = await axios.post(`${AI_SERVICE_URL}/predict/images_by_urls`, {
         urls: files.map(file => file.path)
       });
-      const aiDuration = Date.now() - aiStartTime; // [PERF] AI Duration
+      const aiDuration = Date.now() - aiStartTime;
 
       const batchResults = response.data.results;
       const predictions: PredictionHistoryDoc[] = [];
@@ -505,7 +482,6 @@ export const predictionService = {
         eventData: { fileCount: files.length }
       });
 
-      // [PERF] Log Total Duration
       const totalDuration = Date.now() - startTime;
       logger.info(`[PERF] BACKEND | Type: batch | Count: ${files.length} | AI: ${aiDuration}ms | Total: ${totalDuration}ms`);
 
@@ -531,7 +507,6 @@ export const predictionService = {
     if (!file) throw new BadRequestError("No file.");
     const predictionId = new Types.ObjectId();
 
-    // ... (Giữ nguyên logic lấy directory_id, modelName) ...
     let directory_id: Types.ObjectId | undefined;
     if (userId) {
       const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });

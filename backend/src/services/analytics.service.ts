@@ -25,7 +25,7 @@ class AnalyticsService {
       if (user?._id) {
         query.user = user._id;
       } else if ((req as any).fingerprint?.hash) {
-        query.fingerprint = (req as any).fingerprint.hash; // Vẫn lưu hash vào DB
+        query.fingerprint = (req as any).fingerprint.hash;
       } else {
         logger.warn(`[AnalyticsService] Could not track event '${eventName}' due to missing identifier. Full request fingerprint:`, (req as any).fingerprint);
         return;

@@ -10,9 +10,6 @@ import { logger } from '../utils/logger.util';
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
 export class ConfigService {
-  /**
-   * Lấy cấu hình AI hiện tại từ database, bao gồm cả model đang active.
-   */
   public async getAiConfig(): Promise<IConfiguration> {
     const configDoc = await Configuration.findOne({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
 
@@ -23,9 +20,6 @@ export class ConfigService {
     return configDoc;
   }
 
-  /**
-   * Lấy cấu hình đầy đủ cho trang Admin, bao gồm cả model đang active.
-   */
   public async getFullConfigForAdmin(): Promise<any> {
     const [configDoc, activeModel] = await Promise.all([
       this.getAiConfig(),
@@ -41,9 +35,6 @@ export class ConfigService {
     return configObject;
   }
 
-  /**
-   * Lấy cấu hình đầy đủ để gửi cho AI Service, bao gồm cả model đang active.
-   */
   public async getFullConfigForAIService(): Promise<any> {
     const [config, activeModel] = await Promise.all([
       Configuration.findOne({ key: CONFIG_KEYS.MODEL_THRESHOLDS }),
@@ -53,10 +44,6 @@ export class ConfigService {
     return { ...config?.toObject(), activeModel };
   }
 
-  /**
-   * Cập nhật cấu hình AI trong database.
-   * @param updateData Dữ liệu cần cập nhật.
-   */
   public async updateAiConfig(
     updateData: Partial<IConfiguration>
   ): Promise<IConfiguration> {
@@ -80,9 +67,6 @@ export class ConfigService {
     return updatedConfig;
   }
 
-  /**
-   * Gửi yêu cầu đến AI service để tải lại cấu hình mới.
-   */
   public async reloadAiService(): Promise<{ message: string; details?: any }> {
     const fullConfig = await this.getFullConfigForAIService();
     const { activeModel, ...config } = fullConfig;

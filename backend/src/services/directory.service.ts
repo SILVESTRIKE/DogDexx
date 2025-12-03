@@ -23,20 +23,16 @@ export class DirectoryService {
   }
 
   static async softDeleteRecursive(directoryId: string): Promise<void> {
-    // Cập nhật tất cả media trong thư mục này sang trạng thái đã xóa
-    // NOTE: field in MediaModel is `directory_id`, not `directory_name`.
     await MediaModel.updateMany(
       { directory_id: directoryId, isDeleted: false },
       { $set: { isDeleted: true } }
     );
 
-    // Tìm các thư mục con
     const subDirectories = await DirectoryModel.find({
       parent_id: directoryId,
       isDeleted: false,
     });
 
-    // Đệ quy xóa các thư mục con
     if (subDirectories.length > 0) {
       await Promise.all(
         subDirectories.map((subDir) =>
@@ -45,7 +41,6 @@ export class DirectoryService {
       );
     }
 
-    // Xóa thư mục hiện tại
     await DirectoryModel.findByIdAndUpdate(directoryId, {
       $set: { isDeleted: true },
     });

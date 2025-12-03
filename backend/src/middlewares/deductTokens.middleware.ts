@@ -4,13 +4,7 @@ import { redisClient } from "../utils/redis.util";
 import { logger } from "../utils/logger.util";
 import { tokenConfig } from "../config/token.config";
 import { UserDoc } from "../models/user.model";
-/**
- * Hàm trừ token cho MỘT REQUEST, tự động xác định là user hay guest.
- * SAU KHI TRỪ, NÓ SẼ ĐẶT HEADER VÀO RESPONSE.
- * @param req - Đối tượng Request
- * @param tokenCost - Chi phí token cơ bản
- * @param type - Loại chi phí ('single' hoặc 'batch')
- */
+
 export const deductTokensForRequest = async (
   req: Request,
   res: Response,

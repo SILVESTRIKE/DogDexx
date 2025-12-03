@@ -21,25 +21,19 @@ import gc
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 from pydantic import BaseModel, HttpUrl
-# ==============================================================================
-# 0. GLOBAL SETTINGS
-# ==============================================================================
+
 if torch.cuda.is_available():
     print("CUDA detected: Enabling full GPU performance", flush=True)
 else:
     print("CPU only: Limiting threads to 1 to prevent blocking", flush=True)
     torch.set_num_threads(1)
 
-# ==============================================================================
-# 1. CONFIGURATION
-# ==============================================================================
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
 MONGO_URI = os.getenv("MONGO_URI")
 DB_NAME = os.getenv("DB_NAME")
 COCO_DOG_CLASS_ID = 16 
-# Các class động vật trong COCO: 15: Cat, 16: Dog, 17: Horse, 18: Sheep, 19: Cow, 21: Bear
 ANIMAL_CLASSES = [15, 16, 17, 18, 19, 21]
 
 class URLPayload(BaseModel):
@@ -47,11 +41,10 @@ class URLPayload(BaseModel):
 
 class Config:
     def __init__(self):
-        self.classify_model = None   # Model CHÍNH (V8s)
-        self.detect_model = None     # Model PHỤ (V11n)
+        self.classify_model = None  
+        self.detect_model = None     
         self.device = "cpu"
         
-        # Kết nối DB
         try:
             if MONGO_URI:
                 self.mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
@@ -67,7 +60,6 @@ class Config:
         self._load_detector()
 
     def _load_detector(self):
-        """Load model Nano nhẹ chỉ để tìm vị trí"""
         path = "models/yolo11n.pt"
         if not os.path.exists("models"): os.makedirs("models")
         try:
@@ -103,8 +95,7 @@ class Config:
     def _apply_config(self, config_data: dict):
         print(f"[CONFIG] Bắt đầu áp dụng cấu hình: {config_data}", flush=True)
         
-        # Cấu hình Detector (V11n)
-        self.IMAGE_CONF = float(config_data.get("image_conf", 0.25)) # Chuẩn vàng YOLO
+        self.IMAGE_CONF = float(config_data.get("image_conf", 0.25)) 
         self.VIDEO_CONF = float(config_data.get("video_conf", 0.25))
         self.STREAM_CONF = float(config_data.get("stream_conf", 0.25))
         
@@ -185,9 +176,6 @@ def startup_event():
     global config
     print("--- SERVER STARTING: Loading AI Models... ---")
     config = Config()
-# ==============================================================================
-# 2. LOGIC XỬ LÝ (CPU BOUND)
-# ==============================================================================
 
 def get_padded_crop(img, box, padding_pct=0.2): 
     x1, y1, x2, y2 = int(box[0]), int(box[1]), int(box[2]), int(box[3])
@@ -241,17 +229,14 @@ def apply_nms(detections, iou_threshold=0.5):
         dets = [d for d in dets if get_iou(best['box'], d['box']) < iou_threshold]
     return keep
 
-# --- LOGIC ẢNH: Hybrid (Detect -> Classify -> Court Judgment) ---
 def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
     t_start = time.time()
     nparr = np.frombuffer(image_bytes, np.uint8)
     img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None: raise ValueError("Invalid image")
 
-    # BƯỚC 1: DETECTOR (YOLOv11n) - "Thằng Bảo Vệ"
     t_detect_start = time.time()
     detector = config.detect_model if config.detect_model else config.classify_model
-    # conf=0.25 (Chuẩn vàng), iou=0.45, classes=ANIMAL_CLASSES
     detect_res = detector(img, conf=config.IMAGE_CONF, iou=config.IOU, classes=ANIMAL_CLASSES, verbose=False) 
     base_objects = process_results(detect_res, detector)
     t_detect_end = time.time()
@@ -260,16 +245,12 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
     t_classify_start = time.time()
 
     for obj in base_objects:
-        # BƯỚC 2: CLASSIFIER (YOLOv8s) - "Thằng Chuyên Gia"
-        # Cắt ảnh (Crop)
         crop = get_padded_crop(img, obj["box"])
         
         if crop.size > 0:
-            # Chạy suy luận với conf cực thấp (0.1) để lấy kết quả
             cls_res = config.classify_model(crop, conf=config.CLASS_CONF, verbose=False)
             cls_dets = process_results(cls_res, config.classify_model)
             
-            # BƯỚC 3: TÒA ÁN PHÁN QUYẾT (Logic Python)
             if cls_dets:
                 best_cls = max(cls_dets, key=lambda x: x["confidence"])
                 v8_conf = best_cls["confidence"]
@@ -278,28 +259,20 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
                 v11_label = obj["class"]
                 v11_is_dog = (obj["class_id"] == COCO_DOG_CLASS_ID)
 
-                # Case 1: V11 bảo là Chó
                 if v11_is_dog:
                     if v8_conf > config.BREED_CONF_THRESHOLD:
-                        # V8 tin cậy -> Lấy giống chó cụ thể
                         obj["class"] = v8_label
                         obj["confidence"] = v8_conf
                     else:
-                        # V8 không chắc -> Fallback về "Unknown Dog" (hoặc giữ "Dog")
                         obj["class"] = "Unknown Dog"
-                        # Giữ confidence của V11 hoặc set lại
                 
-                # Case 2: V11 bảo là con khác (Ngựa, Mèo...)
                 else:
                     if v8_conf > config.OVERRIDE_CONF_THRESHOLD:
-                        # V8 cực kỳ chắc chắn -> Lật kèo thành Chó
                         obj["class"] = v8_label
                         obj["confidence"] = v8_conf
                     else:
-                        # V8 không đủ tuổi lật -> Giữ nguyên nhãn của V11 (Ngựa, Mèo...)
                         pass 
             else:
-                # V8 không ra gì cả (conf < 0.1)
                 if obj["class_id"] == COCO_DOG_CLASS_ID:
                     obj["class"] = "Unknown Dog"
         
@@ -326,7 +299,6 @@ def cpu_process_image(image_bytes: bytes) -> Dict[str, Any]:
         "media_type": "image/jpeg"
     }
 
-# --- LOGIC VIDEO: Hybrid Track ---
 def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
     t_start = time.time()
     with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as t_in, \
@@ -340,7 +312,6 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
         unique_results = {}
         VID_STRIDE = 3 
         
-        # Step 1: Detect & Track (V11n)
         results_gen = tracker.track(
             t_in_path, stream=True, persist=True, 
             conf=config.VIDEO_CONF, 
@@ -369,18 +340,15 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
                     v11_label = tracker.names[cls_id]
                     v11_is_dog = (cls_id == COCO_DOG_CLASS_ID)
                     
-                    # Chỉ classify lại nếu chưa có trong cache hoặc muốn update
                     if t_id not in breed_cache:
                         crop = get_padded_crop(frame, box)
-                        final_label = v11_label # Mặc định tin V11
+                        final_label = v11_label 
                         final_conf = 0.5
 
                         if crop.size > 0:
-                            # Step 2: Classify (V8s)
                             c_res = config.classify_model(crop, conf=config.CLASS_CONF, verbose=False)
                             c_dets = process_results(c_res, config.classify_model)
                             
-                            # Step 3: Court Judgment
                             if c_dets:
                                 best = max(c_dets, key=lambda x: x["confidence"])
                                 v8_conf = best["confidence"]
@@ -392,7 +360,7 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
                                         final_conf = v8_conf
                                     else:
                                         final_label = "Unknown Dog"
-                                else: # Not dog
+                                else: 
                                     if v8_conf > config.OVERRIDE_CONF_THRESHOLD:
                                         final_label = v8_label
                                         final_conf = v8_conf
@@ -427,10 +395,6 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
     finally:
         if os.path.exists(t_in_path): os.unlink(t_in_path)
         if os.path.exists(t_out_path): os.unlink(t_out_path)
-
-# ==============================================================================
-# 3. API ASYNC
-# ==============================================================================
 
 @app.get("/")
 def health(): return {"status": "ok", "version": "12.0-Hybrid"}
@@ -517,9 +481,6 @@ async def predict_url(payload: URLPayload):
         except Exception as e:
             return JSONResponse({"status": "error", "message": str(e)}, 400)
 
-# ==============================================================================
-# 4. WEBSOCKET STREAM
-# ==============================================================================
 
 @app.websocket("/predict-stream")
 async def ws_stream(websocket: WebSocket):
