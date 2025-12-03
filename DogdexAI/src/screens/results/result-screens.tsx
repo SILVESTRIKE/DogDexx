@@ -54,14 +54,21 @@ export default function ResultsScreen({ navigation }: Props) {
   );
   const [noDetectionsFound, setNoDetectionsFound] = useState(false);
   const [hasFeedback, setHasFeedback] = useState(false);
-  const [predictionId, setPredictionId] = useState<string | null>(null)
+  const [predictionId, setPredictionId] = useState<string | null>(null);
+  const [isPolling, setIsPolling] = useState(false);
   useEffect(() => {
     const historyId = (route.params as RouteParams)?.id;
-    // Alert.alert(historyId);
+
+    if (!historyId) {
+      setError('No prediction ID provided. Please go back and try again.');
+      setLoading(false);
+      return;
+    }
 
     const processResultData = (result: BffPredictionResponse) => {
       setHasFeedback(result.hasFeedback ?? false);
       setProcessedMediaUrl(result.processedMediaUrl);
+      setPredictionId(result.predictionId);
 
       if (!result.detections || result.detections.length === 0) {
         setNoDetectionsFound(true);
@@ -73,30 +80,70 @@ export default function ResultsScreen({ navigation }: Props) {
       );
 
       setAllDetections(result.detections);
-      setPredictionId(result.predictionId);
       setSelectedDetection(primary);
     };
 
-    if (!historyId) {
-      setError('No prediction ID provided. Please go back and try again.');
-      setLoading(false);
-      return;
-    }
+    const pollForStatus = async (id: string) => {
+      let attempts = 0;
+      const maxAttempts = 300; // 5 phút
+      setIsPolling(true);
+      setError(null);
+
+      const poll = async () => {
+        if (attempts >= maxAttempts) {
+          setError('Timeout waiting for prediction result.');
+          setLoading(false);
+          return;
+        }
+
+        try {
+          const status = await apiClient.getPredictionStatus(id);
+          console.log('Polled status:', status);
+
+          if (status.status === 'completed') {
+            setIsPolling(false);
+            fetchHistoryById();
+            return;
+          }
+
+          if (status.status === 'failed') {
+            setError(status.message || 'Prediction failed.');
+            setIsPolling(false);
+            setLoading(false);
+            return;
+          }
+          attempts++;
+          setTimeout(poll, 1000);
+        } catch (e) {
+          attempts++;
+          setTimeout(poll, 1000);
+        }
+      };
+
+      poll();
+    };
 
     const fetchHistoryById = async () => {
       setLoading(true);
       try {
         const result: BffPredictionResponse =
           await apiClient.getPredictionHistoryById(historyId, locale);
+
+        if (
+          result.processedMediaUrl === 'processing' ||
+          result.processedMediaUrl?.includes('processing')
+        ) {
+          setIsPolling(true);
+          setLoading(false);
+          pollForStatus(historyId);
+          return;
+        }
+
         processResultData(result);
-      } catch (err) {
-        console.error(
-          '[ResultsScreen] Failed to fetch prediction history:',
-          err,
-        );
-        setError(
-          'Failed to load prediction history. It may have been deleted or the link is invalid.',
-        );
+      } catch (err: any) {
+        if (!isPolling) {
+          setError(err);
+        }
       } finally {
         setLoading(false);
       }
@@ -123,7 +170,7 @@ export default function ResultsScreen({ navigation }: Props) {
     }
   };
 
-  if (loading) {
+  if (loading || isPolling) {
     return <LoadingView />;
   }
 
@@ -148,14 +195,6 @@ export default function ResultsScreen({ navigation }: Props) {
   return (
     <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
       {/* Header */}
-      {/* <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton}>
-          <ArrowLeft size={24} color="#2563eb" />
-          <Text style={styles.backButtonText}>
-            {t('results.detectAnother')}
-          </Text>
-        </TouchableOpacity>
-      </View> */}
 
       {/* Main Result Card */}
       <BreedCard
@@ -198,12 +237,12 @@ export default function ResultsScreen({ navigation }: Props) {
         initialMessage="Xin chào! Tôi có thể giúp bạn hiểu thêm về giống chó này 🐶"
       />
       <FeedbackForm
-          detectedBreed={selectedDisplayName}
-          confidence={selectedConfidence}
-          imageUrl={""} 
-          predictionId={predictionId}
-          initialSubmitted={hasFeedback} // Truyền trạng thái ban đầu xuống form
-        />
+        detectedBreed={selectedDisplayName}
+        confidence={selectedConfidence}
+        imageUrl={''}
+        predictionId={predictionId}
+        initialSubmitted={hasFeedback} // Truyền trạng thái ban đầu xuống form
+      />
 
       {/* Bottom Spacing */}
       <View style={{ height: 40 }} />

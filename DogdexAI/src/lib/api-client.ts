@@ -176,20 +176,20 @@ export class ApiClient {
     }
 
     let token = await TokenManager.getAccessToken();
-    console.log("ApiClient Request Token:", token);
+   // console.log("ApiClient Request Token:", token);
     if (token) {
       headers['Authorization'] = `Bearer ${token}`;
     } else if (requiresAuth) {
       throw new Error('Token is not provided for an authenticated request.');
       console.warn('token null');
     }
-    console.log('tiep');
+    // console.log('tiep');
 
     try {
-      console.log('tiep1');
-      console.log(url);
+      // console.log('tiep1');
+      // console.log(url);
       let response = await fetch(url, { ...options, headers });
-      console.log('Response received:', response);
+      //console.log('Response received:', response);
 
 
       if (response.status === 401 && (await TokenManager.getRefreshToken())) {
@@ -960,6 +960,13 @@ export class ApiClient {
       `/bff/public/leaderboard/locations?type=${type}`,
       {},
       false,
+    );
+  }
+  async getPredictionStatus(id: string) {
+    return this.request<any>(
+      `/bff/predict/status/${id}`,
+      { method: "GET" },
+      false
     );
   }
 }

@@ -118,17 +118,14 @@ const HomeScreen = ({ navigation }: Props) => {
       if (fileType === 'image') {
         response = await apiClient.predictImage(formData, onProgress);
       } else if (fileType === 'video') {
-        console.log('Uploading video for prediction');
         response = await apiClient.predictVideo(formData, onProgress);
-        console.log('Video prediction response received:', response);
       }
+      console.log('Prediction response:', response);
 
 
       if (isAuthenticated) {
         await refetchUser();
       }
-   //   console.log('Prediction response:', response);
-
       navigation.navigate('ResulteScreen', { id: response.predictionId });
     } catch (error: any) {
       Alert.alert(
