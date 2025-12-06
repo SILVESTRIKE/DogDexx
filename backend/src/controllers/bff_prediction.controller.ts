@@ -243,25 +243,19 @@ export const bffPredictionController = {
         return;
       }
 
-      // Logic cũ (để dự phòng)
-      const data = await handlePredictionAndEnrichment(
-        req,
-        Promise.resolve(result),
-        PREDICTION_SOURCES.IMAGE_UPLOAD,
-        userId?.toString()
-      );
+      // Logic cũ (để dự phòng) - REMOVED because makePrediction is now always Async
+      // const data = await handlePredictionAndEnrichment(
+      //   req,
+      //   Promise.resolve(result),
+      //   PREDICTION_SOURCES.IMAGE_UPLOAD,
+      //   userId?.toString()
+      // );
       // [KẾT THÚC SỬA]
 
-      const duration = Date.now() - startTime;
-      logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
-
-      await deductTokensForRequest(
-        req,
-        res,
-        tokenConfig.costs.imagePrediction,
-        "single"
-      );
-      res.status(200).json(data);
+      // [REMOVED] Dead code: makePrediction is always async
+      // const duration = Date.now() - startTime;
+      // logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
+      // res.status(200).json(data); // data is undefined
     } catch (error) {
       next(error);
     }
@@ -299,23 +293,18 @@ export const bffPredictionController = {
         return;
       }
 
-      const data = await handlePredictionAndEnrichment(
-        req,
-        Promise.resolve(result),
-        PREDICTION_SOURCES.VIDEO_UPLOAD,
-        userId?.toString()
-      );
+      // Logic cũ - REMOVED
+      // const data = await handlePredictionAndEnrichment(
+      //   req,
+      //   Promise.resolve(result),
+      //   PREDICTION_SOURCES.VIDEO_UPLOAD,
+      //   userId?.toString()
+      // );
 
-      const duration = Date.now() - startTime;
-      logger.info(`[PERF] BFF | Type: video | Total: ${duration}ms`);
-
-      await deductTokensForRequest(
-        req,
-        res,
-        tokenConfig.costs.videoPrediction,
-        "single"
-      );
-      res.status(200).json(data);
+      // [REMOVED] Dead code
+      // const duration = Date.now() - startTime;
+      // logger.info(`[PERF] BFF | Type: video | Total: ${duration}ms`);
+      // res.status(200).json(data);
     } catch (error) {
       next(error);
     }
@@ -596,33 +585,53 @@ export const bffPredictionController = {
   ) => {
     try {
       const { id: historyId } = req.params;
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id;
       const lang =
         req.query.lang === "vi" || req.query.lang === "en"
           ? (req.query.lang as "vi" | "en")
           : "en";
-      let historyItem = null;
+
+      let historyItem: any = null;
       let attempts = 0;
+
+      // Logic retry để chờ Worker cập nhật DB (nếu vừa dự đoán xong)
       while (attempts < 10 && !historyItem) {
         try {
-          historyItem = await predictionHistoryService.getHistoryById(historyId);
-        } catch (error) {
-          // Ignore error and retry if not found
+          if (userId) {
+            // Nếu là User đăng nhập, CHỈ được xem history của chính mình
+            historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
+          } else {
+            // Nếu là Guest, lấy history
+            historyItem = await predictionHistoryService.getHistoryById(historyId);
+            // BẢO MẬT: Nếu history này thuộc về một User nào đó, Guest KHÔNG được quyền xem
+            if (historyItem.user) {
+              throw new NotFoundError("Access denied. This prediction belongs to a registered user.");
+            }
+          }
+        } catch (error: any) {
+          // Nếu lỗi là 'Access denied', throw luôn
+          if (error.message?.includes('Access denied')) throw error;
+          // Nếu không tìm thấy, có thể do delay worker, retry
         }
+
         if (!historyItem) {
           attempts++;
           if (attempts < 10) await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
+
       if (!historyItem)
         throw new NotFoundError("Prediction history not found.");
+
       const breedSlugs: string[] = [
-        ...new Set(
+        ...new Set<string>(
           historyItem.predictions.map((p: any) =>
             p.class.toLowerCase().replace(/\s+/g, "-")
           )
         ),
       ];
-      const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
+      // [REMOVED] Duplicate declaration
       let wikiInfoMap = new Map();
       try {
         const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
@@ -842,7 +851,6 @@ export const bffPredictionController = {
         {
           processed_media_base64,
           detections: detections || [],
-          media_type: media_type || "image/jpeg",
         },
         req
       );

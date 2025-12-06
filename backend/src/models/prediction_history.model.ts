@@ -10,6 +10,11 @@ export interface IYoloPrediction {
   class_id?: number;
 }
 
+export interface StreamResultPayload {
+  processed_media_base64: string;
+  detections: IYoloPrediction[];
+}
+
 export type PredictionHistoryDoc = Document & {
   user?: UserDoc;
   media: MediaDoc;

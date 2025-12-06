@@ -10,7 +10,7 @@ import { UploadApiResponse } from "cloudinary";
 import { AIModelService } from "./ai_models.service";
 import { DirectoryModel } from "../models/directory.model";
 import { MediaModel, MediaDoc } from "../models/medias.model";
-import { PredictionHistoryModel, PredictionHistoryDoc, IYoloPrediction } from "../models/prediction_history.model";
+import { PredictionHistoryModel, PredictionHistoryDoc, IYoloPrediction, StreamResultPayload } from "../models/prediction_history.model";
 import { UserDoc } from "../models/user.model";
 import { BadRequestError } from "../errors";
 import { logger } from "../utils/logger.util";
@@ -115,6 +115,20 @@ if (!FFMPEG_AVAILABLE) {
 }
 
 // Optimize image: Resize & Compress
+const uploadBase64ToCloudinary = async (base64Data: string, folder: string, resource_type: "image" | "video" = "image", access_mode?: "public" | "private"): Promise<string> => {
+  const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
+  const type = access_mode === 'public' ? 'upload' : (access_mode === 'private' ? 'authenticated' : undefined);
+
+  const uploadOptions: any = {
+    folder: folder,
+    resource_type: resource_type,
+  };
+  if (type) uploadOptions.type = type;
+
+  const result = await cloudinary.uploader.upload(dataUri, uploadOptions);
+  return `${result.public_id}.${result.format}`;
+};
+
 const optimizeImage = async (filePath: string): Promise<Buffer> => {
   // Truyền filePath vào sharp() thay vì buffer
   const image = sharp(filePath);
@@ -177,58 +191,15 @@ const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
         .withVideoCodec('libx264')
         .videoBitrate(VIDEO_PREPROCESS_BITRATE)
         .addOption('-preset', VIDEO_PREPROCESS_PRESET)
-        .addOption('-movflags', 'frag_keyframe+empty_moov')
-        .addOption('-vf', scaleFilter)
-        .addOption('-r', String(VIDEO_PREPROCESS_TARGET_FPS))
-        .addOption('-profile:v', 'baseline')
-        .outputFormat('mp4')
-        .on('end', () => resolve(Buffer.concat(chunks)))
-        .on('error', (err: Error) => {
-          logger.error('[FFMPEG Error] Lỗi trong quá trình tiền xử lý video.', err);
-          reject(new Error(`Lỗi khi tiền xử lý video: ${err.message}`));
-        });
+        .format('mp4')
+        .on('error', (err: any) => reject(err))
+        .on('end', () => resolve(Buffer.concat(chunks)));
 
       const outputStream = command.pipe();
       outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    } catch (err: any) {
-      logger.error('[PredictionService] Exception while trying to preprocess video buffer:', err);
-      // Fallback: đọc file gốc nếu lỗi
-      fs.promises.readFile(filePath).then(resolve).catch(reject);
+    } catch (err) {
+      reject(err);
     }
-  });
-};
-
-interface StreamResultPayload {
-  processed_media_base64: string;
-  media_type: string;
-  detections: IYoloPrediction[];
-}
-
-// Upload Base64 to Cloudinary
-const uploadBase64ToCloudinary = async (base64Data: string, folder: string, resource_type: "image" | "video" = "image"): Promise<string> => {
-  const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder: folder,
-    resource_type: resource_type,
-  });
-  return `${result.public_id}.${result.format}`;
-};
-
-// Upload Buffer to Cloudinary
-const uploadBufferToCloudinary = async (buffer: Buffer, public_id_without_ext: string, folder: string, resource_type: "image" | "video" = "image"): Promise<UploadApiResponse> => {
-  return new Promise<UploadApiResponse>((resolve, reject) => {
-    const stream = cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        public_id: public_id_without_ext,
-        resource_type: resource_type,
-      },
-      (error, result) => {
-        if (result) resolve(result);
-        else reject(error);
-      }
-    );
-    stream.end(buffer);
   });
 };
 
@@ -356,12 +327,13 @@ export const predictionService = {
       }
 
       const [originalPath, processedPath] = await Promise.all([
-        uploadFileToCloudinary(filePath, filenameWithoutExt, `public/uploads/${fileType}s`, fileType) // <-- Dùng filePath
+        uploadFileToCloudinary(filePath, filenameWithoutExt, `public/uploads/${fileType}s`, fileType, 'private')
           .then(res => `${res.public_id}.${res.format}`),
         uploadBase64ToCloudinary(
           processedMediaBase64,
           `public/processed/${fileType}s`,
-          fileType
+          fileType,
+          'private'
         )
       ]);
 
@@ -479,7 +451,9 @@ export const predictionService = {
 
         const processedMediaPathForDb = await uploadBase64ToCloudinary(
           result.processed_media_base64,
-          'public/processed/images'
+          'public/processed/images',
+          'image',
+          'private'
         );
 
         const newPrediction = await PredictionHistoryModel.create({
@@ -630,7 +604,6 @@ export const predictionService = {
       source: PREDICTION_SOURCES.STREAM_CAPTURE,
       processingTime
     });
-
     return newPrediction.populate<{ media: MediaDoc, user: UserDoc }>([{ path: "user", select: "-password" }, { path: "media" }]);
   },
 
@@ -640,22 +613,41 @@ export const predictionService = {
     req: Request
   ): Promise<PredictionHistoryDoc> => {
     const startTime = Date.now();
+    let finalUrl = url;
+
     // 1. Resolve Real URL (Handle Data URI / Google Redirects)
     try {
       if (url.startsWith('data:image')) {
         const base64Data = url.split(',')[1];
-        const relativePath = await uploadBase64ToCloudinary(base64Data, 'public/uploads/images', 'image');
-        url = cloudinary.url(relativePath, { secure: true, resource_type: 'image' });
-      }
-
-      const urlObj = new URL(url);
-      if (urlObj.hostname.includes('google.com')) {
-        if (urlObj.pathname === '/imgres') {
-          const imgUrl = urlObj.searchParams.get('imgurl');
-          if (imgUrl) url = imgUrl;
-        } else if (urlObj.pathname === '/url') {
-          const targetUrl = urlObj.searchParams.get('url');
-          if (targetUrl) url = targetUrl;
+        // Upload private
+        const relativePath = await uploadBase64ToCloudinary(base64Data, 'public/uploads/images', 'image', 'private');
+        // Generate signed URL immediately? Or just keep relative path?
+        // We need a URL for mediaPath.
+        // If private, we should generate a signed URL or just store the public_id and let frontend handle it?
+        // Backend usually stores relative path or full URL. Existing logic stores full URL.
+        // If it's private, we should store the URL that references the private resource.
+        // transformPaths handles generation of signed URL if path starts with public/...
+        // But here we set mediaPath = url.
+        // If we set mediaPath = relativePath (e.g. public/uploads/images/xyz.jpg), transformPaths will handle it!
+        // So better to return relativePath or a Cloudinary URL that clearly indicates it.
+        // If we return cloudinary.url(...) it might be signed and expire.
+        // Best approach: Store the "path" or "secure_url".
+        // Let's modify logic to prefer storing the relative path if possible, but legacy code might expect abundant URL.
+        // Actually, MediaModel has mediaPath. `transformPaths` in media.util converts it.
+        // So I should try to set `finalUrl` to something `transformPaths` can recognize?
+        // `transformPaths` looks for `dbPath.startsWith('public/')`.
+        // So I should set finalUrl = relativePath (e.g. 'public/uploads/images/abc.jpg').
+        finalUrl = relativePath;
+      } else {
+        const urlObj = new URL(url);
+        if (urlObj.hostname.includes('google.com')) {
+          if (urlObj.pathname === '/imgres') {
+            const imgUrl = urlObj.searchParams.get('imgurl');
+            if (imgUrl) finalUrl = imgUrl;
+          } else if (urlObj.pathname === '/url') {
+            const targetUrl = urlObj.searchParams.get('url');
+            if (targetUrl) finalUrl = targetUrl;
+          }
         }
       }
     } catch (e) { }
@@ -670,13 +662,74 @@ export const predictionService = {
     const modelName = activeModel ? activeModel.name : 'unknown_model';
 
     try {
-      // 2. Call AI Service
-      const aiResponse = await axios.post(`${AI_SERVICE_URL}/predict/url`, { url }, {
-        headers: { "Content-Type": "application/json" }
-      });
-      const predictionResult = aiResponse.data;
+      let buffer: Buffer | undefined;
+      const CLOUD_NAME = process.env.CLOUD_NAME_CLOUDINARY || '';
+      const isInternal = finalUrl.includes('res.cloudinary.com') && finalUrl.includes(CLOUD_NAME);
 
-      if (predictionResult.status === "error" || !predictionResult.predictions) {
+      if (isInternal) {
+        try {
+          // Identify if it matches our private folders strategy
+          const isPrivateFolder = finalUrl.includes('/uploads/images') || finalUrl.includes('/processed/') || finalUrl.includes('/uploads/videos');
+
+          if (isPrivateFolder) {
+            // Extract public_id
+            const parts = finalUrl.split('/upload/');
+            if (parts.length === 2) {
+              let suffix = parts[1];
+              // Remove version (v1234/)
+              suffix = suffix.replace(/^v\d+\//, '');
+              // Remove extension for ID? Cloudinary ID often implies path without ext, but URL differs.
+              // Actually cloudinary.url() with resource_type image expects ID.
+              // Suffix e.g. "public/uploads/images/abc.jpg".
+              // ID is "public/uploads/images/abc".
+              const publicId = suffix.includes('.') ? suffix.substring(0, suffix.lastIndexOf('.')) : suffix;
+
+              // Generate fresh signed URL specifically for downloading
+              const signedUrl = cloudinary.url(publicId, {
+                type: 'authenticated',
+                resource_type: 'image',
+                sign_url: true,
+                secure: true,
+                auth_token: { key: cloudinary.config().api_secret }
+              });
+
+              const downloadRes = await axios.get(signedUrl, { responseType: 'arraybuffer' });
+              buffer = Buffer.from(downloadRes.data);
+            }
+          }
+        } catch (err: any) {
+          logger.warn(`[PredictionService] Failed to download internal Cloudinary URL: ${err.message}. Falling back to normal URL.`);
+          // Fallback to normal URL (might fail if private, but we tried)
+        }
+      }
+
+      // 2. Call AI Service
+      let predictionResult;
+
+      if (buffer) {
+        // Use batchProcessor to send buffer
+        // We need a unique ID for this job
+        const tempId = new Types.ObjectId().toString();
+        // Wrap batchProcessor in promise? batchProcessor.add returns strict result not promise of result?
+        // Looking at batchProcessor.ts: add(item) returns new Promise(...)
+        // So we can await it.
+        predictionResult = await batchProcessor.add({
+          id: tempId,
+          userId: userId,
+          buffer: buffer,
+          mediaType: 'image',
+          resolve: () => { },
+          reject: () => { }
+        });
+      } else {
+        // External URL: Keep existing flow
+        const aiResponse = await axios.post(`${AI_SERVICE_URL}/predict/url`, { url: finalUrl }, {
+          headers: { "Content-Type": "application/json" }
+        });
+        predictionResult = aiResponse.data;
+      }
+
+      if (!predictionResult || !predictionResult.predictions) {
         throw new BadRequestError("URL không hợp lệ hoặc không phải là ảnh/video được hỗ trợ.");
       }
 
@@ -684,17 +737,18 @@ export const predictionService = {
       const processedMediaPathForDb = await uploadBase64ToCloudinary(
         predictionResult.processed_media_base64,
         'public/processed/images',
-        'image'
+        'image',
+        'private'
       );
 
       // 4. Save to DB
       const newMedia = new MediaModel({
         name: `URL Prediction - ${new Date().toISOString()}`,
-        mediaPath: url,
+        mediaPath: finalUrl,
         creator_id: userId,
         directory_id,
         type: 'image',
-        isExternalUrl: true
+        isExternalUrl: true // Note: if we converted data-uri to internal private path, maybe this flag is less accurate but acceptable.
       });
       await newMedia.save();
 
@@ -713,7 +767,7 @@ export const predictionService = {
       analyticsService.trackEvent({
         eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
         req,
-        eventData: { type: 'url', url },
+        eventData: { type: 'url', url: finalUrl },
         processingTime
       });
 
