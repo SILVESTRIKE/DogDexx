@@ -461,14 +461,14 @@ export default {
         notes: "Ghi chú",
         approveTitle: "Duyệt phản hồi này?",
         approveDescription:
-          "Hành động này sẽ đánh dấu phản hồi là __STRING_0_1__ và di chuyển ảnh vào bộ dữ liệu huấn luyện. Bạn có thể sửa lại nhãn nếu cần.",
+          "Hành động này sẽ đánh dấu phản hồi là 'Đã duyệt' và di chuyển ảnh vào bộ dữ liệu huấn luyện. Bạn có thể sửa lại nhãn nếu cần.",
         correctedLabel: "Nhãn giống chó đã sửa",
         correctedLabelPlaceholder: "Nhập giống chó đúng nếu khác...",
         selectOrEnterBreed: "Chọn hoặc nhập giống chó...",
         noBreedFound: "Không tìm thấy giống chó.",
         rejectTitle: "Từ chối phản hồi này?",
         rejectDescription:
-          "Hành động này sẽ đánh dấu phản hồi là __STRING_0_2__ và di chuyển ảnh vào thư mục tương ứng. Bạn có thể nhập lý do từ chối (tùy chọn).",
+          "Hành động này sẽ đánh dấu phản hồi là 'Đã từ chối' và di chuyển ảnh vào thư mục tương ứng. Bạn có thể nhập lý do từ chối (tùy chọn).",
         rejectionReason: "Lý do từ chối (tùy chọn)",
         rejectionReasonPlaceholder: "Ví dụ: ảnh mờ, không phải chó...",
       },

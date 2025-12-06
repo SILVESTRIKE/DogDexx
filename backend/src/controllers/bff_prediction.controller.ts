@@ -145,8 +145,8 @@ async function handlePredictionAndEnrichment(
         group: "Object / Other",
         description:
           lang === "vi"
-            ? `Hệ thống nhận diện đây là __STRING_1_40__. Đây không phải là một giống chó trong cơ sở dữ liệu.`
-            : `System identified this as __STRING_1_41__. This is not a dog breed in our database.`,
+            ? `Hệ thống nhận diện đây là ${p.class}. Đây không phải là một giống chó trong cơ sở dữ liệu.`
+            : `System identified this as ${p.class}. This is not a dog breed in our database.`,
         life_expectancy: "N/A",
         temperament: ["Non-Dog"],
         energy_level: null,
