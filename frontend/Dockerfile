@@ -51,4 +51,4 @@ EXPOSE 3001
 
 ENV PORT 3001
 
-CMD ["node", "server.js"]
+CMD ["sh", "-c", "ls -R /app && node server.js"]

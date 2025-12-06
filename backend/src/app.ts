@@ -73,7 +73,7 @@ app.use('/bff/admin', bffAdminRoutes);
 app.use('/bff/public', bffPublicRoutes);
 
 // 3. Core API Routes
-app.use(analyticsRoutes);
+app.use('/bff/analytics', analyticsRoutes);
 // app.use(authRoutes);
 // app.use(achievementRoute);
 // app.use(userRoutes);

@@ -425,7 +425,7 @@ router.get("/history", authMiddleware, bffPredictionController.getPredictionHist
  *       404:
  *         description: Not Found - Không tìm thấy lịch sử dự đoán.
  */
-router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
+router.get("/history/:id", optionalAuthMiddleware, bffPredictionController.getPredictionHistoryById);
 
 /**
  * @swagger

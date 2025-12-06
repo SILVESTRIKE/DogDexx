@@ -43,4 +43,4 @@ COPY --from=builder /server/public ./public
 COPY --from=builder /server/swaggerConfig.js ./ 
 
 EXPOSE 5000
-CMD [ "node", "dist/server.js" ]
+CMD ["sh", "-c", "ls -R /server/dist && node dist/server.js"]

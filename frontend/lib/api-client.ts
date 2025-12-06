@@ -700,7 +700,7 @@ export class ApiClient {
   // Analytics endpoint
   async trackVisit(page: string) {
     return this.request<void>(
-      "/api/analytics/track-visit",
+      "/bff/analytics/track-visit",
       {
         method: "POST",
         body: JSON.stringify({ page }),
@@ -716,7 +716,7 @@ export class ApiClient {
    */
   async trackEvent(eventName: string, eventData?: Record<string, any>) {
     return this.request<void>(
-      "/api/analytics/track-event",
+      "/bff/analytics/track-event",
       {
         method: "POST",
         body: JSON.stringify({ eventName, eventData }),
