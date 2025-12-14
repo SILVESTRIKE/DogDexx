@@ -62,7 +62,7 @@ const communityPostSchema = new Schema(
         dog_id: { type: String }, // Optional link to DogProfile
 
         ai_metadata: {
-            breed: { type: String, index: "text" }, // Text index for search
+            breed: { type: String }, // Text index defined below at schema level
             breed_slug: { type: String, index: true }, // For exact match queries
             confidence: Number,
             color: String,
