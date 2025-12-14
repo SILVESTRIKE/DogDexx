@@ -242,20 +242,6 @@ export const bffPredictionController = {
         });
         return;
       }
-
-      // Logic cũ (để dự phòng) - REMOVED because makePrediction is now always Async
-      // const data = await handlePredictionAndEnrichment(
-      //   req,
-      //   Promise.resolve(result),
-      //   PREDICTION_SOURCES.IMAGE_UPLOAD,
-      //   userId?.toString()
-      // );
-      // [KẾT THÚC SỬA]
-
-      // [REMOVED] Dead code: makePrediction is always async
-      // const duration = Date.now() - startTime;
-      // logger.info(`[PERF] BFF | Type: image | Total: ${duration}ms`);
-      // res.status(200).json(data); // data is undefined
     } catch (error) {
       next(error);
     }
@@ -292,19 +278,6 @@ export const bffPredictionController = {
         });
         return;
       }
-
-      // Logic cũ - REMOVED
-      // const data = await handlePredictionAndEnrichment(
-      //   req,
-      //   Promise.resolve(result),
-      //   PREDICTION_SOURCES.VIDEO_UPLOAD,
-      //   userId?.toString()
-      // );
-
-      // [REMOVED] Dead code
-      // const duration = Date.now() - startTime;
-      // logger.info(`[PERF] BFF | Type: video | Total: ${duration}ms`);
-      // res.status(200).json(data);
     } catch (error) {
       next(error);
     }
@@ -593,31 +566,16 @@ export const bffPredictionController = {
           : "en";
 
       let historyItem: any = null;
-      let attempts = 0;
-
-      // Logic retry để chờ Worker cập nhật DB (nếu vừa dự đoán xong)
-      while (attempts < 10 && !historyItem) {
-        try {
-          if (userId) {
-            // Nếu là User đăng nhập, CHỈ được xem history của chính mình
-            historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
-          } else {
-            // Nếu là Guest, lấy history
-            historyItem = await predictionHistoryService.getHistoryById(historyId);
-            // BẢO MẬT: Nếu history này thuộc về một User nào đó, Guest KHÔNG được quyền xem
-            if (historyItem.user) {
-              throw new NotFoundError("Access denied. This prediction belongs to a registered user.");
-            }
-          }
-        } catch (error: any) {
-          // Nếu lỗi là 'Access denied', throw luôn
-          if (error.message?.includes('Access denied')) throw error;
-          // Nếu không tìm thấy, có thể do delay worker, retry
-        }
-
-        if (!historyItem) {
-          attempts++;
-          if (attempts < 10) await new Promise((resolve) => setTimeout(resolve, 1000));
+      // DIRECT FETCH (No Blocking Loop)
+      if (userId) {
+        // Nếu là User đăng nhập, CHỈ được xem history của chính mình
+        historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
+      } else {
+        // Nếu là Guest, lấy history
+        historyItem = await predictionHistoryService.getHistoryById(historyId);
+        // BẢO MẬT: Nếu history này thuộc về một User nào đó, Guest KHÔNG được quyền xem
+        if (historyItem?.user) {
+          throw new NotFoundError("Access denied. This prediction belongs to a registered user.");
         }
       }
 

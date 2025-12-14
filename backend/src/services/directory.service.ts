@@ -12,6 +12,30 @@ export class DirectoryService {
     return newDirectory.save();
   }
 
+  static async ensureDirectory(
+    name: string,
+    parent_id: string | null,
+    creator_id: mongoose.Types.ObjectId
+  ): Promise<DirectoryDoc> {
+    const existingDir = await DirectoryModel.findOne({
+      name,
+      parent_id,
+      creator_id,
+      isDeleted: false,
+    });
+
+    if (existingDir) {
+      return existingDir;
+    }
+
+    const newDirectory = new DirectoryModel({
+      name,
+      parent_id,
+      creator_id,
+    });
+    return newDirectory.save();
+  }
+
   static async findById(id: string): Promise<DirectoryDoc | null> {
     return DirectoryModel.findOne({ _id: id, isDeleted: false });
   }

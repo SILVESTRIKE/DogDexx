@@ -6,9 +6,11 @@ export type PlanDoc = Document & {
   slug: string;
   priceMonthly: number;
   priceYearly: number;
-  
+
   tokenAllotment: number;
-  
+  dogLimit: number;
+  healthRecordLimitPerDog: number;
+
   apiAccess: boolean;
   isDeleted: boolean;
   createdAt: Date;
@@ -21,8 +23,10 @@ const planSchema = new Schema<PlanDoc>(
     slug: { type: String, required: true, unique: true },
     priceMonthly: { type: Number, required: true, min: 0 },
     priceYearly: { type: Number, required: true, min: 0 },
-    
+
     tokenAllotment: { type: Number, required: true, min: 0 },
+    dogLimit: { type: Number, required: true, default: 1, min: 1 },
+    healthRecordLimitPerDog: { type: Number, required: true, default: 3, min: 1 },
 
     apiAccess: { type: Boolean, required: true, default: false },
     isDeleted: {

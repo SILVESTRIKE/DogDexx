@@ -9,13 +9,22 @@ export interface DogProfileDoc extends Document {
     avatarPath?: string;
     photos: string[];
 
-    // Removed isLost, lastSeenLocation, lostAt -> Moved to CommunityPost (Type: LOST)
+    sterilized: boolean;
+
+    isLost: boolean;
+    lastSeenLocation?: {
+        lat: number;
+        lng: number;
+        address: string;
+    };
+    lostAt?: Date;
 
     attributes: {
         color?: string;
         pattern?: string;
         size?: string;
     };
+    isDeleted: boolean;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -29,12 +38,22 @@ const dogProfileSchema = new Schema(
         gender: { type: String, enum: ["male", "female"], required: true },
         avatarPath: { type: String },
         photos: [{ type: String }],
+        sterilized: { type: Boolean, default: false },
 
         attributes: {
             color: { type: String, index: true },
             pattern: String,
             size: String,
         },
+
+        isLost: { type: Boolean, default: false, index: true },
+        lastSeenLocation: {
+            lat: Number,
+            lng: Number,
+            address: String,
+        },
+        lostAt: Date,
+        isDeleted: { type: Boolean, default: false, select: false },
     },
     {
         timestamps: true,
@@ -43,6 +62,7 @@ const dogProfileSchema = new Schema(
                 ret.id = ret._id;
                 delete ret._id;
                 delete ret.__v;
+                delete ret.isDeleted;
             },
         },
     }

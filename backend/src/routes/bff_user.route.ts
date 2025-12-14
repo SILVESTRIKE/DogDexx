@@ -17,7 +17,7 @@ import {
     cancelSubscription
 } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
-import { validateData } from '../middlewares/validateBody.middleware';
+import { validate } from '../middlewares/validation.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { ForgotPasswordSchema, ResetPasswordSchema } from '../types/zod/user.zod';
@@ -86,7 +86,7 @@ router.post('/register', uploadAvatar, register);
  *       200:
  *         description: Đăng nhập thành công, trả về dữ liệu tổng hợp.
  */
-router.post('/login', validateData(LoginPayloadSchema, 'body'), login);
+router.post('/login', validate(LoginPayloadSchema, 'body'), login);
 
 /**
  * @swagger
@@ -133,7 +133,7 @@ router.post('/verify-otp', verifyOtp);
  *       200:
  *         description: Mã đã được gửi.
  */
-router.post('/forgot-password', validateData(ForgotPasswordSchema.shape.body, 'body'), forgotPassword);
+router.post('/forgot-password', validate(ForgotPasswordSchema.shape.body, 'body'), forgotPassword);
 
 /**
  * @swagger
@@ -161,7 +161,7 @@ router.post('/forgot-password', validateData(ForgotPasswordSchema.shape.body, 'b
  *       200:
  *         description: Mật khẩu đã được reset.
  */
-router.post('/reset-password', validateData(ResetPasswordSchema.shape.body, 'body'), resetPassword);
+router.post('/reset-password', validate(ResetPasswordSchema.shape.body, 'body'), resetPassword);
 
 /**
  * @swagger

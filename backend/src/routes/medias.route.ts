@@ -3,7 +3,7 @@ import {
   MediaController,
   DirectoryController,
 } from "../controllers/medias.controller";
-import { validateData } from "../middlewares/validateBody.middleware";
+import { validate } from "../middlewares/validation.middleware";
 import {
   UpdateMediaInfoZodSchema,
   CreateDirectoryZodSchema,
@@ -16,7 +16,7 @@ import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { deleteMedia as adminDeleteMedia } from '../controllers/bff_admin.controller';
 import { bffPredictionController } from '../controllers/bff_prediction.controller';
-import {checkAllowedRoles} from "../middlewares/role.middleware"
+import { checkAllowedRoles } from "../middlewares/role.middleware"
 const router = Router();
 
 // =================================================================
@@ -222,7 +222,7 @@ router.post(
  */
 router.get(
   "/api/medias",
-  validateData(GetMediasQuerySchema, "query"),
+  validate(GetMediasQuerySchema, "query"),
   MediaController.getMedias
 );
 
@@ -270,7 +270,7 @@ router.get(
  */
 router.get(
   "/api/medias/:id",
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   MediaController.getMediaById
 );
 
@@ -325,8 +325,8 @@ router.get(
 router.patch(
   "/api/medias/:id",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
-  validateData(UpdateMediaInfoZodSchema, "body"),
+  validate(GetByIdParamsSchema, "params"),
+  validate(UpdateMediaInfoZodSchema, "body"),
   MediaController.updateMediaInfo
 );
 
@@ -379,7 +379,7 @@ router.patch(
 router.delete(
   "/api/medias/:id",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   MediaController.deleteMedia
 );
 
@@ -425,7 +425,7 @@ router.delete(
 router.post(
   "/api/directories",
   authMiddleware,
-  validateData(CreateDirectoryZodSchema, "body"),
+  validate(CreateDirectoryZodSchema, "body"),
   DirectoryController.create
 );
 
@@ -564,7 +564,7 @@ router.get(
 router.get(
   "/api/directories/content/:id",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   DirectoryController.getContent
 );
 
@@ -615,7 +615,7 @@ router.get(
 router.get(
   "/api/directories/:id/breadcrumb",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   DirectoryController.getBreadcrumb
 );
 
@@ -668,7 +668,7 @@ router.get(
 router.delete(
   "/api/directories/:id",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   DirectoryController.softDelete
 );
 
@@ -723,8 +723,8 @@ router.delete(
 router.patch(
   "/api/directories/:id/rename",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
-  validateData(RenameDirectoryZodSchema, "body"),
+  validate(GetByIdParamsSchema, "params"),
+  validate(RenameDirectoryZodSchema, "body"),
   DirectoryController.rename
 );
 
@@ -779,8 +779,8 @@ router.patch(
 router.patch(
   "/api/directories/:id/move",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
-  validateData(MoveDirectoryZodSchema, "body"),
+  validate(GetByIdParamsSchema, "params"),
+  validate(MoveDirectoryZodSchema, "body"),
   DirectoryController.move
 );
 
@@ -1011,7 +1011,7 @@ router.delete(
 router.delete(
   "/bff/predict/history/:id",
   authMiddleware,
-  validateData(GetByIdParamsSchema, "params"),
+  validate(GetByIdParamsSchema, "params"),
   bffPredictionController.deletePredictionHistory
 );
 

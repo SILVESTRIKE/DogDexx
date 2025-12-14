@@ -5,7 +5,7 @@ import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware";
 import { tokenConfig } from "../config/token.config";
-import validate from "../middlewares/validateRequest.middleware";
+import { validate } from "../middlewares/validation.middleware";
 import {
     PredictUrlSchema,
     FeedbackSchema,

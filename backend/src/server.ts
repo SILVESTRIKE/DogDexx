@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { connectDB } from "./config/db";
 
 import http from 'http';
 import expressWs, { WebsocketRequestHandler } from 'express-ws';
@@ -14,24 +15,20 @@ import { Request, Response, NextFunction } from "express";
 import { uploadQueue } from "./utils/UploadQueue.util";
 
 const startServer = async () => {
-  if (!process.env.MONGO_URI) {
-    throw new Error("MONGO_URI phải được định nghĩa trong file .env");
-  }
+
   if (!process.env.JWT_SECRET) {
     throw new Error("JWT_SECRET phải được định nghĩa trong file .env");
   }
 
-  try {
-    await mongoose.connect(process.env.MONGO_URI);
-    logger.info("[MongoDB] Connected on " + process.env.MONGO_URI + "");
+  await connectDB();
 
+  try {
     console.log("--> Đang xóa queue cũ...");
     await uploadQueue.drain();
     await uploadQueue.obliterate({ force: true });
     console.log("--> Đã xóa sạch queue!");
   } catch (error) {
-    logger.error("[MongoDB] Connection error:", error);
-    process.exit(1);
+    logger.error("[Queue] Clean up error:", error);
   }
   const PORT = process.env.PORT || 3000;
 

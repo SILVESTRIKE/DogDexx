@@ -35,7 +35,7 @@ export const wikiService = {
   async getBreedBySlug(slug: string, lang: 'vi' | 'en' = 'en'): Promise<DogBreedWikiDoc> {
     const Model = getDogBreedWikiModel(lang);
     const breed = await Model.findOne({
-      slug,
+      slug: { $regex: new RegExp(`^${slug}$`, 'i') },
       isDeleted: false,
     });
     if (!breed) throw new NotFoundError(`Không tìm thấy giống chó với slug: '${slug}'`);

@@ -1,11 +1,9 @@
 import mongoose, { Schema, Document } from "mongoose";
 
+// BỎ SALE, ADOPTION, GENERAL
 export enum PostType {
     LOST = "LOST",
-    FOUND = "FOUND",
-    SALE = "SALE",
-    ADOPTION = "ADOPTION",
-    GENERAL = "GENERAL"
+    FOUND = "FOUND"
 }
 
 export enum PostStatus {
@@ -15,113 +13,92 @@ export enum PostStatus {
 }
 
 export interface CommunityPostDoc extends Document {
-    author_id: string;
+    author_id?: string;
     type: PostType;
     status: PostStatus;
-
     title: string;
     content: string;
     photos: string[];
-
     dog_id?: string;
 
-    tags: {
-        breed?: string;
+    ai_metadata: {
+        breed: string;
+        breed_slug: string;
+        confidence: number;
         color?: string;
-        price?: number;
+        verificationType?: 'camera' | 'qr';
     };
 
-    // --- NEW: AI Verification Field ---
-    ai_verification?: {
-        isVerified: boolean;      // True nếu AI đồng ý với User
-        detectedBreed?: string;   // Giống mà AI nhìn thấy
-        confidence?: number;      // Độ tự tin của AI
-        checkedAt: Date;
-    };
-    // ----------------------------------
-
-    location?: {
-        lat: number;
-        lng: number;
-        address: string;
+    // --- GEOJSON STANDARD (Bắt buộc để dùng $near) ---
+    location: {
+        type: "Point";
+        coordinates: number[]; // [longitude, latitude] - Lưu ý thứ tự!
+        address?: string;
     };
 
     contact_info: {
+        name: string;
         phone?: string;
         email?: string;
-        facebook?: string;
     };
-
     views: number;
+    isDeleted: boolean; // Soft delete flag
     createdAt: Date;
-    updatedAt: Date;
 }
 
 const communityPostSchema = new Schema(
     {
-        author_id: { type: String, required: true, index: true },
+        author_id: { type: String, required: false },
         type: {
             type: String,
-            enum: Object.values(PostType),
+            enum: Object.values(PostType), // Chỉ còn LOST/FOUND
             required: true,
             index: true
         },
-        status: {
-            type: String,
-            enum: Object.values(PostStatus),
-            default: PostStatus.OPEN,
-            index: true
-        },
-
+        status: { type: String, enum: Object.values(PostStatus), default: PostStatus.OPEN },
         title: { type: String, required: true },
-        content: { type: String },
-        photos: [{ type: String }],
+        content: { type: String, required: true },
+        photos: { type: [String], required: true },
+        dog_id: { type: String }, // Optional link to DogProfile
 
-        dog_id: { type: Schema.Types.ObjectId, ref: "DogProfile", index: true },
-
-        tags: {
-            breed: { type: String, index: true },
-            color: String,
-            price: Number,
-        },
-
-        // --- NEW: AI Verification Schema ---
-        ai_verification: {
-            isVerified: Boolean,
-            detectedBreed: String,
+        ai_metadata: {
+            breed: { type: String, index: "text" }, // Text index for search
+            breed_slug: { type: String, index: true }, // For exact match queries
             confidence: Number,
-            checkedAt: Date,
+            color: String,
+            verificationType: { type: String, enum: ['camera', 'qr'] }
         },
-        // -----------------------------------
 
+        // Cấu trúc GeoJSON chuẩn
         location: {
-            lat: Number,
-            lng: Number,
-            address: String,
+            type: {
+                type: String,
+                enum: ['Point'],
+                required: true,
+                default: 'Point'
+            },
+            coordinates: {
+                type: [Number], // [Longitude, Latitude]
+                required: true
+            },
+            address: String
         },
 
         contact_info: {
+            name: String,
             phone: String,
-            email: String,
-            facebook: String,
+            email: String
         },
 
         views: { type: Number, default: 0 },
+        isDeleted: { type: Boolean, default: false }
     },
-    {
-        timestamps: true,
-        toJSON: {
-            transform(doc: any, ret: any) {
-                ret.id = ret._id;
-                delete ret._id;
-                delete ret.__v;
-            },
-        },
-    }
+    { timestamps: true }
 );
 
-communityPostSchema.index({ title: "text", content: "text", "tags.breed": "text" });
-communityPostSchema.index({ "location": "2dsphere" });
+// QUAN TRỌNG: Index 2dsphere cho trường location
+communityPostSchema.index({ location: "2dsphere" });
+communityPostSchema.index({ "ai_metadata.breed": "text" });
 
 const CommunityPost = mongoose.model<CommunityPostDoc>("CommunityPost", communityPostSchema);
 export { CommunityPost };

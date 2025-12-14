@@ -5,8 +5,6 @@ import path from "path";
 import axios from "axios";
 import sharp from "sharp";
 import { spawnSync } from "child_process";
-import { Readable } from "stream";
-import { UploadApiResponse } from "cloudinary";
 import { AIModelService } from "./ai_models.service";
 import { DirectoryModel } from "../models/directory.model";
 import { MediaModel, MediaDoc } from "../models/medias.model";
@@ -25,6 +23,7 @@ import os from "os";
 import { collectionService } from "./user_collections.service";
 import { achievementService } from "./achievement.service";
 import { userService } from "./user.service";
+import { DirectoryService } from "./directory.service";
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 const MAX_IMAGE_DIMENSION = 1500;
@@ -399,56 +398,113 @@ export const predictionService = {
     return batchProcessor.getProgress(predictionId);
   },
 
+  makeEphemeralPrediction: async (
+    file: Express.Multer.File,
+    userId: Types.ObjectId | undefined // Optional, for context or logging if needed
+  ): Promise<any> => {
+    if (!file) throw new BadRequestError("No file.");
+
+    try {
+      // 1. Optimize Image (Resize)
+      const optimizedBuffer = await optimizeImage(file.path);
+      const tempId = new Types.ObjectId().toString();
+
+      // 2. Call AI Service (via BatchProcessor for consistency & queueing)
+      const result = await batchProcessor.add({
+        id: tempId,
+        userId: userId, // Can be undefined
+        buffer: optimizedBuffer,
+        mediaType: 'image',
+        resolve: () => { },
+        reject: () => { }
+      });
+
+      if (!result?.predictions) {
+        throw new Error("Invalid result from AI");
+      }
+
+      // 3. Return result directly (Ephemeral)
+      return {
+        predictions: result.predictions,
+        processed_media_base64: result.processed_media_base64
+      };
+
+    } catch (err) {
+      logger.error(`[EphemeralPrediction] Failed for file ${file.originalname}`, err);
+      throw err;
+    } finally {
+      if (file.path && fs.existsSync(file.path)) {
+        await fs.promises.unlink(file.path).catch(err =>
+          logger.warn(`[Cleanup] Failed to delete temp file ${file.path}`, err)
+        );
+      }
+    }
+  },
+
   makeBatchPredictions: async (
     userId: Types.ObjectId | undefined,
     files: Express.Multer.File[],
     req: Request
   ): Promise<PredictionHistoryDoc[]> => {
-    if (!files.length) throw new BadRequestError("Không có file nào được cung cấp.");
-    const startTime = Date.now(); // [PERF] Start timer
 
-    try {
-      let directory_id: Types.ObjectId | undefined;
-      if (userId) {
-        const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });
-        if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
-        directory_id = userDirectory._id;
-      }
+    if (!files.length) throw new BadRequestError("Không có file.");
+    const startTime = Date.now();
 
-      const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
-      const modelName = activeModel ? activeModel.name : 'unknown_model';
+    let directory_id: Types.ObjectId | undefined;
+    if (userId) {
+      const userDirectory = await DirectoryModel.findOne({ creator_id: userId, parent_id: null });
+      if (!userDirectory) throw new BadRequestError("Không tìm thấy thư mục người dùng.");
 
-      // [PERF] Measure AI Service Call
-      const aiStartTime = Date.now();
-      const response = await axios.post(`${AI_SERVICE_URL}/predict/images_by_urls`, {
-        urls: files.map(file => file.path)
-      });
-      const aiDuration = Date.now() - aiStartTime; // [PERF] AI Duration
+      const myDogsDir = await DirectoryService.ensureDirectory("My Dogs", userDirectory._id.toString(), new Types.ObjectId(userId));
+      directory_id = myDogsDir._id;
+    }
+    const activeModel = await AIModelService.findActiveModelForTask("DOG_BREED_CLASSIFICATION");
+    const modelName = activeModel ? activeModel.name : 'unknown_model';
 
-      const batchResults = response.data.results;
-      const predictions: PredictionHistoryDoc[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const result = batchResults[i];
-
+    const promises = files.map(async (file) => {
+      try {
+        const optimizedBuffer = await optimizeImage(file.path);
+        const tempId = new Types.ObjectId().toString();
         const extension = path.extname(file.originalname);
-        const mediaPathForDb = `${file.filename}${extension}`;
+        const filenameWithoutExt = path.parse(file.originalname).name;
 
+        // 2. CHẠY SONG SONG: [Gửi AI] + [Upload Ảnh Gốc lên Cloudinary]
+        const [result, uploadedOriginalPath] = await Promise.all([
+          // Task A: Gửi sang AI (Batch)
+          batchProcessor.add({
+            id: tempId,
+            userId: userId,
+            buffer: optimizedBuffer,
+            mediaType: 'image',
+            resolve: () => { },
+            reject: () => { }
+          }),
+
+          // Task B: Upload ảnh gốc (để lưu trữ lâu dài)
+          uploadFileToCloudinary(file.path, `${filenameWithoutExt}_${Date.now()}`, 'public/uploads/images', 'image', 'private')
+            .then(res => `${res.public_id}.${res.format}`)
+            .catch(err => {
+              logger.warn(`[BatchUpload] Failed to upload original image ${file.originalname}`, err);
+              return `${file.filename}${extension}`; // Fallback: Giữ tên file local nếu upload lỗi
+            })
+        ]);
+
+        // 3. Kiểm tra kết quả AI
+        if (!result?.predictions || !result?.processed_media_base64) {
+          throw new Error("Invalid batch result from AI");
+        }
+
+        // 4. Lưu Media Model
         const newMedia = new MediaModel({
           name: file.originalname,
-          mediaPath: mediaPathForDb,
+          mediaPath: uploadedOriginalPath, // Dùng path trên Cloudinary (hoặc local fallback)
           creator_id: userId,
           directory_id,
           type: 'image',
         });
         await newMedia.save();
 
-        if (!result?.predictions || !result?.processed_media_base64) {
-          logger.error(`[PredictionService] Kết quả không hợp lệ cho file (batch) ${file.originalname}`);
-          continue;
-        }
-
+        // 5. Upload Ảnh đã xử lý (Bounding Box)
         const processedMediaPathForDb = await uploadBase64ToCloudinary(
           result.processed_media_base64,
           'public/processed/images',
@@ -456,6 +512,7 @@ export const predictionService = {
           'private'
         );
 
+        // 6. Lưu Lịch sử Dự đoán
         const newPrediction = await PredictionHistoryModel.create({
           user: userId,
           media: newMedia._id,
@@ -470,30 +527,35 @@ export const predictionService = {
           { path: "user", select: "-password" },
           { path: "media" }
         ]);
-        predictions.push(populatedPrediction);
+
+        return populatedPrediction as any as PredictionHistoryDoc;
+
+      } catch (err) {
+        logger.error(`[BatchError] Failed to process file ${file.originalname}`, err);
+        return null; // Trả về null để không làm fail cả batch
+      } finally {
+        if (file.path && fs.existsSync(file.path)) {
+          await fs.promises.unlink(file.path).catch(err =>
+            logger.warn(`[Cleanup] Failed to delete temp file ${file.path}`, err)
+          );
+        }
       }
+    });
 
-      analyticsService.trackEvent({
-        eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
-        req,
-        eventData: { fileCount: files.length }
-      });
+    const results = await Promise.all(promises);
 
-      // [PERF] Log Total Duration
-      const totalDuration = Date.now() - startTime;
-      logger.info(`[PERF] BACKEND | Type: batch | Count: ${files.length} | AI: ${aiDuration}ms | Total: ${totalDuration}ms`);
+    const predictions = results.filter((p): p is PredictionHistoryDoc => p !== null);
 
-      return predictions;
+    analyticsService.trackEvent({
+      eventName: userId ? AnalyticsEventName.SUCCESSFUL_PREDICTION : AnalyticsEventName.SUCCESSFUL_TRIAL,
+      req,
+      eventData: { fileCount: files.length }
+    });
 
-    } catch (error: any) {
-      if (axios.isAxiosError(error)) {
-        logger.error(`[PredictionService] Lỗi Axios khi gọi AI Service (batch): ${error.message}`);
-        logger.error(`[PredictionService] Phản hồi từ AI Service (nếu có):`, error.response?.data);
-      } else {
-        logger.error(`[PredictionService] Lỗi không xác định trong makeBatchPredictions:`, error);
-      }
-      throw new Error("Không thể xử lý dự đoán hàng loạt do có lỗi từ dịch vụ AI.");
-    }
+    const totalDuration = Date.now() - startTime;
+    logger.info(`[PERF] BACKEND | Type: batch | Count: ${files.length} | Total: ${totalDuration}ms`);
+
+    return predictions;
   },
 
   makePrediction: async (
@@ -621,27 +683,11 @@ export const predictionService = {
         const base64Data = url.split(',')[1];
         // Upload private
         const relativePath = await uploadBase64ToCloudinary(base64Data, 'public/uploads/images', 'image', 'private');
-        // Generate signed URL immediately? Or just keep relative path?
-        // We need a URL for mediaPath.
-        // If private, we should generate a signed URL or just store the public_id and let frontend handle it?
-        // Backend usually stores relative path or full URL. Existing logic stores full URL.
-        // If it's private, we should store the URL that references the private resource.
-        // transformPaths handles generation of signed URL if path starts with public/...
-        // But here we set mediaPath = url.
-        // If we set mediaPath = relativePath (e.g. public/uploads/images/xyz.jpg), transformPaths will handle it!
-        // So better to return relativePath or a Cloudinary URL that clearly indicates it.
-        // If we return cloudinary.url(...) it might be signed and expire.
-        // Best approach: Store the "path" or "secure_url".
-        // Let's modify logic to prefer storing the relative path if possible, but legacy code might expect abundant URL.
-        // Actually, MediaModel has mediaPath. `transformPaths` in media.util converts it.
-        // So I should try to set `finalUrl` to something `transformPaths` can recognize?
-        // `transformPaths` looks for `dbPath.startsWith('public/')`.
-        // So I should set finalUrl = relativePath (e.g. 'public/uploads/images/abc.jpg').
         finalUrl = relativePath;
       } else {
         const urlObj = new URL(url);
         if (urlObj.hostname.includes('google.com')) {
-          if (urlObj.pathname === '/imgres') {
+          if (urlObj.pathname === '/images') {
             const imgUrl = urlObj.searchParams.get('imgurl');
             if (imgUrl) finalUrl = imgUrl;
           } else if (urlObj.pathname === '/url') {
@@ -668,23 +714,15 @@ export const predictionService = {
 
       if (isInternal) {
         try {
-          // Identify if it matches our private folders strategy
           const isPrivateFolder = finalUrl.includes('/uploads/images') || finalUrl.includes('/processed/') || finalUrl.includes('/uploads/videos');
 
           if (isPrivateFolder) {
-            // Extract public_id
             const parts = finalUrl.split('/upload/');
             if (parts.length === 2) {
               let suffix = parts[1];
-              // Remove version (v1234/)
               suffix = suffix.replace(/^v\d+\//, '');
-              // Remove extension for ID? Cloudinary ID often implies path without ext, but URL differs.
-              // Actually cloudinary.url() with resource_type image expects ID.
-              // Suffix e.g. "public/uploads/images/abc.jpg".
-              // ID is "public/uploads/images/abc".
               const publicId = suffix.includes('.') ? suffix.substring(0, suffix.lastIndexOf('.')) : suffix;
 
-              // Generate fresh signed URL specifically for downloading
               const signedUrl = cloudinary.url(publicId, {
                 type: 'authenticated',
                 resource_type: 'image',
@@ -699,7 +737,6 @@ export const predictionService = {
           }
         } catch (err: any) {
           logger.warn(`[PredictionService] Failed to download internal Cloudinary URL: ${err.message}. Falling back to normal URL.`);
-          // Fallback to normal URL (might fail if private, but we tried)
         }
       }
 
@@ -707,12 +744,7 @@ export const predictionService = {
       let predictionResult;
 
       if (buffer) {
-        // Use batchProcessor to send buffer
-        // We need a unique ID for this job
         const tempId = new Types.ObjectId().toString();
-        // Wrap batchProcessor in promise? batchProcessor.add returns strict result not promise of result?
-        // Looking at batchProcessor.ts: add(item) returns new Promise(...)
-        // So we can await it.
         predictionResult = await batchProcessor.add({
           id: tempId,
           userId: userId,
@@ -722,7 +754,6 @@ export const predictionService = {
           reject: () => { }
         });
       } else {
-        // External URL: Keep existing flow
         const aiResponse = await axios.post(`${AI_SERVICE_URL}/predict/url`, { url: finalUrl }, {
           headers: { "Content-Type": "application/json" }
         });
@@ -748,7 +779,7 @@ export const predictionService = {
         creator_id: userId,
         directory_id,
         type: 'image',
-        isExternalUrl: true // Note: if we converted data-uri to internal private path, maybe this flag is less accurate but acceptable.
+        isExternalUrl: true
       });
       await newMedia.save();
 

@@ -22,6 +22,11 @@ export type UserDoc = Document & {
   city?: string;
   phoneNumber?: string;
   avatarPath?: string;
+  address?: string;
+
+  notification_settings: {
+    email_alert: boolean;
+  };
 
   // bao Mat
   verify: boolean;
@@ -75,6 +80,10 @@ const userSchema = new Schema<UserDoc>(
     city: { type: String, trim: true },
     phoneNumber: { type: String, trim: true },
     avatarPath: { type: String, trim: true },
+    address: { type: String, trim: true },
+    notification_settings: {
+      email_alert: { type: Boolean, default: true },
+    },
     verify: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, select: false },
 

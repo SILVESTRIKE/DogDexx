@@ -13,16 +13,50 @@ export type AccessMode = 'public' | 'private';
 
 // 1. CHUẨN HÓA LOGIC KIỂM TRA FOLDER
 // Hàm này phải đồng bộ tuyệt đối giữa lúc Upload và lúc View
+
+/**
+ * Danh sách folders PRIVATE (bắt buộc xác thực để truy cập)
+ * - health_records: Hồ sơ sức khỏe thú cưng (nhạy cảm)
+ * - verification: Ảnh xác thực tìm chó
+ * - processed: Ảnh đã xử lý AI
+ * - uploads: Uploads chung của user
+ */
+const PRIVATE_FOLDERS = [
+    'health_records',
+    'verification',
+    'processed/',
+    'uploads/'
+];
+
+/**
+ * Danh sách folders PUBLIC (ai cũng xem được)
+ * - avatars: Ảnh đại diện user
+ * - wiki: Ảnh Dog Wiki
+ * - dataset/approved: Dataset đã duyệt
+ * - dog-data-img: Ảnh data chó
+ * - posts: Ảnh bài đăng cộng đồng
+ */
+const PUBLIC_FOLDERS = [
+    'avatars',
+    'wiki',
+    'dataset/approved',
+    'dog-data-img',
+    'posts'
+];
+
 const isPublicFolder = (pathOrFolder: string): boolean => {
     // Chuẩn hóa đường dẫn để tránh lỗi dấu gạch chéo
-    const normalized = pathOrFolder.replace(/\\/g, '/');
-    return (
-        normalized.includes('avatars') ||
-        normalized.includes('wiki') ||
-        normalized.includes('dataset/approved') ||
-        normalized.includes('dog-data-img') // <--- ĐÃ THÊM VÀO ĐÂY
-    );
+    const normalized = pathOrFolder.replace(/\\/g, '/').toLowerCase();
+
+    // Kiểm tra private folders trước (ưu tiên bảo mật)
+    if (PRIVATE_FOLDERS.some(pf => normalized.includes(pf.toLowerCase()))) {
+        return false;
+    }
+
+    // Kiểm tra public folders
+    return PUBLIC_FOLDERS.some(pf => normalized.includes(pf.toLowerCase()));
 };
+
 
 const getCloudinaryType = (folder: string): 'upload' | 'authenticated' => {
     if (isPublicFolder(folder)) {
@@ -69,6 +103,34 @@ export const uploadFileToCloudinary = (filePath: string, public_id_without_ext: 
     });
 };
 
+export const uploadMultipleFilesToCloudinary = async (
+    files: Express.Multer.File[],
+    folder: string,
+    resource_type: 'image' | 'video' = 'image'
+): Promise<string[]> => {
+    const urls: string[] = [];
+
+    for (const file of files) {
+        const public_id = `${Date.now()}_${Math.random().toString(36).substring(7)}`;
+        const result = await uploadFileToCloudinary(
+            file.path,
+            public_id,
+            folder,
+            resource_type,
+            'public'
+        );
+        urls.push(result.secure_url);
+
+        // Clean up temp file
+        const fs = await import('fs');
+        if (file.path && fs.existsSync(file.path)) {
+            fs.promises.unlink(file.path).catch(() => { });
+        }
+    }
+
+    return urls;
+};
+
 // 3. HÀM TẠO URL (VIEW)
 const transformPaths = (req: Request, data: any): any => {
     if (data === null || typeof data !== 'object' || data instanceof Date || data instanceof Types.ObjectId) return data;
@@ -83,11 +145,19 @@ const transformPaths = (req: Request, data: any): any => {
         // Chuẩn hóa path
         const normalizedPath = dbPath.replace(/\\/g, '/').replace(/^\/+/, '');
 
+        // [DEBUG]
+        if (dbPath.includes('processed')) {
+            logger.info(`[TransformDebug] Path: ${dbPath} | Norm: ${normalizedPath} | CloudName: ${CLOUD_NAME} | Match: ${normalizedPath.startsWith('public/')}`);
+        }
+
         // Kiểm tra xem path có phải là file trên Cloudinary không
         // (Thêm check 'processed/' vào list nếu bạn lưu ảnh processed lên đó)
         if ((normalizedPath.startsWith('public/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('dataset/') || normalizedPath.startsWith('processed/') || normalizedPath.startsWith('dog-data-img/')) && CLOUD_NAME) {
 
-            const resourceType = normalizedPath.includes('/videos/') ? 'video' : 'image';
+            // Kiểm tra video dựa trên cả folder path VÀ extension của file
+            const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.webp'];
+            const isVideoFile = videoExtensions.some(ext => normalizedPath.toLowerCase().endsWith(ext));
+            const resourceType = (normalizedPath.includes('/videos/') || isVideoFile) ? 'video' : 'image';
 
             // Lấy Public ID (bỏ đuôi mở rộng nếu là ảnh)
             const publicId = resourceType === 'image'
@@ -133,9 +203,13 @@ const transformPaths = (req: Request, data: any): any => {
     // Quét các key chứa đường dẫn ảnh
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
-            if ((key === 'mediaPath' || key === 'processedMediaPath' || key === 'avatarPath' || key === 'imagePath' || key === 'url') && typeof obj[key] === 'string') {
-                const newKey = key.endsWith('Path') ? key.replace('Path', 'Url') : 'url';
-                obj[newKey] = createFullUrl(obj[key]);
+            if ((key === 'mediaPath' || key === 'processedMediaPath' || key === 'avatarPath' || key === 'imagePath' || key === 'url' || key === 'photos') && (typeof obj[key] === 'string' || Array.isArray(obj[key]))) {
+                if (key === 'photos' && Array.isArray(obj[key])) {
+                    obj[key] = obj[key].map((path: string) => createFullUrl(path));
+                } else if (typeof obj[key] === 'string') {
+                    const newKey = key.endsWith('Path') ? key.replace('Path', 'Url') : 'url';
+                    obj[newKey] = createFullUrl(obj[key]);
+                }
             }
             // Đệ quy
             obj[key] = transformPaths(req, obj[key]);

@@ -49,7 +49,7 @@ export const RegisterSchema = z.object({
       lastName: z.string().optional(),
       country: z.string().optional(),
       city: z.string().optional(),
-      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ"),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional().or(z.literal("")),
       captchaToken: z.string().optional(),
     })
     .strict(),
@@ -94,6 +94,10 @@ export const UpdateProfileSchema = z.object({
       country: z.string().optional(),
       city: z.string().optional(),
       phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional(),
+      address: z.string().optional(),
+      notification_settings: z.object({
+        email_alert: z.boolean().optional(),
+      }).optional(),
     })
     .strict(),
 });
