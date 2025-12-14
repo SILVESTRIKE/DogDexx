@@ -45,14 +45,22 @@ export function DogQrCode({ shortCode, dogName }: DogQrCodeProps) {
                     {t("dogQrCode.petId")}
                 </h3>
 
-                {/* QR CODE GENERATOR */}
+                {/* QR CODE GENERATOR with Logo */}
                 <div className="p-2 border border-black/10 rounded-lg">
                     <QRCodeCanvas
                         id="dog-qr-canvas"
                         value={qrValue}
                         size={200}
-                        level={"M"}
+                        level={"H"} // High error correction để QR vẫn scan được với logo
                         includeMargin={true}
+                        imageSettings={{
+                            src: "/LogoWebBlack.png", // Logo app (black cho nền trắng QR)
+                            x: undefined,
+                            y: undefined,
+                            height: 40,
+                            width: 40,
+                            excavate: true, // Tạo vùng trống cho logo
+                        }}
                     />
                 </div>
 
