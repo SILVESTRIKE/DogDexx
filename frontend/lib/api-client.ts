@@ -58,6 +58,242 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
+  // --- Dog Management ---
+  async createDog(data: any) {
+    if (data instanceof FormData) {
+      return this.requestWithFormData<any>("/bff/dog", data, true);
+    }
+    return this.request<any>(
+      "/bff/dog",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+
+  async getMyDogs() {
+    return this.request<any>("/bff/dog/my-dogs", {}, true);
+  }
+
+  async getDog(id: string) {
+    return this.request<any>(`/bff/dog/${id}`, {}, true);
+  }
+
+  async updateDog(id: string, data: any) {
+    return this.request<any>(`/bff/dog/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async deleteDog(id: string) {
+    return this.request<any>(`/bff/dog/${id}`, {
+      method: "DELETE",
+    }, true);
+  }
+
+  async addHealthRecord(dogId: string, data: any) {
+    // If data contains files (attachments), use FormData
+    if (data.attachments && data.attachments.length > 0 && data.attachments[0] instanceof File) {
+      const formData = new FormData();
+      // Append basic fields
+      Object.keys(data).forEach(key => {
+        if (key !== 'attachments' && data[key] !== undefined && data[key] !== null) {
+          formData.append(key, String(data[key]));
+        }
+      });
+      // Append files
+      data.attachments.forEach((file: File) => {
+        formData.append('files', file);
+      });
+
+      return this.requestWithFormData<any>(`/bff/dog/${dogId}/health`, formData, true);
+    }
+
+    // JSON Fallback (if no files)
+    return this.request<any>(`/bff/dog/${dogId}/health`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async updateHealthRecord(recordId: string, data: any) {
+    if (data.newAttachments && data.newAttachments.length > 0) {
+      const formData = new FormData();
+      Object.keys(data).forEach(key => {
+        if (key !== 'newAttachments' && data[key] !== undefined && data[key] !== null) {
+          // Handle basic fields. If passing arrays/objects, strictly stringify or handle on backend.
+          // Assuming simple fields for now.
+          formData.append(key, String(data[key]));
+        }
+      });
+
+      data.newAttachments.forEach((file: File) => {
+        formData.append('files', file);
+      });
+
+      return this.requestWithFormData<any>(`/bff/dog/health/${recordId}`, formData, true, "PUT"); // Need to support PUT in requestWithFormData or just use custom
+    }
+
+    return this.request<any>(`/bff/dog/health/${recordId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async deleteHealthRecord(recordId: string) {
+    return this.request<any>(`/bff/dog/health/${recordId}`, {
+      method: "DELETE",
+    }, true);
+  }
+
+  async getHealthRecords(dogId: string) {
+    return this.request<any>(`/bff/dog/${dogId}/health`, {}, true);
+  }
+
+  async searchLostDogs(params: any) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/dog/search/lost?${queryParams.toString()}`, {}, false);
+  }
+
+  // New methods for Dog Analysis and Public Contact
+  async analyzeDogImage(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.requestWithFormData<any>("/bff/dog/analyze", formData, true);
+  }
+
+  async getPublicDog(id: string) {
+    return this.request<any>(`/bff/dog/public/${id}`, {}, false);
+  }
+
+  async contactOwner(data: { dogId: string; finderName: string; finderPhone: string; message: string; location?: any }) {
+    return this.request<any>("/bff/dog/public/contact-owner", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, false);
+  }
+
+  // --- Community Post (Smart Search) ---
+
+  async createCommunityPost(data: {
+    type: "LOST" | "FOUND";
+    title: string;
+    content: string;
+    photos: File[]; // Upload Files
+    dog_id?: string;
+    location: { lat: number; lng: number; address: string };
+    contact_info: { name: string; phone?: string; email?: string };
+  }) {
+    const formData = new FormData();
+    formData.append("type", data.type);
+    formData.append("title", data.title);
+    formData.append("content", data.content);
+    if (data.dog_id) formData.append("dog_id", data.dog_id);
+
+    // JSON stringify complex objects for FormData
+    formData.append("location", JSON.stringify(data.location));
+    formData.append("contact_info", JSON.stringify(data.contact_info));
+
+    if (data.photos) {
+      data.photos.forEach(file => formData.append("files", file));
+    }
+
+    return this.requestWithFormData<any>("/bff/post", formData, true);
+  }
+
+  async getCommunityPosts(params: {
+    type?: "LOST" | "FOUND";
+    breed?: string;
+    lat?: number;
+    lng?: number;
+    radius?: number; // km
+    page?: number;
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/post?${queryParams.toString()}`, {}, false); // Public read
+  }
+
+  async getCommunityPost(id: string) {
+    return this.request<any>(`/bff/post/${id}`, {}, false);
+  }
+
+  async resolveCommunityPost(id: string) {
+    return this.request<any>(`/bff/post/${id}/resolve`, {
+      method: "PATCH"
+    }, true);
+  }
+
+  // Alias for usage in components
+  async resolvePost(id: string) {
+    return this.resolveCommunityPost(id);
+  }
+
+  // --- Lost & Found Radar API ---
+  async reportLost(dogId: string, data: {
+    location: { lat: number; lng: number; address: string };
+    contact: { name: string; phone?: string; email?: string };
+    title?: string;
+    content?: string;
+  }) {
+    return this.request<any>(`/bff/dog/${dogId}/report-lost`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async reportFoundWithVerification(data: any, file?: File) {
+    if (file) {
+      const formData = new FormData();
+      // Flatten data to formData
+      formData.append("dogId", data.dogId);
+      formData.append("verificationType", data.verificationType);
+      formData.append("contact", JSON.stringify(data.contact));
+      formData.append("location", JSON.stringify(data.location));
+      if (data.verificationData) formData.append("verificationData", data.verificationData);
+
+      formData.append("file", file);
+
+      return this.requestWithFormData<any>("/bff/dog/report-found-verified", formData, false);
+    } else {
+      return this.request<any>("/bff/dog/report-found-verified", {
+        method: "POST",
+        body: JSON.stringify(data)
+      }, false);
+    }
+  }
+
+  /**
+   * Get radar posts for bi-directional matching
+   * @param sourceType - The type of the source post (LOST or FOUND)
+   *                     If viewing a LOST post, will search for FOUND posts (clues)
+   *                     If viewing a FOUND post, will search for LOST posts (matching owners)
+   */
+  async getRadarPosts(params: {
+    lat: number;
+    lng: number;
+    radius?: number;
+    breed?: string;
+    sourceType?: "LOST" | "FOUND";
+  }) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/post/radar?${queryParams.toString()}`, {}, false);
+  }
+
+
+
 
   public getBaseUrl(): string {
     return this.baseUrl;
@@ -143,14 +379,15 @@ export class ApiClient {
     const url = new URL(endpoint, this.baseUrl).toString();
     const headers: Record<string, string> = { ...options.headers };
 
-    // KHÔNG set Content-Type nếu body là FormData, trình duyệt sẽ tự làm.
-    // Nếu không, nó sẽ bị thiếu 'boundary' và request sẽ bị treo.
-    if (!(options.body instanceof FormData)) {
+    const method = options.method ? options.method.toUpperCase() : "GET";
+    const isBodyLess = method === "GET" || method === "HEAD";
+
+    if (!(options.body instanceof FormData) && !isBodyLess) {
       headers["Content-Type"] = "application/json";
     }
 
     let token = TokenManager.getAccessToken();
-    if (token) {
+    if (token && token !== "null" && token !== "undefined") {
       headers["Authorization"] = `Bearer ${token}`;
     } else if (requiresAuth) {
       throw new Error("Token is not provided for an authenticated request.");
@@ -220,12 +457,13 @@ export class ApiClient {
   private async requestWithFormData<T>(
     endpoint: string,
     formData: FormData,
-    requiresAuth = false
+    requiresAuth = false,
+    method = "POST"
   ): Promise<T> {
     return this.request<T>(
       endpoint,
       {
-        method: "POST",
+        method: method,
         body: formData,
       },
       requiresAuth

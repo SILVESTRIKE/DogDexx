@@ -7,7 +7,7 @@ import { useI18n } from '@/lib/i18n-context';
 import { MapPin, Search, Globe, Building2, Trophy, Crown, User } from 'lucide-react';
 import { cn } from "@/lib/utils";
 
-import { LocationPicker } from '@/components/location-picker';
+import { CountryStatePicker } from '@/components/CountryStatePicker';
 
 // --- Hooks ---
 function useDebounce<T>(value: T, delay: number): T {
@@ -31,9 +31,9 @@ const UserAvatar = ({ src, alt, name }: { src?: string | null, alt: string, name
   // Nếu có link ảnh VÀ chưa bị lỗi load -> Hiển thị ảnh
   if (src && !hasError) {
     return (
-      <img 
-        src={src} 
-        alt={alt} 
+      <img
+        src={src}
+        alt={alt}
         className="w-full h-full object-cover"
         onError={() => setHasError(true)} // Quan trọng: Nếu ảnh lỗi -> setHasError(true)
       />
@@ -52,7 +52,7 @@ const UserAvatar = ({ src, alt, name }: { src?: string | null, alt: string, name
 export default function LeaderboardPage() {
   const { t } = useI18n();
   const [scope, setScope] = useState<'global' | 'country' | 'city'>('global');
-  
+
   // Location state
   const [selectedCountryCode, setSelectedCountryCode] = useState("VN");
   const [selectedCountryName, setSelectedCountryName] = useState("Vietnam");
@@ -65,17 +65,17 @@ export default function LeaderboardPage() {
   const fetchLeaderboard = async () => {
     let value = undefined;
     if (scope === 'country') {
-        if (!selectedCountryName) {
-            setLeaderboard([]);
-            return;
-        }
-        value = selectedCountryName;
+      if (!selectedCountryName) {
+        setLeaderboard([]);
+        return;
+      }
+      value = selectedCountryName;
     } else if (scope === 'city') {
-        if (!selectedCityName) {
-            setLeaderboard([]);
-            return;
-        }
-        value = selectedCityName;
+      if (!selectedCityName) {
+        setLeaderboard([]);
+        return;
+      }
+      value = selectedCityName;
     }
 
     setLoading(true);
@@ -146,7 +146,7 @@ export default function LeaderboardPage() {
   return (
     <main className="min-h-screen relative overflow-hidden">
       <div className="container mx-auto px-4 py-8 md:py-12">
-        
+
         {/* HERO HEADER */}
         <div className="text-center mb-10 md:mb-14 relative z-10">
           <h1 className="text-3xl md:text-5xl font-extrabold mb-4 tracking-tight text-balance">
@@ -164,11 +164,11 @@ export default function LeaderboardPage() {
           <div className="absolute -inset-1 bg-gradient-to-r from-primary to-violet-600 rounded-[2rem] blur opacity-20 transition duration-500"></div>
 
           <div className="relative bg-background/60 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
-            
+
             {/* Controls Bar */}
             <div className="p-6 border-b border-white/10 bg-white/5">
               <div className="flex flex-col md:flex-row gap-4 justify-between items-center">
-                
+
                 {/* Custom Tabs */}
                 <div className="flex bg-secondary/30 p-1.5 rounded-xl w-full md:w-auto backdrop-blur-md">
                   {[
@@ -178,23 +178,23 @@ export default function LeaderboardPage() {
                   ].map((tab) => (
                     <button
                       key={tab.id}
-                      onClick={() => { 
-                        setScope(tab.id as any); 
+                      onClick={() => {
+                        setScope(tab.id as any);
                         // Reset selection when switching tabs if needed, or keep it?
                         // If switching from City to Country, maybe keep Country?
                         // For now, let's just keep the state as is, or reset if switching to Global.
                         if (tab.id === 'global') {
-                            // No reset needed strictly as global ignores it, but good practice?
+                          // No reset needed strictly as global ignores it, but good practice?
                         }
                       }}
                       className={cn(
                         "flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2",
-                        scope === tab.id 
-                          ? "bg-background shadow-lg text-primary ring-1 ring-black/5" 
+                        scope === tab.id
+                          ? "bg-background shadow-lg text-primary ring-1 ring-black/5"
                           : "text-muted-foreground hover:text-foreground hover:bg-white/5"
                       )}
                     >
-                      <tab.icon size={15} /> 
+                      <tab.icon size={15} />
                       <span className="hidden sm:inline">{tab.label}</span>
                     </button>
                   ))}
@@ -203,7 +203,7 @@ export default function LeaderboardPage() {
                 {/* Location Picker */}
                 {scope !== 'global' && (
                   <div className="w-full md:w-auto animate-in fade-in slide-in-from-right-4 duration-300">
-                    <LocationPicker
+                    <CountryStatePicker
                       selectedCountryCode={selectedCountryCode}
                       onCountryChange={(code, name) => {
                         setSelectedCountryCode(code);
@@ -215,7 +215,7 @@ export default function LeaderboardPage() {
                       showCity={scope === 'city'}
                       className={scope === 'country' ? "grid-cols-1 w-full md:w-64" : "grid-cols-2 w-full md:w-96"}
                       selectClassName="bg-secondary/30 border-white/10"
-                      labels={{ country: undefined, city: undefined }} 
+                      labels={{ country: undefined, city: undefined }}
                     />
                   </div>
                 )}
@@ -260,8 +260,8 @@ export default function LeaderboardPage() {
                       {leaderboard.map((user) => {
                         const style = getRankStyle(user.rank);
                         return (
-                          <tr 
-                            key={user.userId} 
+                          <tr
+                            key={user.userId}
                             className={`group transition-all duration-300 ${style.rowBg}`}
                           >
                             <td className="px-4 md:px-8 py-4 text-center">
@@ -271,18 +271,18 @@ export default function LeaderboardPage() {
                             </td>
                             <td className="px-4 md:px-6 py-4">
                               <div className="flex items-center gap-3 md:gap-4">
-                                
+
                                 {/* AVATAR ĐÃ ĐƯỢC FIX Ở ĐÂY */}
                                 <div className={`relative flex-shrink-0 w-10 h-10 md:w-12 md:h-12 rounded-full p-0.5 ${user.rank <= 3 ? style.ringColor + ' ring-2' : 'ring-1 ring-white/10'}`}>
                                   <div className="w-full h-full rounded-full overflow-hidden bg-secondary">
-                                    <UserAvatar 
-                                      src={user.avatarUrl} 
-                                      alt={user.username} 
-                                      name={user.displayName} 
+                                    <UserAvatar
+                                      src={user.avatarUrl}
+                                      alt={user.username}
+                                      name={user.displayName}
                                     />
                                   </div>
                                 </div>
-                                
+
                                 <div className="min-w-0">
                                   <div className={`font-semibold text-sm md:text-base truncate ${user.rank <= 3 ? 'text-foreground' : 'text-foreground/90'}`}>
                                     {user.displayName}
@@ -301,12 +301,12 @@ export default function LeaderboardPage() {
                                   <>
                                     {user.city && (
                                       <span className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-default">
-                                        <Building2 size={13} className="opacity-50"/> {user.city}
+                                        <Building2 size={13} className="opacity-50" /> {user.city}
                                       </span>
                                     )}
                                     {user.country && (
                                       <span className="flex items-center gap-1.5 hover:text-primary transition-colors cursor-default">
-                                        <MapPin size={13} className="opacity-50"/> {user.country}
+                                        <MapPin size={13} className="opacity-50" /> {user.country}
                                       </span>
                                     )}
                                   </>

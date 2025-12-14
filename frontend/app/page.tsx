@@ -227,12 +227,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen relative overflow-hidden">
-      {/* Đã xóa phần Background Effects ở đây */}
-
       {/* Padding container */}
       <div className="container mx-auto px-4 py-1 md:py-5">
         {/* HERO SECTION */}
-        <div className="text-center mb-5 md:mb-10 relative z-10">
+        <div className="text-center mb-2 md:mb-5 relative z-10">
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-extrabold mb-4 md:mb-6 tracking-tight text-balance leading-tight">
             {t("home.heroTitle")} <br className="hidden md:block" />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary  to-ring block md:inline mt-1">

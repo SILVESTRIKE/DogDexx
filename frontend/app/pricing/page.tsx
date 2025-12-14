@@ -148,13 +148,12 @@ export default function PricingPage() {
                 return (
                   <Card
                     key={plan.slug}
-                    className={`flex flex-col p-6 transition-all relative ${
-                      isEffectiveCurrent
+                    className={`flex flex-col p-6 transition-all relative ${isEffectiveCurrent
                         ? "ring-2 ring-primary shadow-lg lg:scale-105 z-10"
                         : isLowerTier
-                        ? "opacity-75 grayscale-[0.5] border-border/50"
-                        : "hover:shadow-md"
-                    }`}
+                          ? "opacity-75 grayscale-[0.5] border-border/50"
+                          : "hover:shadow-md"
+                      }`}
                   >
                     {plan.slug === "professional" &&
                       !isEffectiveCurrent &&
@@ -197,14 +196,13 @@ export default function PricingPage() {
                         isEffectiveCurrent
                           ? "default"
                           : isLowerTier
-                          ? "ghost"
-                          : "default"
+                            ? "ghost"
+                            : "default"
                       }
-                      className={`mb-6 w-full ${
-                        isLowerTier
+                      className={`mb-6 w-full ${isLowerTier
                           ? "bg-muted/50 text-muted-foreground hover:bg-muted/50 cursor-not-allowed"
                           : ""
-                      }`}
+                        }`}
                       disabled={isDisabled}
                     >
                       {(() => {
@@ -221,21 +219,19 @@ export default function PricingPage() {
                         <div key={idx} className="flex items-start gap-3">
                           {feature.included ? (
                             <Check
-                              className={`h-5 w-5 shrink-0 mt-0.5 ${
-                                isLowerTier
+                              className={`h-5 w-5 shrink-0 mt-0.5 ${isLowerTier
                                   ? "text-muted-foreground"
                                   : "text-green-500"
-                              }`}
+                                }`}
                             />
                           ) : (
                             <X className="h-5 w-5 text-muted-foreground shrink-0 mt-0.5" />
                           )}
                           <span
-                            className={`text-sm ${
-                              feature.included && !isLowerTier
+                            className={`text-sm ${feature.included && !isLowerTier
                                 ? ""
                                 : "text-muted-foreground"
-                            }`}
+                              }`}
                           >
                             {feature.name}
                           </span>
@@ -289,7 +285,7 @@ export default function PricingPage() {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-6 mb-12 pb-12 border-b container mx-auto px-4">
+        <div className="grid md:grid-cols-3 gap-6 pb-12 border-b container mx-auto px-4">
           <div className="bg-linear-to-br from-primary/10 to-primary/5 rounded-lg p-6 text-center">
             <h3 className="font-semibold mb-2">
               {t("footer.adSection1Title")}

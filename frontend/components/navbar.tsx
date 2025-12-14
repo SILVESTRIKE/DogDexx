@@ -67,6 +67,8 @@ export function Navbar() {
 
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
+    { href: "/my-dogs", label: "My Dogs", auth: true },
+    { href: "/community/lost-found", label: "Lost & Found", auth: false },
     { href: "/live", label: t("nav.live"), auth: false },
     { href: "/dogdex", label: t("nav.dogdex"), auth: false },
     { href: "/history", label: t("nav.history"), auth: true },

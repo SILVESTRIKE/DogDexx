@@ -40,7 +40,7 @@ import { useI18n } from "@/lib/i18n-context";
 import { useState, useEffect, useRef, use, useMemo } from "react";
 import Link from "next/link";
 import { Country } from 'country-state-city';
-import { LocationPicker } from "@/components/location-picker";
+import { CountryStatePicker } from "@/components/CountryStatePicker";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { apiClient } from "@/lib/api-client";
 import { toast } from "sonner";
@@ -95,7 +95,7 @@ function ProfileContent() {
         city: user.city || "",
         phoneNumber: user.phoneNumber || "",
       }));
-      
+
       // Set country code from country name
       if (user.country) {
         const country = allCountries.find(c => c.name === user.country);
@@ -348,16 +348,15 @@ function ProfileContent() {
                 {
                   icon: CheckCircle,
                   label: t("profile.stats.completion"),
-                  value: `${
-                    achievementStats?.totalBreeds &&
+                  value: `${achievementStats?.totalBreeds &&
                     achievementStats.totalBreeds > 0
-                      ? Math.round(
-                          (achievementStats.totalCollected /
-                            achievementStats.totalBreeds) *
-                            100
-                        )
-                      : 0
-                  }%`,
+                    ? Math.round(
+                      (achievementStats.totalCollected /
+                        achievementStats.totalBreeds) *
+                      100
+                    )
+                    : 0
+                    }%`,
                   color: "text-green-500",
                   bg: "bg-green-500/10",
                 },
@@ -450,7 +449,7 @@ function ProfileContent() {
                     className="bg-white/5 border-white/10 focus:bg-background/50 h-11"
                   />
                 </div>
-                <LocationPicker
+                <CountryStatePicker
                   selectedCountryCode={selectedCountryCode}
                   onCountryChange={(code, name) => {
                     setSelectedCountryCode(code);

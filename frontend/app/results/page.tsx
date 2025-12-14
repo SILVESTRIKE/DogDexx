@@ -171,7 +171,7 @@ import Loading from "./loading"; function ResultsContent() {
           <Card className="mb-8">
             <CardContent className="p-4">
               <div className="relative rounded-lg overflow-hidden bg-muted aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') || processedMediaUrl.startsWith('data:video')) ? ( // <--- SỬA ĐIỀU KIỆN
+                {processedMediaUrl && (processedMediaUrl.includes('.mp4') || processedMediaUrl.includes('.mov') || processedMediaUrl.includes('.webm') || processedMediaUrl.startsWith('data:video')) ? (
                   <video
                     key={processedMediaUrl} // <--- THÊM KEY
                     src={processedMediaUrl}
@@ -284,7 +284,7 @@ import Loading from "./loading"; function ResultsContent() {
             <div className="grid md:grid-cols-2 gap-8 items-center">
               {/* --- CỘT TRÁI: ẢNH/VIDEO --- */}
               <div className="relative rounded-lg overflow-hidden bg-linear-to-br from-muted to-muted/50 aspect-square flex items-center justify-center max-w-xl mx-auto">
-                {processedMediaUrl && (processedMediaUrl.endsWith('.mp4') || processedMediaUrl.startsWith('data:video')) ? // <--- SỬA Ở ĐÂY
+                {processedMediaUrl && (processedMediaUrl.includes('.mp4') || processedMediaUrl.includes('.mov') || processedMediaUrl.includes('.webm') || processedMediaUrl.startsWith('data:video')) ?
                   (
                     <video
                       key={processedMediaUrl}

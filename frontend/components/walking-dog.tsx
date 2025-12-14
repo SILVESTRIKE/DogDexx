@@ -45,6 +45,7 @@ export default function WalkingDog() {
   const [direction, setDirection] = useState(1);
   const [showHeart, setShowHeart] = useState(false);
   const [tick, setTick] = useState(0);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
@@ -55,13 +56,22 @@ export default function WalkingDog() {
   const controls = useAnimation();
 
   useEffect(() => {
+    // Check if desktop (md breakpoint = 768px)
+    const checkDesktop = () => setIsDesktop(window.innerWidth >= 768);
+    checkDesktop();
+    window.addEventListener("resize", checkDesktop);
+
     setMounted(true);
     // 1. THEO DÕI CHUỘT
     const handleMouseMove = (e: MouseEvent) => {
       mouseX.current = e.clientX;
     };
     window.addEventListener("mousemove", handleMouseMove);
-    return () => window.removeEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      window.removeEventListener("resize", checkDesktop);
+      window.removeEventListener("mousemove", handleMouseMove);
+    };
   }, []);
 
   const currentDogImage =
@@ -159,7 +169,7 @@ export default function WalkingDog() {
         const isChasing =
           mouseX.current !== null &&
           Math.abs(mouseX.current - (xPos.current + (DOG_WIDTH * SCALE) / 2)) <
-            CHASE_RANGE;
+          CHASE_RANGE;
 
         // Nếu đang đuổi (Chase) thì tốc độ bàn thờ, còn đi chơi thì thong thả
         const MOVE_SPEED = behavior === "RUN" ? (isChasing ? 400 : 300) : 50;
@@ -206,7 +216,7 @@ export default function WalkingDog() {
 
           // Chạy xong 1 nhịp thì suy nghĩ tiếp (để check xem chuột có di chuyển chỗ khác không)
           thinkNextMove();
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 2. XIN ĂN (Khi bắt được chuột)
@@ -330,7 +340,8 @@ export default function WalkingDog() {
   const getSteps = () => (behavior === "SLEEP" ? 4 : 7);
   const getEndPosition = () => `-${getSteps() * DOG_WIDTH}px`;
 
-  if (!mounted) return null;
+  // Skip rendering entirely on mobile to save resources
+  if (!mounted || !isDesktop) return null;
 
   return (
     <div className="fixed bottom-0 left-0 w-full h-0 z-[50]">

@@ -299,3 +299,70 @@ export interface LeaderboardResponse {
   filterValue: string;
   data: LeaderboardEntry[];
 }
+
+export interface DogProfile {
+  id: string;
+  owner_id: string;
+  name: string;
+  breed: string;
+  birthday?: string;
+  gender: "male" | "female";
+  avatarPath?: string;
+  avatarUrl?: string;
+  photos: string[];
+  isLost: boolean;
+  lastSeenLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+  attributes: {
+    color?: string;
+    pattern?: string;
+    size?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthRecord {
+  id: string;
+  dog_id: string;
+  type: "vaccine" | "checkup" | "medicine" | "surgery" | "hygiene" | "other";
+  title: string;
+  date: string;
+  nextDueDate?: string;
+  notes?: string;
+  vetName?: string;
+  cost?: number;
+  weight?: number;
+  symptoms?: string;
+  diagnosis?: string;
+  attachments?: string[];
+  createdAt: string;
+}
+
+export interface Post {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar?: string;
+  type: "discussion" | "image" | "review" | "lost_found" | "sale" | "adoption";
+  title?: string;
+  content: string;
+  mediaUrls: string[];
+  likes: number;
+  comments_count: number;
+  tags?: string[];
+  related_dog_id?: string;
+  sale_info?: {
+    price: number;
+    currency: string;
+    location: string;
+    is_verified_breeder: boolean;
+    vaccination_status: boolean;
+    age_months: number;
+  };
+  createdAt: string;
+  isLiked?: boolean;
+}

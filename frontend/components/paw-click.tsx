@@ -44,16 +44,16 @@ export function DogClickEffect() {
     const handleClick = (e: MouseEvent) => {
       const currentColors = themeRef.current === "dark" ? DARK_PAW_COLORS : LIGHT_PAW_COLORS;
       const randomColor = currentColors[Math.floor(Math.random() * currentColors.length)];
-      
+
       const newItem: DogItem = {
-        id: Date.now(),
+        id: Date.now() + Math.random(), // Prevent key collision on fast clicks
         x: e.clientX,
         y: e.clientY,
         rotation: Math.random() * 60 - 30,
         scale: Math.random() * 0.3 + 0.9, // Kích thước ngẫu nhiên nhẹ
         color: randomColor,
       };
-      
+
       setItems((prev) => [...prev, newItem]);
 
       // Thời gian tồn tại ngắn gọn
@@ -74,9 +74,9 @@ export function DogClickEffect() {
             key={item.id}
             // --- ANIMATION "SMOOTH" ---
             // Chỉ hiện ra và ẩn đi, không di chuyển vị trí
-            initial={{ scale: 0.5, opacity: 0 }} 
-            animate={{ scale: item.scale, opacity: 1 }} 
-            exit={{ scale: 0.5, opacity: 0 }} 
+            initial={{ scale: 0.5, opacity: 0 }}
+            animate={{ scale: item.scale, opacity: 1 }}
+            exit={{ scale: 0.5, opacity: 0 }}
             transition={{
               duration: 0.3, // Nhanh gọn
               ease: "easeOut", // Mượt
@@ -108,7 +108,7 @@ function StandardPawIcon() {
       <ellipse cx="40" cy="25" rx="9" ry="13" transform="rotate(-10 40 25)" />
       <ellipse cx="60" cy="25" rx="9" ry="13" transform="rotate(10 60 25)" />
       <ellipse cx="80" cy="40" rx="9" ry="13" transform="rotate(20 80 40)" />
-      
+
       {/* Đệm chính (Main Pad) */}
       {/* Vẽ bằng Path: Phía trên là cung tròn lồi, phía dưới lõm vào */}
       <path d="
@@ -116,7 +116,7 @@ function StandardPawIcon() {
         C 25 45, 75 45, 75 65  
         C 75 85, 55 90, 50 75 
         C 45 90, 25 85, 25 65 
-        Z" 
+        Z"
       />
     </svg>
   );
