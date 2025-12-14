@@ -93,14 +93,17 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           toast.success(t('auth.loginTitle') + " thành công!")
           resetAndClose()
 
+          // Small delay to ensure dialog overlay is fully unmounted before redirect
           const redirectUrl = searchParams.get("redirect")
-          if (redirectUrl) {
-            const [path, params] = redirectUrl.split('?')
-            const redirectParams = new URLSearchParams(params || '')
-            router.push(`${path}?${redirectParams.toString()}`)
-          } else {
-            router.refresh()
-          }
+          setTimeout(() => {
+            if (redirectUrl) {
+              const [path, params] = redirectUrl.split('?')
+              const redirectParams = new URLSearchParams(params || '')
+              router.push(`${path}?${redirectParams.toString()}`)
+            } else {
+              router.push("/")
+            }
+          }, 150)
         } else {
           if (!username.trim()) {
             setError(t("auth.errorUsernameRequired"))

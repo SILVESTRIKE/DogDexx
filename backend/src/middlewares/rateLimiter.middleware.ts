@@ -2,7 +2,7 @@ import { Request } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 
 export const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 5 * 60 * 1000,
   max: 500,
   standardHeaders: true,
   legacyHeaders: false,
@@ -23,7 +23,7 @@ export const apiLimiter = rateLimit({
   handler: (req, res, next, options) => {
     res.status(options.statusCode || 429).json({
       success: false,
-      errors: [{ message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.", field: "rate_limit", },],
+      errors: [{ message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 5 phút.", field: "rate_limit", },],
     });
   },
 });

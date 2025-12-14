@@ -172,8 +172,7 @@ export default function Home() {
 
       runDetectionSimulation();
       try {
-        const onProgress = (progress: number) =>
-          console.log(`Upload: ${progress}%`);
+        const onProgress = (_progress: number) => { };
         let response;
 
         if (activeTab === "url") {

@@ -41,15 +41,15 @@ export const leaderboardService = {
     });
     pipeline.push({ $unwind: "$userInfo" });
     pipeline.push({ $match: { "userInfo.isDeleted": false } });
-    
+
     // Lọc bỏ người dùng có vai trò 'admin' hoặc 'dev'
     pipeline.push({ $match: { "userInfo.role": { $nin: ["admin", "dev"] } } });
 
     // Lọc theo Country/City
     if (scope === 'country' && value) {
-        pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
     } else if (scope === 'city' && value) {
-        pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
     }
 
     pipeline.push({ $sort: { collectionSize: -1, updatedAt: 1 } });
@@ -107,7 +107,7 @@ export const leaderboardService = {
       { $unwind: "$userInfo" },
       { $match: { "userInfo.isDeleted": false } },
       { $group: { _id: type === 'country' ? "$userInfo.country" : "$userInfo.city" } },
-      { $match: { _id: { $ne: null} } },
+      { $match: { _id: { $ne: null } } },
       { $sort: { _id: 1 } }
     ]);
 

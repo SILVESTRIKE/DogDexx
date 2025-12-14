@@ -95,7 +95,7 @@ export default function DatasetsPage() {
     setSearchQuery("");
     setBreadcrumbs(prev => [...prev, { name: folder.name, path: folder.id }]);
   }
-  
+
   const handleBreadcrumbClick = (index: number) => {
     if (index === breadcrumbs.length - 1) return;
     setIsLoading(true);
@@ -113,14 +113,14 @@ export default function DatasetsPage() {
 
       // 2. Mở URL trong một tab mới, trình duyệt sẽ tự động tải file
       window.open(downloadUrl, '_blank');
-      
+
     } catch (error) {
-        console.log("Tải xuống thất bại", { description: (error as Error).message });
+      console.log("Tải xuống thất bại", { description: (error as Error).message });
     } finally {
       setIsDownloading(false);
     }
   };
-  
+
   const filteredItems = useMemo(() =>
     items.filter((item) =>
       item && item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -128,7 +128,7 @@ export default function DatasetsPage() {
 
   const renderItemIcon = (item: FileSystemItem) => {
     const commonClass = "h-12 w-12 text-muted-foreground";
-    switch(item.type) {
+    switch (item.type) {
       case "folder":
         return <Folder className={`${commonClass} text-blue-500`} />;
       case "image":
@@ -209,7 +209,7 @@ export default function DatasetsPage() {
                       renderItemIcon(item)
                     )}
                   </div>
-                  
+
                   <CardContent className="p-3 grow flex flex-col items-start w-full">
                     <p className="text-sm font-medium truncate w-full" title={item.name}>{item.name}</p>
                     {item.createdAt && <p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</p>}
@@ -223,14 +223,14 @@ export default function DatasetsPage() {
       </Card>
 
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate pr-8" title={selectedItem?.name}>{selectedItem?.name}</DialogTitle>
             <DialogDescription>{selectedItem?.createdAt ? new Date(selectedItem.createdAt).toLocaleString() : ''}</DialogDescription>
           </DialogHeader>
           <div className="bg-black/90 rounded-lg grow flex items-center justify-center overflow-hidden">
             {selectedItem?.type === "image" ? (
-              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain"/>
+              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain" />
             ) : selectedItem?.type === "video" ? (
               <video src={selectedItem?.url} controls autoPlay className="max-w-full max-h-full" />
             ) : (

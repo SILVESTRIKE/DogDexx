@@ -69,7 +69,7 @@ export default function ImagesPage() {
 
     } catch (error: any) {
       if (error.name === 'AbortError') {
-        console.log('Fetch aborted');
+        // Fetch was aborted, ignore
       } else {
         console.error("Error loading file system:", error);
         toast.error("Tải dữ liệu thất bại", { description: (error as Error).message });
@@ -99,7 +99,7 @@ export default function ImagesPage() {
     setSearchQuery("");
     setBreadcrumbs(prev => [...prev, { name: folder.name, path: folder.id }]);
   }
-  
+
   const handleBreadcrumbClick = (index: number) => {
     if (index === breadcrumbs.length - 1) return;
     setIsLoading(true);
@@ -121,7 +121,7 @@ export default function ImagesPage() {
       toast.error("Xóa thất bại", { description: (error as Error).message });
     }
   }
-  
+
   const filteredItems = useMemo(() =>
     items.filter((item) =>
       item && item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -132,16 +132,16 @@ export default function ImagesPage() {
   const handleDownloadFolder = () => {
     toast.info("Tính năng tải xuống thư mục đang được phát triển.");
   };
-  
+
   const renderItemIcon = (item: MediaItem) => {
     const commonClass = "h-12 w-12";
     if (item.type === "folder") {
-        if (item.name === 'images') return <ImageIcon className={`${commonClass} text-green-500`} />;
-        if (item.name === 'videos') return <Video className={`${commonClass} text-purple-500`} />;
-        return <Folder className={`${commonClass} text-blue-500`} />;
+      if (item.name === 'images') return <ImageIcon className={`${commonClass} text-green-500`} />;
+      if (item.name === 'videos') return <Video className={`${commonClass} text-purple-500`} />;
+      return <Folder className={`${commonClass} text-blue-500`} />;
     }
-    
-    switch(item.type) {
+
+    switch (item.type) {
       case "image":
         return <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />;
       case "video":
@@ -182,7 +182,7 @@ export default function ImagesPage() {
           </div>
         </CardContent>
       </Card>
-<div className="flex justify-between items-center gap-4">
+      <div className="flex justify-between items-center gap-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder={t("common.search") || "Search files..."} className="pl-10" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
@@ -199,9 +199,9 @@ export default function ImagesPage() {
         <CardHeader>
           <CardTitle>{t("admin.folderContents") || "Contents"}</CardTitle>
           <CardDescription>
-            {t('admin.showingDescription', { 
-              count: filteredItems.length, 
-              folderName: breadcrumbs[breadcrumbs.length - 1]?.name || t('admin.imageManagementRoot') 
+            {t('admin.showingDescription', {
+              count: filteredItems.length,
+              folderName: breadcrumbs[breadcrumbs.length - 1]?.name || t('admin.imageManagementRoot')
             })}
           </CardDescription>
         </CardHeader>
@@ -227,7 +227,7 @@ export default function ImagesPage() {
                   <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden shrink-0">
                     {renderItemIcon(item)}
                   </div>
-                  
+
                   <CardFooter className="p-3 grow flex flex-col items-start w-full">
                     <p className="text-sm font-medium truncate w-full" title={item.name}>{item.name}</p>
                     {item.createdAt && <p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</p>}
@@ -261,14 +261,14 @@ export default function ImagesPage() {
       </Card>
       {/* Dialog Preview không đổi */}
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate pr-8" title={selectedItem?.name}>{selectedItem?.name}</DialogTitle>
             <DialogDescription>{selectedItem?.createdAt ? new Date(selectedItem.createdAt).toLocaleString() : ''}</DialogDescription>
           </DialogHeader>
           <div className="bg-black/90 rounded-lg grow flex items-center justify-center overflow-hidden">
             {selectedItem?.type === "image" ? (
-              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain"/>
+              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain" />
             ) : (
               <video src={selectedItem?.url} controls autoPlay className="max-w-full max-h-full" />
             )}

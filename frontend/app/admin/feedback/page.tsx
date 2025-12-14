@@ -162,17 +162,17 @@ const MediaDisplay = ({ url, alt }: { url: string; alt: string }) => {
   if (isVideo) {
     return (
       <div className="relative group">
-        <video 
-          src={url} 
-          controls 
+        <video
+          src={url}
+          controls
           className="max-h-32 w-auto rounded-md border bg-black"
         >
           Trình duyệt của bạn không hỗ trợ thẻ video.
         </video>
         {/* Nút mở tab mới cho video */}
-        <a 
-          href={url} 
-          target="_blank" 
+        <a
+          href={url}
+          target="_blank"
           rel="noopener noreferrer"
           className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded opacity-0 group-hover:opacity-100 transition-opacity"
           title="Mở video trong tab mới"
@@ -186,10 +186,10 @@ const MediaDisplay = ({ url, alt }: { url: string; alt: string }) => {
   // Nếu là ảnh
   return (
     <a href={url} target="_blank" rel="noopener noreferrer">
-      <img 
-        src={url} 
-        alt={alt} 
-        className="max-h-32 w-auto rounded-md border hover:opacity-80 transition-opacity object-contain" 
+      <img
+        src={url}
+        alt={alt}
+        className="max-h-32 w-auto rounded-md border hover:opacity-80 transition-opacity object-contain"
       />
     </a>
   );
@@ -242,9 +242,7 @@ export default function FeedbackManagement() {
         });
         setData(result);
       } catch (error) {
-        console.log(t("admin.feedback.errors.fetchFailed"), {
-          description: (error as Error).message,
-        });
+        console.error(t("admin.feedback.errors.fetchFailed"), (error as Error).message);
       } finally {
         setLoading(false);
       }
@@ -310,11 +308,9 @@ export default function FeedbackManagement() {
     const feedbackId = selectedFeedbackForApproval.id;
 
     setIsApproveAlertOpen(false);
-    console.log(t("admin.feedback.actions.approving"));
 
     try {
-      const result = await approveAdminFeedback(feedbackId, { correctedLabel });
-      console.log(result.message);
+      await approveAdminFeedback(feedbackId, { correctedLabel });
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData((prevData) => {
         const newStats = { ...prevData.stats };
@@ -335,9 +331,7 @@ export default function FeedbackManagement() {
         };
       });
     } catch (error) {
-      console.log(t("admin.feedback.errors.approveFailed"), {
-        description: (error as Error).message,
-      });
+      console.error(t("admin.feedback.errors.approveFailed"), (error as Error).message);
     } finally {
       setSelectedFeedbackForApproval(null);
       setCorrectedLabel("");
@@ -349,10 +343,8 @@ export default function FeedbackManagement() {
     const feedbackId = selectedFeedbackForRejection.id;
     const reason = rejectionReasonRef.current?.value;
     setIsRejectAlertOpen(false);
-    console.log(t("admin.feedback.actions.rejecting"));
     try {
-      const result = await rejectAdminFeedback(feedbackId, { reason });
-      console.log(result.message);
+      await rejectAdminFeedback(feedbackId, { reason });
       // Cập nhật lại UI, bao gồm cả stats và danh sách
       setData((prevData) => {
         const newStats = { ...prevData.stats };
@@ -371,9 +363,7 @@ export default function FeedbackManagement() {
         };
       });
     } catch (error) {
-      console.log(t("admin.feedback.errors.rejectFailed"), {
-        description: (error as Error).message,
-      });
+      console.error(t("admin.feedback.errors.rejectFailed"), (error as Error).message);
     } finally {
       setSelectedFeedbackForRejection(null);
     }
@@ -728,10 +718,9 @@ export default function FeedbackManagement() {
                                     {f.feedbackContent.isCorrect
                                       ? t("feedback.yes")
                                       : `${t("feedback.no")}, ${t(
-                                          "admin.feedback.dialog.mustBe"
-                                        )}: ${
-                                          f.feedbackContent.userSubmittedLabel
-                                        }`}
+                                        "admin.feedback.dialog.mustBe"
+                                      )}: ${f.feedbackContent.userSubmittedLabel
+                                      }`}
                                   </p>
                                 </div>
                                 {f.feedbackContent.notes && (

@@ -48,12 +48,10 @@ import Loading from "./loading"; function ResultsContent() {
 
       try {
         const status = await apiClient.getPredictionStatus(id);
-        console.log("Polling status:", status);
 
         if (status.status === 'completed') {
           // Nếu đã hoàn thành và có kết quả -> Dừng polling và lấy dữ liệu
           if (status.result) {
-            console.log("Polling completed, fetching final history...");
             fetchHistoryById();
             return;
           }
@@ -113,7 +111,6 @@ import Loading from "./loading"; function ResultsContent() {
 
       // Check if result is still processing (placeholder)
       if (result.processedMediaUrl === 'processing' || (result.processedMediaUrl && result.processedMediaUrl.includes('processing'))) {
-        console.log("Result is still processing, starting poll...");
         pollForStatus(historyId);
       } else {
         processResultData(result);
@@ -121,7 +118,6 @@ import Loading from "./loading"; function ResultsContent() {
       }
     } catch (err) {
       console.error("[ResultsPage] Failed to fetch prediction history:", err);
-      console.log("Trying to poll status as fallback...");
       pollForStatus(historyId);
     }
   };

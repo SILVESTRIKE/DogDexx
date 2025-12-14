@@ -351,8 +351,16 @@ def cpu_process_video(video_bytes: bytes) -> Dict[str, Any]:
 
         cap = cv2.VideoCapture(t_in_path)
         fps_input = cap.get(cv2.CAP_PROP_FPS)
+        if fps_input <= 0: fps_input = 30  # Fallback nếu không đọc được FPS
         fps = fps_input / VID_STRIDE
-        writer = imageio.get_writer(t_out_path, fps=min(fps, 20), codec="libx264", pixelformat="yuv420p")
+        
+        # Thử libx264 trước, fallback sang mjpeg nếu lỗi
+        try:
+            writer = imageio.get_writer(t_out_path, fps=min(fps, 20), codec="libx264", pixelformat="yuv420p")
+        except Exception:
+            print("[AI-API] libx264 failed, falling back to mjpeg", flush=True)
+            t_out_path = t_out_path.replace(".mp4", ".avi")
+            writer = imageio.get_writer(t_out_path, fps=min(fps, 20), codec="mjpeg")
 
         frame_count = 0
         for res in results_gen:
@@ -484,61 +492,35 @@ async def predict_image(file: UploadFile = File(...)):
 
 @app.post("/predict/images")
 async def predict_images(files: List[UploadFile] = File(...)):
-    """
-    Endpoint xử lý Batch (Gom nhiều ảnh chạy 1 lần).
-    Thay thế vòng lặp for tuần tự bằng Batch Inference của YOLO.
-    """
     print(f"[AI-API] Received BATCH request with {len(files)} files.", flush=True)
-    if not config.classify_model: return JSONResponse({"status": "error"}, 503)
+    if not config.classify_model: 
+        return JSONResponse({"status": "error", "message": "Model not loaded"}, status_code=503)
 
     t_start = time.time()
-    
-    # 1. Giai đoạn IO & Preprocess: Đọc tất cả ảnh vào RAM
-    images_data = []
-    
-    # Đọc file upload (IO Bound)
-    for file in files:
-        content = await file.read()
-        nparr = np.frombuffer(content, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is not None:
-            images_data.append(img)
-        else:
-            # Xử lý trường hợp ảnh lỗi (đẩy vào placeholder để giữ đúng thứ tự index nếu cần)
-            # Ở đây ta bỏ qua, nhưng trong production nên handle để trả về error cho ảnh đó
-            pass
-            
-    if not images_data:
-        return JSONResponse({"results": []})
-
-    # 2. Giai đoạn Inference (GPU/CPU Bound): Chạy Model 1 lần duy nhất cho N ảnh
-    # Ultralytics hỗ trợ nhận List[numpy_array], nó sẽ tự stack thành Batch Tensor
-    results = config.classify_model(
-        images_data, 
-        conf=config.CLASS_CONF, 
-        iou=config.IOU, 
-        verbose=False
-    )
-    
-    # 3. Giai đoạn Post-process: Format lại dữ liệu trả về
     final_results = []
-    for res in results:
-        # Lấy thông tin detections (Box, Class, Confidence)
-        dets = process_results([res], config.classify_model)
-        
-        # Vẽ Bounding Box lên ảnh và encode Base64 để trả về Client hiển thị
-        annotated_img = res.plot()
-        _, buf = cv2.imencode(".jpg", annotated_img)
-        b64 = base64.b64encode(buf).decode("utf-8")
-        
-        final_results.append({
-            "predictions": dets,
-            "processed_media_base64": b64,
-            "media_type": "image/jpeg"
-        })
+
+    for file in files:
+        try:
+            content = await file.read()
+            
+            # Dùng cùng hàm cpu_process_image để có Hybrid Logic
+            result = await run_in_threadpool(cpu_process_image, content)
+            
+            final_results.append({
+                "status": "success",
+                "filename": file.filename,
+                **result  # predictions, processed_media_base64, media_type
+            })
+        except Exception as e:
+            print(f"[AI-API] Error processing {file.filename}: {e}", flush=True)
+            final_results.append({
+                "status": "error",
+                "filename": file.filename,
+                "message": str(e)
+            })
 
     duration = (time.time() - t_start) * 1000
-    print(f"[AI-API] Finished Batch Inference for {len(files)} images in {duration:.2f}ms", flush=True)
+    print(f"[AI-API] Finished Batch ({len(files)} files) in {duration:.2f}ms", flush=True)
     
     return JSONResponse({"results": final_results})
 
