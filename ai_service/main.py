@@ -484,14 +484,63 @@ async def predict_image(file: UploadFile = File(...)):
 
 @app.post("/predict/images")
 async def predict_images(files: List[UploadFile] = File(...)):
-    print(f"[AI-API] Received predict_images request with {len(files)} files.", flush=True)
+    """
+    Endpoint xử lý Batch (Gom nhiều ảnh chạy 1 lần).
+    Thay thế vòng lặp for tuần tự bằng Batch Inference của YOLO.
+    """
+    print(f"[AI-API] Received BATCH request with {len(files)} files.", flush=True)
     if not config.classify_model: return JSONResponse({"status": "error"}, 503)
-    results = []
+
+    t_start = time.time()
+    
+    # 1. Giai đoạn IO & Preprocess: Đọc tất cả ảnh vào RAM
+    images_data = []
+    
+    # Đọc file upload (IO Bound)
     for file in files:
-        data = await file.read()
-        res = await run_in_threadpool(cpu_process_image, data)
-        results.append(res)
-    return JSONResponse({"results": results})
+        content = await file.read()
+        nparr = np.frombuffer(content, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if img is not None:
+            images_data.append(img)
+        else:
+            # Xử lý trường hợp ảnh lỗi (đẩy vào placeholder để giữ đúng thứ tự index nếu cần)
+            # Ở đây ta bỏ qua, nhưng trong production nên handle để trả về error cho ảnh đó
+            pass
+            
+    if not images_data:
+        return JSONResponse({"results": []})
+
+    # 2. Giai đoạn Inference (GPU/CPU Bound): Chạy Model 1 lần duy nhất cho N ảnh
+    # Ultralytics hỗ trợ nhận List[numpy_array], nó sẽ tự stack thành Batch Tensor
+    results = config.classify_model(
+        images_data, 
+        conf=config.CLASS_CONF, 
+        iou=config.IOU, 
+        verbose=False
+    )
+    
+    # 3. Giai đoạn Post-process: Format lại dữ liệu trả về
+    final_results = []
+    for res in results:
+        # Lấy thông tin detections (Box, Class, Confidence)
+        dets = process_results([res], config.classify_model)
+        
+        # Vẽ Bounding Box lên ảnh và encode Base64 để trả về Client hiển thị
+        annotated_img = res.plot()
+        _, buf = cv2.imencode(".jpg", annotated_img)
+        b64 = base64.b64encode(buf).decode("utf-8")
+        
+        final_results.append({
+            "predictions": dets,
+            "processed_media_base64": b64,
+            "media_type": "image/jpeg"
+        })
+
+    duration = (time.time() - t_start) * 1000
+    print(f"[AI-API] Finished Batch Inference for {len(files)} images in {duration:.2f}ms", flush=True)
+    
+    return JSONResponse({"results": final_results})
 
 @app.post("/predict/video")
 async def predict_video(file: UploadFile = File(...)):

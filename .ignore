@@ -1,0 +1,85 @@
+# ===========================================
+# Repomix Ignore File
+# ===========================================
+
+# Dependencies
+node_modules/
+**/node_modules/**
+
+# Lock files (very large, not needed for code review)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+
+# Source maps
+*.map
+
+# Test files
+tests/
+__tests__/
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Logs
+*.log
+logs/
+
+# Backups
+backups/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# IDE & Editor
+.vscode/
+.idea/
+
+# Environment files (security)
+.env
+.env.local
+.env.*.local
+
+# Documentation assets
+doc/
+*.docx
+*.pdf
+
+# Media test files
+*.mp4
+*.mp3
+*.wav
+
+# Generated files
+repomix-output.xml
+git_status_output.txt
+
+# TypeScript build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# Coverage reports
+coverage/
+
+# Public uploads (user data)
+public/uploads/
+uploads/
+
+# Swagger generated
+swagger-output.json
+
+# Large i18n files (not needed for code review)
+frontend/i18n/messages/vi.ts
+frontend/i18n/messages/en.ts
+
+# Test views
+backend/src/views/test.ejs
