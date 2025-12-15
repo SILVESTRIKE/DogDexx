@@ -953,6 +953,14 @@ export default {
     verifySuccess: "Cảm ơn bạn! Thông tin đã được gửi tới chủ nhân.",
     back: "Quay lại",
   },
+  lostFound: {
+    loading: "Đang tải thêm tin...",
+    noMore: "Bạn đã xem hết tin",
+    noResults: "Không tìm thấy kết quả",
+    noResultsHint: "Chưa có tin đăng nào phù hợp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc bộ lọc.",
+    clearFilters: "Xóa bộ lọc",
+    share: "Chia sẻ",
+  },
   report: {
     postTitle: "KHẨN CẤP: Tìm chó lạc {name} - Giống {breed}",
     postContent: "Bé {name} bị lạc tại khu vực {address}. \nĐặc điểm: {color}, {size}. \nGiống: {breed}. \nXin hãy giúp đỡ!",

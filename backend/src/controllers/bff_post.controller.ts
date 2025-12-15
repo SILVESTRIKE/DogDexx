@@ -148,3 +148,44 @@ export const deletePost = async (req: Request, res: Response, next: NextFunction
         next(err);
     }
 };
+
+// QR Found Report: Create FOUND post from QR scan without requiring photo upload
+export const createQrFoundPost = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { title, content, location, contact_info, dog_id } = req.body;
+
+        if (!dog_id) {
+            return res.status(400).send({ message: "dog_id is required for QR Found Report." });
+        }
+
+        // Parse JSON strings if needed
+        let parsedLocation;
+        let parsedContact;
+
+        try {
+            parsedLocation = typeof location === 'string' ? JSON.parse(location) : location;
+            parsedContact = typeof contact_info === 'string' ? JSON.parse(contact_info) : contact_info;
+        } catch (e) {
+            return res.status(400).send({ message: "Invalid JSON format for location or contact_info." });
+        }
+
+        const postData = {
+            type: PostType.FOUND,
+            title: title || "Đã tìm thấy chó",
+            content: content || "Tôi đã tìm thấy chú chó này.",
+            photos: [], // Will be filled from DogProfile in PostService
+            dog_id,
+            location: parsedLocation,
+            contact_info: parsedContact
+        };
+
+        // Use guest ID or user ID
+        const authorId = req.user?.id || `guest_${Date.now()}`;
+
+        const post = await PostService.createPost(postData, authorId, req);
+        res.status(201).send(transformMediaURLs(req, post));
+
+    } catch (err) {
+        next(err);
+    }
+};

@@ -9,27 +9,29 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageCircle, Share2, Calendar, Filter, AlertTriangle, CheckCircle2, Cpu, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
 import { useInView } from "react-intersection-observer";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { CommunityHeader } from "@/components/community-header";
 
-// Helper timeAgo
-
-// Helper timeAgo
-const timeAgo = (date: string | Date) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + " năm trước";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + " tháng trước";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + " ngày trước";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + " giờ trước";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + " phút trước";
-    return "Vừa xong";
+// Helper timeAgo - i18n version
+const useTimeAgo = () => {
+    const { t, locale } = useI18n();
+    return (date: string | Date) => {
+        const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " năm trước" : " years ago");
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " tháng trước" : " months ago");
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " ngày trước" : " days ago");
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " giờ trước" : " hours ago");
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " phút trước" : " minutes ago");
+        return locale === 'vi' ? "Vừa xong" : "Just now";
+    };
 };
 
 // Types giữ nguyên
@@ -62,6 +64,8 @@ interface Post {
 
 export default function LostFoundPage() {
     const { isAuthenticated } = useAuth();
+    const { t, locale } = useI18n();
+    const timeAgo = useTimeAgo();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -139,7 +143,7 @@ export default function LostFoundPage() {
                                     });
                                     setSortByDistance(true);
                                 },
-                                (error) => alert("Cần cấp quyền truy cập vị trí để sử dụng tính năng này.") // Note: This alert could also be i18n'd if passed from header, but header handles the click logic now?
+                                (error) => alert(t("community.header.location.permissionError"))
                                 // Wait, I moved the click logic into CommunityHeader in the previous step...
                                 // Let's check CommunityHeader props. It takes `onSortByDistanceChange` as () => void.
                                 // But in CommunityHeader implementation I wrote:
@@ -163,7 +167,7 @@ export default function LostFoundPage() {
                                 // However, in the page, I need to pass the state setters.
                             );
                         } else {
-                            alert("Trình duyệt không hỗ trợ định vị.");
+                            alert(t("community.header.location.unsupportedError"));
                         }
                     }
                 }}
@@ -180,7 +184,7 @@ export default function LostFoundPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
                         >
-                            <PostCard post={post} />
+                            <PostCard post={post} timeAgo={timeAgo} />
                         </motion.div>
                     ))}
                 </div>
@@ -190,13 +194,13 @@ export default function LostFoundPage() {
                     {loading && (
                         <div className="flex items-center gap-2 text-primary font-medium">
                             <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-                            Đang tải thêm tin...
+                            {t("lostFound.loading") || "Đang tải thêm tin..."}
                         </div>
                     )}
 
                     {!loading && !hasMore && posts.length > 0 && (
                         <div className="text-muted-foreground text-sm flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50">
-                            <CheckCircle2 className="h-4 w-4" /> Bạn đã xem hết tin
+                            <CheckCircle2 className="h-4 w-4" /> {t("lostFound.noMore") || "Bạn đã xem hết tin"}
                         </div>
                     )}
 
@@ -205,12 +209,12 @@ export default function LostFoundPage() {
                             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                                 <Filter className="h-8 w-8 text-muted-foreground opacity-50" />
                             </div>
-                            <h3 className="text-lg font-bold mb-2">Không tìm thấy kết quả</h3>
+                            <h3 className="text-lg font-bold mb-2">{t("lostFound.noResults") || "Không tìm thấy kết quả"}</h3>
                             <p className="text-muted-foreground text-sm mb-4">
-                                Chưa có tin đăng nào phù hợp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc bộ lọc.
+                                {t("lostFound.noResultsHint") || "Chưa có tin đăng nào phù hợp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc bộ lọc."}
                             </p>
                             <Button variant="outline" onClick={() => { setBreedFilter(""); setActiveTab("all"); setSortByDistance(false); }}>
-                                Xóa bộ lọc
+                                {t("lostFound.clearFilters") || "Xóa bộ lọc"}
                             </Button>
                         </div>
                     )}
@@ -221,7 +225,8 @@ export default function LostFoundPage() {
 }
 
 // --- REDESIGNED POST CARD ---
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, timeAgo }: { post: Post; timeAgo: (date: string | Date) => string }) {
+    const { t } = useI18n();
     const isLost = post.type === "LOST";
 
     return (
@@ -236,7 +241,7 @@ function PostCard({ post }: { post: Post }) {
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                        <span className="text-muted-foreground text-xs">No image</span>
+                        <span className="text-muted-foreground text-xs">{t("community.noImage")}</span>
                     </div>
                 )}
 
@@ -250,7 +255,7 @@ function PostCard({ post }: { post: Post }) {
                         !isLost && "bg-green-600 hover:bg-green-700"
                     )}>
                         {isLost ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                        {isLost ? "THẤT LẠC" : "TÌM THẤY"}
+                        {isLost ? t("community.lostStatus") : t("community.foundStatus")}
                     </Badge>
                 </div>
 
@@ -297,7 +302,7 @@ function PostCard({ post }: { post: Post }) {
                 <div className="mt-auto pt-2">
                     <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2.5 py-1.5 rounded-lg max-w-full">
                         <MapPin className="h-3 w-3 shrink-0 text-red-500" />
-                        <span className="truncate">{post.location?.address || "Không xác định"}</span>
+                        <span className="truncate">{post.location?.address || t("community.unknownLocation")}</span>
                     </div>
                 </div>
             </CardContent>
@@ -307,7 +312,7 @@ function PostCard({ post }: { post: Post }) {
                 <Link href={`/community/${post._id}`} className="w-full">
                     <Button variant="ghost" size="sm" className="w-full h-9 hover:bg-primary/10 hover:text-primary">
                         <MessageCircle className="h-4 w-4 mr-2" />
-                        Chi tiết
+                        {t("community.details")}
                     </Button>
                 </Link>
                 <Button
@@ -322,13 +327,13 @@ function PostCard({ post }: { post: Post }) {
                                 url: window.location.href + "/" + post._id
                             }).catch(console.error);
                         } else {
-                            // Fallback copy logic if needed
-                            alert("Link copied!");
+                            navigator.clipboard.writeText(window.location.href + "/" + post._id);
+                            alert(t("community.linkCopied"));
                         }
                     }}
                 >
                     <Share2 className="h-4 w-4 mr-2" />
-                    Chia sẻ
+                    {t("lostFound.share") || "Chia sẻ"}
                 </Button>
             </CardFooter>
         </Card>

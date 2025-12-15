@@ -86,6 +86,18 @@ export const feedbackService = {
       status: 'pending_review',
     });
 
+    // Send thank you email immediately on feedback submission
+    const user = await UserModel.findById(userId).select('email username firstName');
+    if (user && user.email) {
+      const breedLabel = user_submitted_label || (await PredictionHistoryModel.findById(prediction_id).select('predictions'))?.predictions?.[0]?.class || 'Unknown';
+      emailService.sendFeedbackThankYouEmail({
+        to: user.email,
+        userName: user.firstName || user.username || 'bạn',
+        breedLabel: breedLabel,
+        language: 'vi',
+      }).catch(err => logger.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
+    }
+
     return feedback;
   },
 
@@ -320,13 +332,7 @@ export const feedbackService = {
       { $set: { isCorrect: updatedFeedback.isCorrect } }
     );
 
-    const user = updatedFeedback.user_id as any;
-    if (user && user.email) {
-      const subject = 'Cảm ơn bạn đã đóng góp cho DogBreedID!';
-      const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${updatedFeedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
-
-      emailService.sendEmail(user.email, subject, text).catch(err => logger.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
-    }
+    // Thank you email is now sent on submit, not on approve
 
     return updatedFeedback;
   },

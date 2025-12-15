@@ -207,6 +207,20 @@ export class ApiClient {
     return this.requestWithFormData<any>("/bff/post", formData, true);
   }
 
+  // Create FOUND post from QR scan (no auth or photo required)
+  async createQrFoundPost(data: {
+    dog_id: string;
+    title?: string;
+    content?: string;
+    location: { lat: number; lng: number; address: string };
+    contact_info: { name: string; phone?: string; email?: string };
+  }) {
+    return this.request<any>("/bff/post/qr-found", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, false); // No auth required
+  }
+
   async getCommunityPosts(params: {
     type?: "LOST" | "FOUND";
     breed?: string;

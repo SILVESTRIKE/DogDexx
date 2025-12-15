@@ -905,6 +905,14 @@ export default {
     verifySuccess: "Thank you! Information has been sent to the owner.",
     back: "Back",
   },
+  lostFound: {
+    loading: "Loading more...",
+    noMore: "You've seen all posts",
+    noResults: "No results found",
+    noResultsHint: "No posts match your current filters. Try changing keywords or filters.",
+    clearFilters: "Clear filters",
+    share: "Share",
+  },
   report: {
     postTitle: "URGENT: Lost Dog {name} - Breed {breed}",
     postContent: "Lost dog {name} last seen at {address}. \nAttributes: {color}, {size}. \nBreed: {breed}. \nPlease help!",

@@ -313,7 +313,7 @@ export const userService = {
     return (await _enrich(updatedUser))!;
   },
 
-  async sendOtp(email: string): Promise<{ message: string }> {
+  async sendOtp(email: string, language: 'vi' | 'en' = 'vi'): Promise<{ message: string }> {
     logger.info(`[USER_SERVICE] Bắt đầu sendOtp cho email: ${email}`);
 
     const user = await UserModel.findOne({ email });
@@ -345,58 +345,12 @@ export const userService = {
     logger.info(`[USER_SERVICE] sendOtp: Đã lưu OTP. Chuẩn bị gửi email...`);
 
     try {
-      const userName = user.firstName || user.username || 'bạn';
-      const emailContent = `
-        <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-          <!-- Header -->
-          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 32px 24px; text-align: center;">
-            <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">🐕 DogDex</h1>
-            <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Ứng dụng nhận diện giống chó thông minh</p>
-          </div>
-          
-          <!-- Body -->
-          <div style="padding: 32px 24px;">
-            <h2 style="color: #1a1a2e; margin: 0 0 16px 0; font-size: 20px;">Xin chào ${userName} 👋</h2>
-            
-            <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 24px 0;">
-              Cảm ơn bạn đã đăng ký tài khoản trên <strong>DogDex</strong>! 
-              Để hoàn tất quá trình đăng ký, vui lòng sử dụng mã xác thực bên dưới:
-            </p>
-            
-            <!-- OTP Box -->
-            <div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border: 2px dashed #667eea; border-radius: 12px; padding: 24px; text-align: center; margin: 24px 0;">
-              <p style="color: #6c757d; margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Mã xác thực của bạn</p>
-              <div style="font-size: 36px; font-weight: 700; color: #667eea; letter-spacing: 8px; font-family: 'Courier New', monospace;">${otpCode}</div>
-            </div>
-            
-            <p style="color: #6c757d; font-size: 13px; line-height: 1.5; margin: 0 0 16px 0;">
-              ⏱️ Mã này sẽ hết hạn sau <strong>10 phút</strong>.<br/>
-              🔒 Vui lòng không chia sẻ mã này với bất kỳ ai.
-            </p>
-            
-            <hr style="border: none; border-top: 1px solid #e9ecef; margin: 24px 0;"/>
-            
-            <p style="color: #868e96; font-size: 12px; line-height: 1.5; margin: 0;">
-              Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email này. 
-              Tài khoản của bạn sẽ không bị ảnh hưởng.
-            </p>
-          </div>
-          
-          <!-- Footer -->
-          <div style="background: #f8f9fa; padding: 20px 24px; text-align: center; border-top: 1px solid #e9ecef;">
-            <p style="color: #868e96; font-size: 11px; margin: 0;">
-              © ${new Date().getFullYear()} DogDex. Ứng dụng nhận diện giống chó thông minh bằng AI.<br/>
-              Email này được gửi tự động, vui lòng không trả lời trực tiếp.
-            </p>
-          </div>
-        </div>
-      `;
-
-      await emailService.sendEmail(
-        user.email,
-        "🔐 Xác thực tài khoản DogDex - Mã OTP của bạn",
-        emailContent
-      );
+      await emailService.sendVerificationOtp({
+        to: user.email,
+        otp: otpCode,
+        userName: user.firstName || user.username || (language === 'vi' ? 'bạn' : 'there'),
+        language,
+      });
       logger.info(`[USER_SERVICE] sendOtp: Gửi email thành công đến ${email}.`);
       return { message: "OTP đã được gửi đến email của bạn" };
     } catch (error) {

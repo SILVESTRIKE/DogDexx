@@ -61,7 +61,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
 
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [view, setView] = useState<"form" | "otp" | "forgot" | "reset">("form")
+  const [view, setView] = useState<"form" | "otp" | "forgot" | "reset-otp" | "reset-password">("form")
   const [message, setMessage] = useState("")
 
   // --- HANDLER ---
@@ -170,7 +170,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       const { apiClient } = await import("@/lib/api-client");
       await apiClient.forgotPassword(forgotEmail);
       toast.success("Đã gửi mã OTP!", { description: "Vui lòng kiểm tra email của bạn." });
-      setView("reset");
+      setView("reset-otp");
     } catch (err: any) {
       toast.error("Lỗi", { description: err.message || "Không thể gửi mã OTP" });
       setError(err.message);
@@ -439,18 +439,26 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </form>
         )}
 
-        {view === 'reset' && (
-          <form id="reset-form" onSubmit={handleResetPassword} className="space-y-4 py-4">
+        {view === 'reset-otp' && (
+          <form id="reset-otp-form" onSubmit={(e) => {
+            e.preventDefault();
+            if (otp.length !== 6) {
+              setError("Vui lòng nhập đủ 6 số OTP");
+              return;
+            }
+            setError("");
+            setView("reset-password");
+          }} className="space-y-4 py-4">
             <div className="text-center space-y-2 mb-4">
-              <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
-                <KeyRound className="h-6 w-6 text-green-600" />
+              <div className="mx-auto w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center">
+                <KeyRound className="h-6 w-6 text-blue-600" />
               </div>
-              <h3 className="font-semibold">Đặt lại mật khẩu</h3>
+              <h3 className="font-semibold">Xác thực mã OTP</h3>
               <p className="text-sm text-muted-foreground">Mã OTP đã được gửi đến <span className="font-medium">{forgotEmail}</span></p>
             </div>
 
             <div className="space-y-2">
-              <Label>Mã OTP (6 số)</Label>
+              <Label>Nhập mã OTP (6 số)</Label>
               <div className="flex justify-center">
                 <InputOTP maxLength={6} value={otp} onChange={setOtp}>
                   <InputOTPGroup>
@@ -459,6 +467,30 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   </InputOTPGroup>
                 </InputOTP>
               </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={otp.length !== 6}>
+              Xác thực OTP
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => { setView('forgot'); setOtp(''); setError(''); }}
+              className="w-full text-sm text-muted-foreground hover:text-primary flex items-center justify-center gap-1"
+            >
+              <ArrowLeft className="h-3 w-3" /> Gửi lại mã
+            </button>
+          </form>
+        )}
+
+        {view === 'reset-password' && (
+          <form id="reset-form" onSubmit={handleResetPassword} className="space-y-4 py-4">
+            <div className="text-center space-y-2 mb-4">
+              <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
+                <Lock className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold">Đặt mật khẩu mới</h3>
+              <p className="text-sm text-muted-foreground">Nhập mật khẩu mới cho tài khoản của bạn</p>
             </div>
 
             <div className="space-y-2">
@@ -496,40 +528,46 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading || otp.length !== 6}>
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
             </Button>
 
             <button
               type="button"
-              onClick={() => { setView('forgot'); setOtp(''); setError(''); }}
+              onClick={() => { setView('reset-otp'); setError(''); }}
               className="w-full text-sm text-muted-foreground hover:text-primary flex items-center justify-center gap-1"
             >
-              <ArrowLeft className="h-3 w-3" /> Gửi lại mã
+              <ArrowLeft className="h-3 w-3" /> Quay lại nhập OTP
             </button>
           </form>
         )}
 
         {error && <p className="text-sm text-red-500 text-center mt-2">{error}</p>}
 
-        <Button
-          type="submit"
-          form={view === 'form' ? 'auth-form' : 'otp-form'}
-          className="w-full mt-4"
-          disabled={isLoading}
-        >
-          {isLoading ? "Đang xử lý..." :
-            view === "otp" ? "Xác thực OTP" :
-              mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
-        </Button>
+        {/* Only show main submit button for form and otp views */}
+        {(view === 'form' || view === 'otp') && (
+          <Button
+            type="submit"
+            form={view === 'form' ? 'auth-form' : 'otp-form'}
+            className="w-full mt-4"
+            disabled={isLoading}
+          >
+            {isLoading ? "Đang xử lý..." :
+              view === "otp" ? "Xác thực OTP" :
+                mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
+          </Button>
+        )}
 
-        <div className="text-center text-sm mt-4">
-          {mode === "login" ? (
-            <span>{t("auth.noAccount")} <button type="button" onClick={() => onSwitchMode("register")} className="text-primary hover:underline font-medium">{t("auth.registerNow")}</button></span>
-          ) : (
-            <span>{t("auth.hasAccount")} <button type="button" onClick={() => onSwitchMode("login")} className="text-primary hover:underline font-medium">{t("auth.loginNow")}</button></span>
-          )}
-        </div>
+        {/* Only show login/register switch for main form view */}
+        {view === 'form' && (
+          <div className="text-center text-sm mt-4">
+            {mode === "login" ? (
+              <span>{t("auth.noAccount")} <button type="button" onClick={() => onSwitchMode("register")} className="text-primary hover:underline font-medium">{t("auth.registerNow")}</button></span>
+            ) : (
+              <span>{t("auth.hasAccount")} <button type="button" onClick={() => onSwitchMode("login")} className="text-primary hover:underline font-medium">{t("auth.loginNow")}</button></span>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )

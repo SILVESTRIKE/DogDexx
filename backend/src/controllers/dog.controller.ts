@@ -248,7 +248,7 @@ export const getPublicDogInfo = async (req: Request, res: Response, next: NextFu
 
         // ALERT: If dog is lost, send scan notification to owner
         if (dog.isLost && owner && owner.email) {
-            sendQrScanAlert(req, dog, owner).catch(err => {
+            sendQrScanAlertEmail(req, dog, owner).catch(err => {
                 console.error('[QR_ALERT] Failed to send scan alert:', err);
             });
         }
@@ -274,7 +274,7 @@ export const getPublicDogInfo = async (req: Request, res: Response, next: NextFu
 const QR_ALERT_COOLDOWN_SECONDS = 30 * 60; // 30 minutes
 
 // Helper function to send QR scan alert email
-async function sendQrScanAlert(req: Request, dog: any, owner: any) {
+async function sendQrScanAlertEmail(req: Request, dog: any, owner: any) {
     const dogId = dog._id.toString();
     const cacheKey = `qr_alert:${dogId}`;
 
@@ -287,7 +287,6 @@ async function sendQrScanAlert(req: Request, dog: any, owner: any) {
                 console.log(`[QR_ALERT] Skipped (cooldown) for dog ${dogId}`);
                 return;
             }
-            // Set key with TTL (auto-expires after 30 min)
             await redisClient.setEx(cacheKey, QR_ALERT_COOLDOWN_SECONDS, Date.now().toString());
         }
     } catch (redisError) {
@@ -295,10 +294,7 @@ async function sendQrScanAlert(req: Request, dog: any, owner: any) {
     }
 
     // Get scanner IP
-    const scannerIp = req.headers['x-forwarded-for'] as string ||
-        req.headers['x-real-ip'] as string ||
-        req.socket.remoteAddress ||
-        'Không xác định';
+    const scannerIp = req.headers['x-forwarded-for'] as string || req.headers['x-real-ip'] as string || req.socket.remoteAddress || 'Unknown';
     const ip = Array.isArray(scannerIp) ? scannerIp[0] : scannerIp.split(',')[0].trim();
 
     // Get location from IP using free API
@@ -306,82 +302,27 @@ async function sendQrScanAlert(req: Request, dog: any, owner: any) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        const geoResponse = await fetch(
-            `http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon&lang=vi`,
-            { signal: controller.signal }
-        );
+        const geoResponse = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city,lat,lon&lang=vi`, { signal: controller.signal });
         clearTimeout(timeoutId);
-
         const geoData = await geoResponse.json() as any;
-
         if (geoData.status === 'success') {
             locationInfo = `${geoData.city || ''}, ${geoData.regionName || ''}, ${geoData.country || ''}`.replace(/^, |, $/g, '');
-            if (geoData.lat && geoData.lon) {
-                locationInfo += ` (${geoData.lat}, ${geoData.lon})`;
-            }
+            if (geoData.lat && geoData.lon) locationInfo += ` (${geoData.lat}, ${geoData.lon})`;
         }
     } catch (geoError) {
         console.warn('[QR_ALERT] Failed to get location from IP:', geoError);
     }
 
-    const scanTime = new Date().toLocaleString('vi-VN', {
-        timeZone: 'Asia/Ho_Chi_Minh',
-        dateStyle: 'full',
-        timeStyle: 'medium'
+    const scanTime = new Date().toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', dateStyle: 'full', timeStyle: 'medium' });
+
+    await emailService.sendQrScanAlert({
+        to: owner.email,
+        ownerName: owner.firstName || owner.username,
+        dogName: dog.name,
+        locationInfo,
+        scanTime,
+        language: 'vi',
     });
-
-    const emailContent = `
-        <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-            <!-- Header -->
-            <div style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); padding: 24px; text-align: center;">
-                <h1 style="color: #ffffff; margin: 0; font-size: 24px;">📍 Có người vừa quét mã QR chó của bạn!</h1>
-            </div>
-            
-            <!-- Body -->
-            <div style="padding: 24px;">
-                <p style="color: #374151; margin: 0 0 16px 0;">
-                    Xin chào <strong>${owner.firstName || owner.username}</strong>,
-                </p>
-                
-                <p style="color: #374151; margin: 0 0 24px 0;">
-                    Ai đó vừa quét mã QR trên vòng cổ của bé <strong>${dog.name}</strong>! 
-                    Đây có thể là dấu hiệu cho thấy bé đang ở gần đó.
-                </p>
-                
-                <!-- Location Card -->
-                <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 20px; margin: 0 0 24px 0;">
-                    <p style="margin: 0 0 12px 0; color: #92400e; font-weight: 600; font-size: 16px;">📍 Vị trí ước tính:</p>
-                    <p style="margin: 0 0 8px 0; color: #78350f; font-size: 18px; font-weight: bold;">${locationInfo}</p>
-                    <p style="margin: 0; color: #92400e; font-size: 13px;">⏰ Thời gian: ${scanTime}</p>
-                </div>
-                
-                <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; margin-bottom: 16px;">
-                    <p style="margin: 0; color: #6b7280; font-size: 13px;">
-                        <strong>Lưu ý:</strong> Vị trí trên được ước tính từ địa chỉ IP của người quét. 
-                        Độ chính xác có thể dao động từ vài trăm mét đến vài km tùy thuộc vào mạng của họ.
-                    </p>
-                </div>
-                
-                <p style="color: #374151; margin: 0;">
-                    Nếu bạn đang ở gần khu vực đó, hãy thử đến tìm bé nhé! 🏃‍♂️🐕
-                </p>
-            </div>
-            
-            <!-- Footer -->
-            <div style="background: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
-                <p style="color: #9ca3af; font-size: 11px; margin: 0;">
-                    © ${new Date().getFullYear()} DogDex - Giúp bạn tìm lại thú cưng 🐕💚
-                </p>
-            </div>
-        </div>
-    `;
-
-    await emailService.sendEmail(
-        owner.email,
-        `📍 [DogDex] Có người vừa quét mã QR của ${dog.name}!`,
-        emailContent
-    );
 
     console.log(`[QR_ALERT] Sent scan alert for dog ${dog._id} to ${owner.email} (IP: ${ip})`);
 }
@@ -402,22 +343,17 @@ export const contactOwner = async (req: Request, res: Response, next: NextFuncti
             return;
         }
 
-        // Send Email
-        const locationStr = location ? `<p>Vị trí: <a href="https://maps.google.com/?q=${location.lat},${location.lng}">${location.address || 'Xem bản đồ'}</a></p>` : '';
-        const emailContent = `
-            <h2>Thông báo khẩn cấp từ DogDex</h2>
-            <p>Xin chào ${owner.firstName || 'bạn'},</p>
-            <p>Có người vừa tìm thấy chó của bạn (ID: ${dogId}) và gửi tin nhắn:</p>
-            <hr/>
-            <p><strong>Người tìm thấy:</strong> ${finderName}</p>
-            <p><strong>SĐT liên hệ:</strong> ${finderPhone}</p>
-            <p><strong>Lời nhắn:</strong> ${message}</p>
-            ${locationStr}
-            <hr/>
-            <p>Vui lòng liên hệ lại với người tìm thấy ngay nhé!</p>
-        `;
-
-        await emailService.sendEmail(owner.email, "⚠️ [DogDex] Có người tìm thấy chó của bạn!", emailContent);
+        // Send Email using new consolidated email service
+        await emailService.sendDogFoundNotification({
+            to: owner.email,
+            ownerName: owner.firstName || 'bạn',
+            dogId: dogId,
+            finderName: finderName,
+            finderPhone: finderPhone,
+            message: message,
+            location: location,
+            language: 'vi',
+        });
 
         res.status(200).send({ message: "Email sent to owner successfully" });
     } catch (err) {
@@ -489,102 +425,50 @@ export const reportFoundWithVerification = async (req: Request, res: Response, n
 
         await communityPost.save();
 
-        // 5. Notify Owner via Email
+        // 5. Notify Owner via Email using consolidated email service
         const owner = await UserModel.findById(dog.owner_id);
         if (owner) {
-            const evidenceHtml = evidenceUrl ? `<br/><img src="${evidenceUrl}" style="max-width:300px;border-radius:8px;"/><br/>` : '';
-            const emailContent = `
-                <div style="background:#f0fdf4; padding: 20px; border-radius: 10px; border: 2px solid #22c55e;">
-                    <h2 style="color:#166534;">✅ TIN MỪNG: Chó của bạn đã được tìm thấy!</h2>
-                    <p>Hệ thống vừa nhận được báo cáo xác thực từ người tìm thấy.</p>
-                    <hr/>
-                    <p><strong>Người báo tin:</strong> ${parsedContact.name}</p>
-                    <p><strong>Số điện thoại:</strong> <a href="tel:${parsedContact.phone}" style="font-size:1.2em; font-weight:bold;">${parsedContact.phone}</a></p>
-                    <p><strong>Email:</strong> ${parsedContact.email || 'Không có'}</p>
-                    <p><strong>Lời nhắn:</strong> ${parsedContact.message}</p>
-                    <p><strong>Phương thức xác thực:</strong> ${verificationType === 'qr' ? 'Quét mã QR (Chính xác 100%)' : 'Chụp ảnh hiện trường'}</p>
-                    ${evidenceHtml}
-                    <hr/>
-                    <p>Hãy liên hệ ngay để đón bé về nhà nhé!</p>
-                </div>
-            `;
-            await emailService.sendEmail(owner.email, "✅ [DogDex] Đã tìm thấy chó của bạn!", emailContent);
+            await emailService.sendDogFoundNotification({
+                to: owner.email,
+                ownerName: owner.firstName || 'bạn',
+                dogId: dogId,
+                finderName: parsedContact.name,
+                finderPhone: parsedContact.phone,
+                finderEmail: parsedContact.email,
+                message: parsedContact.message,
+                location: parsedLocation,
+                verificationType: verificationType,
+                evidenceUrl: evidenceUrl,
+                language: 'vi',
+            });
         }
 
         // 6. Send Thank You Email to Finder & Reward Tokens if they have an account
         if (parsedContact.email) {
-            // Check if finder has a DogDex account
             const finderAccount = await UserModel.findOne({
                 email: parsedContact.email.toLowerCase().trim(),
                 isDeleted: false
             });
 
-            let rewardMessage = '';
             if (finderAccount) {
                 // Reward 10 tokens
                 await UserModel.updateOne(
                     { _id: finderAccount._id },
                     { $inc: { remainingTokens: 10 } }
                 );
-                rewardMessage = `
-                    <div style="background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 2px solid #f59e0b; border-radius: 12px; padding: 16px; margin: 16px 0; text-align: center;">
-                        <p style="font-size: 24px; margin: 0;">🎁</p>
-                        <p style="color: #92400e; font-weight: bold; margin: 8px 0 4px 0;">PHẦN THƯỞNG ĐẶC BIỆT!</p>
-                        <p style="color: #78350f; margin: 0;">Bạn đã nhận được <strong style="font-size: 1.2em;">+10 tokens</strong> vào tài khoản DogDex của mình!</p>
-                    </div>
-                `;
             }
 
-            const thankYouEmail = `
-                <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
-                    <!-- Header -->
-                    <div style="background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%); padding: 32px 24px; text-align: center;">
-                        <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 700;">🐕 DogDex</h1>
-                        <p style="color: rgba(255,255,255,0.9); margin: 8px 0 0 0; font-size: 14px;">Cảm ơn bạn đã giúp đỡ!</p>
-                    </div>
-                    
-                    <!-- Body -->
-                    <div style="padding: 32px 24px;">
-                        <h2 style="color: #166534; margin: 0 0 16px 0; font-size: 22px;">💚 Cảm ơn bạn, ${parsedContact.name || 'người bạn tốt bụng'}!</h2>
-                        
-                        <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 16px 0;">
-                            Chúng tôi vô cùng biết ơn bạn đã dành thời gian báo cáo việc tìm thấy bé <strong>${dog.name}</strong>! 
-                            Nhờ có bạn, một chú chó sẽ sớm được đoàn tụ với gia đình của mình. 🏠
-                        </p>
-                        
-                        <p style="color: #4a4a4a; line-height: 1.6; margin: 0 0 24px 0;">
-                            Hành động nhỏ của bạn mang lại niềm vui lớn cho cả người và thú cưng. 
-                            Cảm ơn bạn đã là một phần của cộng đồng yêu thương động vật! 🐾
-                        </p>
-                        
-                        ${rewardMessage}
-                        
-                        <div style="background: #f0fdf4; border-left: 4px solid #22c55e; padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 16px 0;">
-                            <p style="color: #166534; margin: 0; font-size: 14px;">
-                                <strong>Thông tin báo cáo của bạn:</strong><br/>
-                                🐕 Chó: ${dog.name} (${dog.breed})<br/>
-                                📍 Vị trí: ${parsedLocation.address || 'Không xác định'}<br/>
-                                ✅ Xác thực: ${verificationType === 'qr' ? 'Mã QR' : 'AI Camera'}
-                            </p>
-                        </div>
-                    </div>
-                    
-                    <!-- Footer -->
-                    <div style="background: #f8f9fa; padding: 20px 24px; text-align: center; border-top: 1px solid #e9ecef;">
-                        <p style="color: #868e96; font-size: 11px; margin: 0;">
-                            © ${new Date().getFullYear()} DogDex. Cùng nhau kết nối yêu thương. 🐕💚<br/>
-                            ${finderAccount ? '<a href="https://dogdex.vn" style="color: #22c55e;">Đăng nhập để sử dụng tokens của bạn!</a>' : '<a href="https://dogdex.vn" style="color: #22c55e;">Đăng ký DogDex để nhận thưởng cho lần sau!</a>'}
-                        </p>
-                    </div>
-                </div>
-            `;
-
             try {
-                await emailService.sendEmail(
-                    parsedContact.email,
-                    "💚 [DogDex] Cảm ơn bạn đã giúp tìm chó!" + (finderAccount ? " (+10 Tokens)" : ""),
-                    thankYouEmail
-                );
+                await emailService.sendThankFinderEmail({
+                    to: parsedContact.email,
+                    finderName: parsedContact.name || 'người bạn tốt bụng',
+                    dogName: dog.name,
+                    dogBreed: dog.breed,
+                    location: parsedLocation.address,
+                    verificationType: verificationType,
+                    hasAccount: !!finderAccount,
+                    language: 'vi',
+                });
             } catch (emailError) {
                 console.error("Failed to send thank you email to finder:", emailError);
             }

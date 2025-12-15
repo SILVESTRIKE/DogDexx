@@ -1,5 +1,6 @@
 import express from "express";
 import { authMiddleware } from "../middlewares/auth.middleware";
+import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { validate } from "../middlewares/validation.middleware";
 import { createPostSchema, updatePostSchema } from "../utils/validation";
 import {
@@ -10,7 +11,8 @@ import {
     deletePost,
     resolvePost,
     getRadar,
-    uploadPostImages
+    uploadPostImages,
+    createQrFoundPost
 } from "../controllers/bff_post.controller";
 
 const router = express.Router();
@@ -194,6 +196,55 @@ router.get("/:id", getPost);
  *         description: Chưa đăng nhập
  */
 router.post("/", authMiddleware, uploadPostImages, validate(createPostSchema, "body"), createPost);
+
+/**
+ * @swagger
+ * /bff/post/qr-found:
+ *   post:
+ *     summary: Tạo bài đăng FOUND từ quét QR (không cần đăng nhập, không cần ảnh)
+ *     tags: [BFF-Post]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - dog_id
+ *               - location
+ *               - contact_info
+ *             properties:
+ *               dog_id:
+ *                 type: string
+ *                 description: ID của chó từ mã QR
+ *               title:
+ *                 type: string
+ *               content:
+ *                 type: string
+ *               location:
+ *                 type: object
+ *                 properties:
+ *                   lat:
+ *                     type: number
+ *                   lng:
+ *                     type: number
+ *                   address:
+ *                     type: string
+ *               contact_info:
+ *                 type: object
+ *                 properties:
+ *                   name:
+ *                     type: string
+ *                   phone:
+ *                     type: string
+ *     responses:
+ *       201:
+ *         description: Tạo bài đăng thành công
+ *       400:
+ *         description: Dữ liệu không hợp lệ
+ */
+router.post("/qr-found", optionalAuthMiddleware, createQrFoundPost);
 
 /**
  * @swagger

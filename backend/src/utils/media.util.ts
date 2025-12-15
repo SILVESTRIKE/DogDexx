@@ -151,11 +151,10 @@ const transformPaths = (req: Request, data: any): any => {
         }
 
         // Kiểm tra xem path có phải là file trên Cloudinary không
-        // (Thêm check 'processed/' vào list nếu bạn lưu ảnh processed lên đó)
         if ((normalizedPath.startsWith('public/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('dataset/') || normalizedPath.startsWith('processed/') || normalizedPath.startsWith('dog-data-img/')) && CLOUD_NAME) {
 
             // Kiểm tra video dựa trên cả folder path VÀ extension của file
-            const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv', '.webp'];
+            const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv'];
             const isVideoFile = videoExtensions.some(ext => normalizedPath.toLowerCase().endsWith(ext));
             const resourceType = (normalizedPath.includes('/videos/') || isVideoFile) ? 'video' : 'image';
 

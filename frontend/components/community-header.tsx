@@ -109,15 +109,6 @@ export const CommunityHeader = memo(function CommunityHeader({
                                         {t("community.header.subtitle")}
                                     </p>
                                 </div>
-
-                                <Link href="/community/create">
-                                    <Button
-                                        size="lg"
-                                        className="rounded-xl font-bold shadow-lg shadow-primary/25 hover:scale-105 transition-transform bg-gradient-to-r from-primary to-purple-600 border-0 w-full md:w-auto m-2"
-                                    >
-                                        <Plus className="mr-2 h-5 w-5" /> {t("community.header.postButton")}
-                                    </Button>
-                                </Link>
                             </div>
 
                             {/* CONTROLS BAR */}

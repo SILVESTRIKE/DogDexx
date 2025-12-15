@@ -41,15 +41,6 @@ async function saveOtp(email: string, otp: string, type: OtpType) {
   await OtpModel.create({ email, otp, type, expiresAt });
 }
 
-async function sendOtpEmail(email: string, otp: string, subject: string, text: string) {
-  try {
-    await emailService.sendEmail(email, subject, text.replace("{{otp}}", otp));
-  } catch (error) {
-    logger.error("Lỗi gửi mail:", error);
-    throw new Error("Không thể gửi email");
-  }
-}
-
 export const authService = {
   async login(
     email: string,
@@ -171,7 +162,7 @@ export const authService = {
     return { accessToken, refreshToken: newRefreshToken };
   },
 
-  async resendVerificationOtp(email: string) {
+  async resendVerificationOtp(email: string, language: 'vi' | 'en' = 'vi') {
     const user = await userService.getByEmail(email);
     if (!user) {
       throw new ConflictError("Không tìm thấy người dùng với email này.");
@@ -183,12 +174,12 @@ export const authService = {
     const otp = crypto.randomInt(100000, 999999).toString();
     await saveOtp(email, otp, OtpType.EMAIL_VERIFICATION);
 
-    await sendOtpEmail(
-      email,
+    await emailService.sendVerificationOtp({
+      to: email,
       otp,
-      "Xác thực tài khoản của bạn",
-      `Mã OTP xác thực tài khoản của bạn là {{otp}}. Mã này sẽ hết hạn sau 10 phút.`
-    );
+      userName: user.firstName || user.username || (language === 'vi' ? 'bạn' : 'there'),
+      language,
+    });
 
     return { message: "OTP xác thực đã được gửi lại đến email của bạn." };
   },
@@ -213,26 +204,30 @@ export const authService = {
     return { message: "Xác thực email thành công." };
   },
 
-  async forgotPassword(email: string) {
-    const user = await userService.getByEmail(email);
+  async forgotPassword(email: string, language: 'vi' | 'en' = 'vi') {
+    const user = await userService.getByEmail(email).catch(() => null);
     if (!user) {
       return {
-        message: "Nếu tài khoản tồn tại, một mã OTP sẽ được gửi đến email của bạn.",
+        message: language === 'vi'
+          ? "Nếu tài khoản tồn tại, một mã OTP sẽ được gửi đến email của bạn."
+          : "If the account exists, an OTP will be sent to your email.",
       };
     }
 
     const otp = crypto.randomInt(100000, 999999).toString();
     await saveOtp(email, otp, OtpType.PASSWORD_RESET);
 
-    await sendOtpEmail(
-      email,
+    await emailService.sendPasswordResetOtp({
+      to: email,
       otp,
-      "Yêu cầu đặt lại mật khẩu",
-      `Mã OTP đặt lại mật khẩu của bạn là {{otp}}. Mã này sẽ hết hạn sau 10 phút.`
-    );
+      userName: user.firstName || user.username || (language === 'vi' ? 'bạn' : 'there'),
+      language,
+    });
 
     return {
-      message: "Nếu tài khoản tồn tại, một mã OTP sẽ được gửi đến email của bạn.",
+      message: language === 'vi'
+        ? "Nếu tài khoản tồn tại, một mã OTP sẽ được gửi đến email của bạn."
+        : "If the account exists, an OTP will be sent to your email.",
     };
   },
 
@@ -251,7 +246,9 @@ export const authService = {
       throw new ConflictError("Không tìm thấy người dùng.");
     }
 
-    userDoc.password = newPassword;
+    // Hash the new password before saving
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    userDoc.password = hashedPassword;
     await userDoc.save();
 
     await OtpModel.deleteMany({ email, type: OtpType.PASSWORD_RESET });
