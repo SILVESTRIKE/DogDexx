@@ -47,7 +47,8 @@ export default {
     pricing: "Upgrade",
     tokens: "Tokens",
     rank: "Rank",
-
+    myPets: "My Pets",
+    lostFound: "Lost & Found",
   },
   auth: {
     loginTitle: "Login",

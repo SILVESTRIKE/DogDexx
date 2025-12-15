@@ -8,7 +8,7 @@ import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus, ImageIcon, Video, Radio, MessageSquare } from "lucide-react"
+import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus, ImageIcon, Video, Radio, MessageSquare, PawPrint } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,9 +67,8 @@ export function Navbar() {
 
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
-    { href: "/my-dogs", label: "My Dogs", auth: true },
-    { href: "/community/lost-found", label: "Lost & Found", auth: false },
     { href: "/live", label: t("nav.live"), auth: false },
+    { href: "/community", label: t("nav.lostFound"), auth: false },
     { href: "/dogdex", label: t("nav.dogdex"), auth: false },
     { href: "/history", label: t("nav.history"), auth: true },
     { href: "/rank", label: t("nav.rank"), auth: false },
@@ -127,7 +126,7 @@ export function Navbar() {
             href={link.href}
             ref={(el) => { itemsRef.current[index] = el }}
             className={cn(
-              "relative transition-colors duration-300 px-5 py-2 rounded-full text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
+              "relative transition-colors duration-300 px-3 lg:px-5 py-2 rounded-full text-xs lg:text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
               active
                 ? "text-white"
                 : "text-muted-foreground hover:text-primary"
@@ -251,6 +250,7 @@ export function Navbar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer hover:text-primary focus:text-primary"><User className="h-4 w-4 mr-2" />{t("nav.profile")}</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/my-dogs" className="cursor-pointer hover:text-primary focus:text-primary"><PawPrint className="h-4 w-4 mr-2" />{t("nav.myPets")}</Link></DropdownMenuItem>
             {user.role === "admin" && (
               <React.Fragment key="admin-menu">
                 <DropdownMenuSeparator />
@@ -298,12 +298,12 @@ export function Navbar() {
             : "bg-transparent border-transparent"
         )}
       >
-        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between">
+        <div className="w-full px-4 lg:px-8 py-2 md:py-3 flex items-center justify-between">
 
           {/* ======================= */}
           {/* 1. LEFT SECTION (Logo + Tokens) */}
           {/* ======================= */}
-          <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1">
+          <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1 min-w-fit">
             <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group flex-shrink-0">
               <div className="relative">
                 <img
@@ -318,22 +318,25 @@ export function Navbar() {
                 />
               </div>
 
-              <span className="hidden lg:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
+              <span className="hidden xl:inline whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
                 {t("common.appName")}
               </span>
-              <span className="text-base sm:text-lg uppercase tracking-widest font-black lg:hidden text-primary mt-1">
+              <span className="text-base uppercase tracking-widest font-black xl:hidden text-primary mt-1">
                 DogDex
               </span>
             </Link>
+            <div className="hidden pr-6 lg:block">
+              {mounted && tokenDisplay}
+            </div>
           </div>
 
           {/* ======================= */}
           {/* 2. CENTER SECTION (Nav Pill) */}
           {/* ======================= */}
-          <div className="hidden md:flex justify-center flex-shrink-0">
+          <div className="hidden lg:flex justify-center flex-shrink">
             <div
               ref={navContainerRef}
-              className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
+              className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-10 lg:h-11 px-1 lg:px-1.5 shadow-sm max-w-full overflow-hidden"
             >
               {mounted ? (
                 <>
@@ -359,7 +362,7 @@ export function Navbar() {
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 md:flex-1">
 
             {/* Hiển thị Token trên Mobile (nếu muốn) hoặc ẩn đi. Ở đây tôi để ẩn trên Desktop (vì đã có ở bên trái), hiện trên Mobile để user check */}
-            <div className="md:hidden">
+            <div className="lg:hidden">
               {mounted && tokenDisplay}
             </div>
 
@@ -372,10 +375,6 @@ export function Navbar() {
                   <span className="sr-only">Settings</span>
                 </Button>
               </DropdownMenuTrigger>
-              {/* Token Display Moved Here */}
-              <div className="hidden md:block">
-                {mounted && tokenDisplay}
-              </div>
               <DropdownMenuContent align="end" className="w-56 bg-background/90 backdrop-blur-xl border-border shadow-lg">
                 <DropdownMenuLabel className="text-primary">{t('nav.light')}/{t('nav.dark')}</DropdownMenuLabel>
                 <div className="px-2 py-1"><ThemeToggle /></div>
@@ -385,7 +384,7 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="md:hidden">
+            <div className="lg:hidden">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10 rounded-full">

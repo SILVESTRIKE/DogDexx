@@ -624,7 +624,8 @@ export const predictionService = {
     const processedMediaPathForDb = await uploadBase64ToCloudinary(
       payload.processed_media_base64,
       'public/processed/images',
-      'image'
+      'image',
+      'private'
     );
 
     let directory_id: Types.ObjectId | undefined;

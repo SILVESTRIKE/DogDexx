@@ -47,6 +47,8 @@ export default {
     pricing: "Nâng cấp",
     tokens: "Tokens",
     rank: "Xếp hạng",
+    myPets: "Thú cưng",
+    lostFound: "Cộng đồng",
     sourceImage: "Upload ảnh",
     sourceVideo: "Upload video",
     sourceStream: "Live Capture",

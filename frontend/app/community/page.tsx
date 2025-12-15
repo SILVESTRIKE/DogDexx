@@ -144,27 +144,6 @@ export default function LostFoundPage() {
                                     setSortByDistance(true);
                                 },
                                 (error) => alert(t("community.header.location.permissionError"))
-                                // Wait, I moved the click logic into CommunityHeader in the previous step...
-                                // Let's check CommunityHeader props. It takes `onSortByDistanceChange` as () => void.
-                                // But in CommunityHeader implementation I wrote:
-                                // handleLocationClick calls onSortByDistanceChange() AND setUserLocation().
-                                // So I should pass a simple toggler or state setter?
-                                // In CommunityHeader I wrote:
-                                /*
-                                  const handleLocationClick = () => {
-                                    if (sortByDistance) {
-                                      onSortByDistanceChange(); // Turn off
-                                      setUserLocation(null);
-                                    } else {
-                                      ... navigator ...
-                                        setUserLocation(...);
-                                        onSortByDistanceChange(); // Turn on
-                                    }
-                                  };
-                                */
-                                // So onSortByDistanceChange should just toggle the boolean?
-                                // Yes.
-                                // However, in the page, I need to pass the state setters.
                             );
                         } else {
                             alert(t("community.header.location.unsupportedError"));
