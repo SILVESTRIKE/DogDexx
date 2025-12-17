@@ -23,10 +23,10 @@ const startServer = async () => {
   await connectDB();
 
   try {
-    console.log("--> Đang xóa queue cũ...");
+    logger.info("--> Đang xóa queue cũ...");
     await uploadQueue.drain();
     await uploadQueue.obliterate({ force: true });
-    console.log("--> Đã xóa sạch queue!");
+    logger.info("--> Đã xóa sạch queue!");
   } catch (error) {
     logger.error("[Queue] Clean up error:", error);
   }

@@ -145,7 +145,7 @@ export class BatchProcessor extends EventEmitter {
         formData,
         {
           headers: { ...formData.getHeaders() },
-          timeout: 300000, // 5 minutes timeout for video
+          timeout: 600000, // 10 minutes timeout for video
         }
       );
       logger.info(`[Timing] [BatchProcessor] [${item.id}] Received video response from AI Service. Duration: ${Date.now() - startTime}ms`);
@@ -216,7 +216,7 @@ export class BatchProcessor extends EventEmitter {
         formData,
         {
           headers: { ...formData.getHeaders() },
-          timeout: 60000,
+          timeout: 300000,
         }
       );
       logger.info(`[Timing] [BatchProcessor] Received response from AI Service. Status: ${response.status}. Duration: ${Date.now() - startTime}ms`);
