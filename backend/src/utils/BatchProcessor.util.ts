@@ -116,6 +116,23 @@ export class BatchProcessor extends EventEmitter {
     });
   }
 
+  private async makeRequestWithRetry(
+    fn: () => Promise<any>,
+    retries: number = 3,
+    delay: number = 2000
+  ): Promise<any> {
+    try {
+      return await fn();
+    } catch (error) {
+      if (retries > 0) {
+        logger.warn(`[BatchProcessor] Request failed, retrying... (${retries} attempts left). Error: ${error instanceof Error ? error.message : String(error)}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.makeRequestWithRetry(fn, retries - 1, delay * 2); // Backoff exponential
+      }
+      throw error;
+    }
+  }
+
   private async processVideo(item: BatchItem) {
     this.processingVideos++;
     this.progressMap.set(item.id, {
@@ -138,26 +155,29 @@ export class BatchProcessor extends EventEmitter {
         throw new Error("No file or buffer provided");
       }
 
-      const startTime = Date.now();
-      logger.info(`[Timing] [BatchProcessor] [${item.id}] Sending video request to AI Service.`);
-      const response = await axios.post(
-        `${AI_SERVICE_URL}/predict/video`,
-        formData,
-        {
-          headers: { ...formData.getHeaders() },
-          timeout: 600000, // 10 minutes timeout for video
-        }
-      );
-      logger.info(`[Timing] [BatchProcessor] [${item.id}] Received video response from AI Service. Duration: ${Date.now() - startTime}ms`);
+      await this.makeRequestWithRetry(async () => {
+        const startTime = Date.now();
+        logger.info(`[Timing] [BatchProcessor] [${item.id}] Sending video request to AI Service.`);
+        const response = await axios.post(
+          `${AI_SERVICE_URL}/predict/video`,
+          formData,
+          {
+            headers: { ...formData.getHeaders() },
+            timeout: 600000, // 10 minutes timeout for video
+          }
+        );
+        logger.info(`[Timing] [BatchProcessor] [${item.id}] Received video response from AI Service. Duration: ${Date.now() - startTime}ms`);
 
-      this.progressMap.set(item.id, {
-        status: 'completed',
-        progress: 100,
-        message: 'Xử lý video hoàn tất',
-        result: response.data
+        this.progressMap.set(item.id, {
+          status: 'completed',
+          progress: 100,
+          message: 'Xử lý video hoàn tất',
+          result: response.data
+        });
+
+        item.resolve(response.data);
       });
 
-      item.resolve(response.data);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định';
       this.progressMap.set(item.id, {
@@ -209,29 +229,32 @@ export class BatchProcessor extends EventEmitter {
         });
       });
 
-      const startTime = Date.now();
-      logger.info(`[Timing] [BatchProcessor] Sending request to ${AI_SERVICE_URL}/predict/images`);
-      const response = await axios.post(
-        `${AI_SERVICE_URL}/predict/images`,
-        formData,
-        {
-          headers: { ...formData.getHeaders() },
-          timeout: 300000,
-        }
-      );
-      logger.info(`[Timing] [BatchProcessor] Received response from AI Service. Status: ${response.status}. Duration: ${Date.now() - startTime}ms`);
+      await this.makeRequestWithRetry(async () => {
+        const startTime = Date.now();
+        logger.info(`[Timing] [BatchProcessor] Sending request to ${AI_SERVICE_URL}/predict/images`);
+        const response = await axios.post(
+          `${AI_SERVICE_URL}/predict/images`,
+          formData,
+          {
+            headers: { ...formData.getHeaders() },
+            timeout: 3000000,
+          }
+        );
+        logger.info(`[Timing] [BatchProcessor] Received response from AI Service. Status: ${response.status}. Duration: ${Date.now() - startTime}ms`);
 
-      const results = response.data.results;
-      currentBatch.forEach((item, index) => {
-        const result = results[index];
-        this.progressMap.set(item.id, {
-          status: 'completed',
-          progress: 100,
-          message: 'Xử lý hoàn tất',
-          result
+        const results = response.data.results;
+        currentBatch.forEach((item, index) => {
+          const result = results[index];
+          this.progressMap.set(item.id, {
+            status: 'completed',
+            progress: 100,
+            message: 'Xử lý hoàn tất',
+            result
+          });
+          item.resolve(result);
         });
-        item.resolve(result);
       });
+
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Lỗi không xác định';
       currentBatch.forEach(item => {
