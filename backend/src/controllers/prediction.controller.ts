@@ -4,6 +4,8 @@ import { predictionService } from "../services/prediction.service";
 import { BadRequestError } from "../errors";
 import { transformMediaURLs } from "../utils/media.util";
 import { logger } from "../utils/logger.util";
+import { redisClient } from "../utils/redis.util"; // Import Redis
+import { REDIS_KEYS } from "../constants/redis.constants";
 
 export const predictionController = {
   getPredictionStatus: async (req: Request, res: Response) => {
@@ -18,23 +20,48 @@ export const predictionController = {
     const file = req.file;
     const mediaType = (req as any).mediaType as "image" | "video";
 
-    // Handle single file prediction
-    if (!file) {
-      throw new BadRequestError("Không có file nào được cung cấp.");
+    // 0. LOCKING KEY (Rate Limit per User)
+    let lockKey = '';
+    if (userId) {
+      lockKey = `predict:lock:user:${userId}`;
+    } else {
+      // Fallback to IP if generic (though predict usually requires auth or guest token)
+      const ip = req.ip || req.socket.remoteAddress;
+      lockKey = `predict:lock:ip:${ip}`;
     }
 
-    // Call service - now returns immediate result { predictions, processed_base64 }
-    const result = await predictionService.makePrediction(userId, file, mediaType, req);
+    if (redisClient) {
+      // Try to acquire lock for 10 seconds (max prediction time assumption)
+      const acquired = await redisClient.set(lockKey, 'processing', { NX: true, EX: 10 });
+      if (!acquired) {
+        throw new BadRequestError("Hệ thống đang xử lý yêu cầu trước đó của bạn. Vui lòng đợi.");
+      }
+    }
 
-    const responseData = transformMediaURLs(req, result);
+    try {
+      // Handle single file prediction
+      if (!file) {
+        throw new BadRequestError("Không có file nào được cung cấp.");
+      }
 
-    const duration = Date.now() - startTime;
-    logger.info(`[PERF] CONTROLLER | Total: ${duration}ms`);
+      // Call service - now returns immediate result { predictions, processed_base64 }
+      const result = await predictionService.makePrediction(userId, file, mediaType, req);
 
-    res.status(200).json({
-      message: `Dự đoán ${mediaType} thành công.`,
-      data: responseData,
-    });
+      const responseData = transformMediaURLs(req, result);
+
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] CONTROLLER | Total: ${duration}ms`);
+
+      res.status(200).json({
+        message: `Dự đoán ${mediaType} thành công.`,
+        data: responseData,
+      });
+    } finally {
+      // ALWAYS Release Lock
+      if (redisClient) {
+        await redisClient.del(lockKey);
+      }
+    }
   },
 
   saveStreamResult: async (req: Request, res: Response) => {

@@ -24,10 +24,26 @@ Dự án được xây dựng với kiến trúc **Monorepo**, kết hợp **Bac
 | Hạng mục | Công nghệ |
 | :--- | :--- |
 | **Frontend** | Next.js 14, TypeScript, Tailwind CSS, Shadcn/ui, Zustand, React Query |
-| **Backend** | Node.js, Express, TypeScript, MongoDB (Mongoose), Redis |
-| **AI Service** | Python, PyTorch, YOLO (Object Detection), Flask/FastAPI |
+| **Backend** | Node.js, Express, TypeScript, MongoDB (Mongoose), Redis, BullMQ |
+| **AI Service** | Python, PyTorch, YOLO (Object Detection), FastAPI |
 | **DevOps** | Docker, Docker Compose, Nginx |
 | **3rd Party** | Google Gemini API, Cloudinary (Media Storage) |
+
+## ⚡ Tối ưu hiệu năng (Production-Ready)
+
+Hệ thống được tối ưu hóa toàn diện để đảm bảo khả năng chịu tải cao và bảo mật:
+
+| Tối ưu | Công nghệ | Mô tả |
+| :--- | :--- | :--- |
+| **Cache Stampede Prevention** | Redis Mutex | Chỉ 1 request tính toán khi cache miss, các request khác chờ |
+| **Rate Limiting** | Redis Store | Giới hạn request phân tán, persist qua restart |
+| **Video Processing Queue** | BullMQ (Redis) | Xử lý video bất đồng bộ, không mất job khi restart |
+| **AI Response Caching** | Redis (7 ngày) | Giảm chi phí gọi Google Gemini API |
+| **Real-time Updates** | WebSocket Push | Thay thế polling, giảm tải server |
+| **Security Headers** | Helmet | Bảo mật HTTP headers chuẩn OWASP |
+| **Compression** | Gzip | Giảm 70-80% dung lượng response |
+| **Auth Security** | HTTP-only Cookie | RefreshToken an toàn, chống XSS |
+| **Database Indexing** | MongoDB Indexes | Tối ưu query cho các trường hay truy vấn |
 
 ## 🏗️ Kiến trúc hệ thống
 
@@ -94,7 +110,7 @@ cp .env.example .env
 Chỉ cần một lệnh duy nhất để khởi chạy toàn bộ hệ thống:
 
 ```bash
-docker-compose up -d --build
+docker-compose up --build -d
 ```
 
 Sau khi khởi động thành công:
@@ -125,7 +141,7 @@ npm run dev
 ```bash
 cd ai_service
 pip install -r requirements.txt
-python app.py
+python main.py
 ```
 
 ## 📂 Cấu trúc thư mục

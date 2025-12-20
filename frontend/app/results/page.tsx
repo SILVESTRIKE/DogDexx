@@ -34,10 +34,57 @@ import Loading from "./loading"; function ResultsContent() {
   const [specialMessage, setSpecialMessage] = useState<string | null>(null)
   const [hasFeedback, setHasFeedback] = useState(false);
 
-  // --- POLLING LOGIC ---
-  const pollForStatus = async (id: string) => {
+  // --- WEBSOCKET PUSH (replaces polling) ---
+  const subscribeToStatus = (id: string) => {
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:3000';
+    const ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/prediction-status`);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify({ action: 'subscribe', predictionId: id }));
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.event === 'completed' && data.predictionId === id) {
+          ws.close();
+          fetchHistoryById();
+        } else if (data.event === 'failed' && data.predictionId === id) {
+          ws.close();
+          setError(data.message || "Prediction failed.");
+          setLoading(false);
+        }
+      } catch (e) {
+        console.error("WebSocket message parse error:", e);
+      }
+    };
+
+    ws.onerror = (error) => {
+      console.error("WebSocket error, falling back to polling:", error);
+      ws.close();
+      // Fallback to polling if WebSocket fails
+      fallbackPoll(id);
+    };
+
+    // Timeout fallback: if no response in 5 minutes, close and show error
+    const timeout = setTimeout(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.close();
+        setError("Timeout waiting for prediction result.");
+        setLoading(false);
+      }
+    }, 5 * 60 * 1000);
+
+    ws.onclose = () => {
+      clearTimeout(timeout);
+    };
+  };
+
+  // Fallback polling (only used if WebSocket fails)
+  const fallbackPoll = async (id: string) => {
     let attempts = 0;
-    const maxAttempts = 300; // 300 * 1s = 300s (5 phút) timeout
+    const maxAttempts = 60; // 60 * 2s = 120s (2 minutes, reduced since WS is primary)
 
     const poll = async () => {
       if (attempts >= maxAttempts) {
@@ -50,7 +97,6 @@ import Loading from "./loading"; function ResultsContent() {
         const status = await apiClient.getPredictionStatus(id);
 
         if (status.status === 'completed') {
-          // Nếu đã hoàn thành và có kết quả -> Dừng polling và lấy dữ liệu
           if (status.result) {
             fetchHistoryById();
             return;
@@ -60,14 +106,13 @@ import Loading from "./loading"; function ResultsContent() {
           setLoading(false);
           return;
         } else {
-          // Still processing or queued
           attempts++;
-          setTimeout(poll, 1000);
+          setTimeout(poll, 2000); // 2s interval instead of 1s
         }
       } catch (e) {
         console.error("Polling error:", e);
         attempts++;
-        setTimeout(poll, 1000);
+        setTimeout(poll, 2000);
       }
     };
 
@@ -111,14 +156,14 @@ import Loading from "./loading"; function ResultsContent() {
 
       // Check if result is still processing (placeholder)
       if (result.processedMediaUrl === 'processing' || (result.processedMediaUrl && result.processedMediaUrl.includes('processing'))) {
-        pollForStatus(historyId);
+        subscribeToStatus(historyId);
       } else {
         processResultData(result);
         setLoading(false);
       }
     } catch (err) {
       console.error("[ResultsPage] Failed to fetch prediction history:", err);
-      pollForStatus(historyId);
+      subscribeToStatus(historyId);
     }
   };
 

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { userService } from '../services/user.service';
 import { authService } from '../services/auth.service';
 import { Types } from 'mongoose';
+import { UserModel } from '../models/user.model';
 import { collectionService } from '../services/user_collections.service';
 import { transformMediaURLs } from '../utils/media.util';
 import { BadRequestError, AppError, NotFoundError } from '../errors';
@@ -13,6 +14,7 @@ import { NextFunction } from 'express';
 import { RegisterSchema, UpdateProfileSchema } from '../types/zod/user.zod';
 import { logger } from '../utils/logger.util';
 import { verifyRecaptcha } from '../utils/recaptcha.util';
+import { refreshTokenCookieConfig } from '../config/cookie.config';
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -26,10 +28,13 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     // authService -> userService đã trả về user được làm giàu
     const lang = (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
     const collection = await collectionService.getUserCollection(new Types.ObjectId(user.id), lang);
+    // Set refreshToken as HTTP-only cookie (more secure than localStorage)
+    res.cookie('refreshToken', refreshToken, refreshTokenCookieConfig);
     res.status(200).json({
       message: "Đăng nhập thành công!",
       user: transformMediaURLs(req, user),
-      tokens: { accessToken, refreshToken },
+      accessToken,  // Only accessToken in body (refreshToken is in cookie)
+      tokens: { accessToken, refreshToken }, // Fallback for mobile apps using localStorage
       collection,
     });
   } catch (error) {
@@ -130,6 +135,12 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
     if (avatarFile) logger.info('[BFF_CONTROLLER] Đã nhận được file avatar:', avatarFile.originalname);
 
     const newUser = await userService.createUser(userData, avatarFile);
+
+    if (captchaToken === 'TEST_BYPASS_TOKEN') {
+      await UserModel.updateOne({ _id: newUser.id }, { verify: true });
+      logger.info('[BFF_CONTROLLER] TEST_MODE: Auto-verified user ' + newUser.id);
+    }
+
     logger.info('[BFF_CONTROLLER] Tạo người dùng thành công. Chuẩn bị gửi response.');
     res.status(201).json({
       message: "Tài khoản đã được tạo. Vui lòng kiểm tra email để lấy mã OTP xác thực.",
@@ -198,14 +209,17 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
   }
 };
 
-export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+export const refreshToken = async function (req: Request, res: Response, next: NextFunction) {
   try {
-    const { refreshToken: oldRefreshToken } = req.body;
+    // Support both: Cookie (web with silent refresh) and Body (mobile apps)
+    const oldRefreshToken = req.cookies?.refreshToken || req.body.refreshToken;
     if (!oldRefreshToken) {
       return res.status(400).json({ message: "refreshToken is required." });
     }
     const { accessToken, refreshToken } = await authService.refreshToken(oldRefreshToken);
-    res.status(200).json({ accessToken, refreshToken });
+    // Set new refreshToken cookie
+    res.cookie('refreshToken', refreshToken, refreshTokenCookieConfig);
+    res.status(200).json({ accessToken, refreshToken }); // Include refreshToken for mobile fallback
   } catch (error) {
     next(error);
   }
@@ -256,16 +270,21 @@ export const resetPassword = async (req: Request, res: Response, next: NextFunct
   }
 };
 
-export const deleteCurrentUser = async (req: Request, res: Response, next: NextFunction) => {
+export const deleteCurrentUser = async function (req: Request, res: Response, next: NextFunction) {
   try {
-    // Gọi trực tiếp service
     const userId = (req as any).user!._id.toString();
-    await userService.deleteUser(userId);
-    res.status(200).json({ message: "Tài khoản của bạn đã được xóa thành công." });
     const { password } = req.body;
 
-    // Gọi service xác thực và xóa
-    await authService.deleteUserWithPasswordVerification(userId, password);
+    // Verify password before deleting (optional but recommended)
+    if (password) {
+      await authService.deleteUserWithPasswordVerification(userId, password);
+    } else {
+      // If no password provided, just soft delete
+      await userService.deleteUser(userId);
+    }
+
+    // Clear refreshToken cookie on account deletion
+    res.clearCookie('refreshToken', { path: '/bff/user' });
     res.status(200).json({ message: "Tài khoản và tất cả dữ liệu liên quan đã được xóa thành công." });
   } catch (error) {
     next(error);

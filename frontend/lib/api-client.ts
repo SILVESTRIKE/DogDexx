@@ -3,27 +3,39 @@ import { AdminApiClient } from "./admin-api-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-// Token management
+// Token management - Hybrid: In-Memory (preferred) + localStorage (fallback for mobile)
+let inMemoryAccessToken: string | null = null;
+
 export const TokenManager = {
   getAccessToken: (): string | null => {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem("accessToken");
+    // Prefer in-memory (more secure), fallback to localStorage (for mobile app reload)
+    return inMemoryAccessToken || localStorage.getItem("accessToken");
   },
 
   getRefreshToken: (): string | null => {
     if (typeof window === "undefined") return null;
+    // RefreshToken is now in HTTP-only cookie (handled by browser/backend)
+    // This fallback is for mobile apps that still use localStorage
     return localStorage.getItem("refreshToken");
   },
 
-  setTokens: (accessToken: string, refreshToken: string) => {
+  // For web: Only set accessToken in memory. RefreshToken is in cookie.
+  // For mobile fallback: Also store in localStorage.
+  setTokens: (accessToken: string, refreshToken?: string) => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = accessToken;
+    // Fallback: Store in localStorage for mobile apps that can't use cookies well
     localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
     TokenManager.clearGuestSession();
   },
 
   clearTokens: () => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = null;
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     TokenManager.setGuestSession();
@@ -31,11 +43,12 @@ export const TokenManager = {
 
   hasGuestSession: (): boolean => {
     if (typeof window === "undefined") return false;
-    return !localStorage.getItem("accessToken");
+    return !TokenManager.getAccessToken();
   },
 
   setGuestSession: () => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = null;
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.setItem("guestSession", "true");
@@ -352,32 +365,31 @@ export class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<boolean> {
+    // Try cookie first (web), then localStorage fallback (mobile)
     const refreshToken = TokenManager.getRefreshToken();
-    if (!refreshToken) return false;
 
     try {
       const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }), // Đảm bảo gửi đúng key 'refreshToken'
+        credentials: 'include', // Send HTTP-only cookie
+        body: refreshToken ? JSON.stringify({ refreshToken }) : undefined, // Mobile fallback
       });
 
       if (response.ok) {
         const data = await response.json();
-        // Backend trả về { accessToken, refreshToken }
-        if (data.accessToken && data.refreshToken) {
+        // Backend returns accessToken (refreshToken is set in cookie or body for mobile)
+        if (data.accessToken) {
           TokenManager.setTokens(data.accessToken, data.refreshToken);
           return true;
         }
       }
 
-      // Nếu server trả về 401/403 tại endpoint refresh -> Token hết hạn thật sự
-      // Lúc này mới xóa token ở Client
+      // If server returns 401/403 at refresh endpoint -> Token truly expired
       TokenManager.clearTokens();
       return false;
     } catch (error) {
-      // Nếu lỗi mạng (mất mạng), ĐỪNG xóa token ngay.
-      // Hãy để user thử lại lần sau.
+      // Network error - don't clear tokens, let user retry
       console.error("[ApiClient] refreshAccessToken error:", error);
       return false;
     } finally {

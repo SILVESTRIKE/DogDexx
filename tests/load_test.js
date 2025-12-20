@@ -1,56 +1,124 @@
-const fs = require('fs');
-const path = require('path');
+import http from 'k6/http';
+import { check, group, sleep } from 'k6';
+import { randomString } from 'https://jslib.k6.io/k6-utils/1.2.0/index.js';
+
+export const options = {
+    vus: 50, // 50 concurrent users
+    duration: '1m', // Run for 1 minute
+    thresholds: {
+        http_req_failed: ['rate<0.01'], // Error rate < 1%
+        http_req_duration: ['p(95)<500'], // 95% requests < 500ms
+    },
+};
 
 const BASE_URL = 'http://localhost:5000';
-const IMAGE_PATH = 'd:\\DoAnTotNghiep\\DogBreedID_v2\\backend\\public\\dataset\\approved\\shiba-inu\\14112025_4508a.png';
-const CONCURRENT_REQUESTS = 20;
 
-async function sendRequest(id) {
-    if (!fs.existsSync(IMAGE_PATH)) return { id, status: 'error', time: 0 };
+export function setup() {
+    // 1. Create a dedicated user for this test run
+    const randomName = `k6user_${randomString(8)}`;
+    const email = `${randomName}@example.com`;
+    const password = 'Password123!';
 
-    const fileBuffer = fs.readFileSync(IMAGE_PATH);
-    const blob = new Blob([fileBuffer], { type: 'image/png' });
-    const formData = new FormData();
-    formData.append('file', blob, 'load_test.png');
+    const payload = {
+        username: randomName,
+        email: email,
+        password: password,
+        captchaToken: 'TEST_BYPASS_TOKEN',
+    };
 
-    const start = performance.now();
-    try {
-        const res = await fetch(`${BASE_URL}/bff/predict/image`, {
-            method: 'POST',
-            body: formData
+    console.log(`[Setup] Creating user: ${email}`);
+
+    // Use JSON for registration (easier/safer than implicit form-data if no file)
+    const registerParams = {
+        headers: { 'Content-Type': 'application/json' }
+    };
+    const registerRes = http.post(`${BASE_URL}/bff/user/register`, JSON.stringify(payload), registerParams);
+
+    if (registerRes.status !== 201) {
+        console.error(`Register failed. Status: ${registerRes.status}`);
+        console.error('Body:', registerRes.body);
+        throw new Error(`Register failed with status ${registerRes.status}`);
+    }
+
+    // 2. Login to get token
+    const loginPayload = JSON.stringify({
+        email: email,
+        password: password,
+        captchaToken: 'TEST_BYPASS_TOKEN'
+    });
+
+    const loginParams = {
+        headers: { 'Content-Type': 'application/json' }
+    };
+
+    const loginRes = http.post(`${BASE_URL}/bff/user/login`, loginPayload, loginParams);
+
+    if (loginRes.status !== 200) {
+        throw new Error('Login failed');
+    }
+
+    const body = loginRes.json();
+    const accessToken = body.tokens ? body.tokens.accessToken : body.accessToken;
+
+    return { accessToken, password };
+}
+
+export default function (data) {
+    const params = {
+        headers: {
+            'Authorization': `Bearer ${data.accessToken}`,
+            'Content-Type': 'application/json',
+        },
+    };
+
+    group('My Achievements', () => {
+        const res = http.get(`${BASE_URL}/bff/collection/achievements`, params);
+        check(res, {
+            'achievements status 200': (r) => r.status === 200,
+            'achievements cache hit': (r) => r.json('stats') !== undefined,
         });
-        const end = performance.now();
-        return { id, status: res.status, time: end - start };
-    } catch (e) {
-        return { id, status: 'error', time: 0 };
-    }
+    });
+
+    group('Achievement Stats', () => {
+        const res = http.get(`${BASE_URL}/bff/collection/achievements/stats`, params);
+        check(res, {
+            'stats status 200': (r) => r.status === 200,
+            'stats valid': (r) => r.json('totalAchievements') !== undefined,
+        });
+    });
+
+    group('Leaderboard', () => {
+        // Test locking on heavy leaderboard query
+        const res = http.get(`${BASE_URL}/bff/public/leaderboard?scope=global&limit=10`, params);
+        check(res, {
+            'leaderboard status 200': (r) => r.status === 200,
+            'leaderboard is array': (r) => Array.isArray(r.json()),
+        });
+    });
+
+    sleep(1);
 }
 
-async function main() {
-    console.log(`Starting Load Test with ${CONCURRENT_REQUESTS} concurrent requests...`);
+export function teardown(data) {
+    // Cleanup: Delete the test user
+    console.log('[Teardown] Deleting test user...');
 
-    const promises = [];
-    const startTotal = performance.now();
+    // Note: deleteCurrentUser requires body with password in some implementations, 
+    // but the current controller might just delete by ID from token. 
+    // We send password just in case.
+    const params = {
+        headers: {
+            'Authorization': `Bearer ${data.accessToken}`,
+            'Content-Type': 'application/json',
+        },
+    };
+    const payload = JSON.stringify({ password: data.password });
 
-    for (let i = 0; i < CONCURRENT_REQUESTS; i++) {
-        promises.push(sendRequest(i + 1));
+    const res = http.del(`${BASE_URL}/bff/user/profile`, payload, params);
+
+    if (res.status === 200) {
+        console.log('[Teardown] User deleted successfully.');
+    } else {
+        console.warn('[Teardown] Failed to delete user. Status:', res.status, res.body);
     }
-
-    const results = await Promise.all(promises);
-    const endTotal = performance.now();
-    const totalTime = (endTotal - startTotal) / 1000; // seconds
-
-    const success = results.filter(r => r.status === 200).length;
-    const rateLimited = results.filter(r => r.status === 429).length;
-    const errors = results.filter(r => r.status !== 200 && r.status !== 429).length;
-
-    console.log('\n--- Load Test Results ---');
-    console.log(`Total Requests: ${CONCURRENT_REQUESTS}`);
-    console.log(`Success: ${success}`);
-    console.log(`Rate Limited (429): ${rateLimited}`);
-    console.log(`Errors: ${errors}`);
-    console.log(`Total Time: ${totalTime.toFixed(2)} s`);
-    console.log(`Throughput: ${(CONCURRENT_REQUESTS / totalTime).toFixed(2)} req/s`);
 }
-
-main();

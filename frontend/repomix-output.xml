@@ -32,7 +32,7 @@ The content is organized as follows:
 <notes>
 - Some files may have been excluded based on .gitignore rules and Repomix's configuration
 - Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
-- Files matching these patterns are excluded: .\**node_modules\**, **\i18n\
+- Files matching these patterns are excluded: **/node_modules/**, **/i18n/messages/vi.ts, **/i18n/messages/en.ts, **/.next/**, **/pnpm-lock.yaml, **/package-lock.json, **/repomix-output.xml, **/dist/**, **/build/**, **/public/**
 - Files matching patterns in .gitignore are excluded
 - Files matching default ignore patterns are excluded
 - Files are sorted by Git change count (files with more changes are at the bottom)
@@ -70,7 +70,7 @@ app/checkout/loading.tsx
 app/checkout/page.tsx
 app/community/[id]/page.tsx
 app/community/create/page.tsx
-app/community/lost-found/page.tsx
+app/community/page.tsx
 app/docs/page.tsx
 app/dogdex/loading.tsx
 app/dogdex/page.tsx
@@ -87,7 +87,6 @@ app/page.tsx
 app/pricing/page.tsx
 app/profile/loading.tsx
 app/profile/page.tsx
-app/public/[id]/page.tsx
 app/rank/page.tsx
 app/results/loading.tsx
 app/results/page.tsx
@@ -122,6 +121,7 @@ components/pokedex-header.tsx
 components/product_rec.tsx
 components/protected-route.tsx
 components/providers/recaptcha-provider.tsx
+components/ReportFoundForm.tsx
 components/ReportLostModal.tsx
 components/result-modal.tsx
 components/theme-provider.tsx
@@ -191,8 +191,6 @@ hooks/use-debounce.ts
 hooks/use-mobile.ts
 hooks/use-mounted.ts
 hooks/use-toast.ts
-i18n/messages/en.ts
-i18n/messages/vi.ts
 lib/admin-api-client.ts
 lib/admin-api.ts
 lib/analytics-context.tsx
@@ -208,10 +206,6 @@ lib/utils.ts
 next.config.mjs
 package.json
 postcss.config.mjs
-public/Dogs-Remastered-02.png
-public/Dogs-Remastered-10.png
-public/LogoWebBlack.png
-public/LogoWebWhite.png
 tsconfig.json
 </directory_structure>
 
@@ -6670,7 +6664,7 @@ export default function CreatePostPage() {
 }
 </file>
 
-<file path="app/community/lost-found/page.tsx">
+<file path="app/community/page.tsx">
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
@@ -6682,27 +6676,29 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { MessageCircle, Share2, Calendar, Filter, AlertTriangle, CheckCircle2, Cpu, MapPin } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
+import { useI18n } from "@/lib/i18n-context";
 import { useInView } from "react-intersection-observer";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { CommunityHeader } from "@/components/community-header";
 
-// Helper timeAgo
-
-// Helper timeAgo
-const timeAgo = (date: string | Date) => {
-    const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + " năm trước";
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + " tháng trước";
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + " ngày trước";
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + " giờ trước";
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + " phút trước";
-    return "Vừa xong";
+// Helper timeAgo - i18n version
+const useTimeAgo = () => {
+    const { t, locale } = useI18n();
+    return (date: string | Date) => {
+        const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " năm trước" : " years ago");
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " tháng trước" : " months ago");
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " ngày trước" : " days ago");
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " giờ trước" : " hours ago");
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + (locale === 'vi' ? " phút trước" : " minutes ago");
+        return locale === 'vi' ? "Vừa xong" : "Just now";
+    };
 };
 
 // Types giữ nguyên
@@ -6735,6 +6731,8 @@ interface Post {
 
 export default function LostFoundPage() {
     const { isAuthenticated } = useAuth();
+    const { t, locale } = useI18n();
+    const timeAgo = useTimeAgo();
     const [posts, setPosts] = useState<Post[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -6812,31 +6810,10 @@ export default function LostFoundPage() {
                                     });
                                     setSortByDistance(true);
                                 },
-                                (error) => alert("Cần cấp quyền truy cập vị trí để sử dụng tính năng này.") // Note: This alert could also be i18n'd if passed from header, but header handles the click logic now?
-                                // Wait, I moved the click logic into CommunityHeader in the previous step...
-                                // Let's check CommunityHeader props. It takes `onSortByDistanceChange` as () => void.
-                                // But in CommunityHeader implementation I wrote:
-                                // handleLocationClick calls onSortByDistanceChange() AND setUserLocation().
-                                // So I should pass a simple toggler or state setter?
-                                // In CommunityHeader I wrote:
-                                /*
-                                  const handleLocationClick = () => {
-                                    if (sortByDistance) {
-                                      onSortByDistanceChange(); // Turn off
-                                      setUserLocation(null);
-                                    } else {
-                                      ... navigator ...
-                                        setUserLocation(...);
-                                        onSortByDistanceChange(); // Turn on
-                                    }
-                                  };
-                                */
-                                // So onSortByDistanceChange should just toggle the boolean?
-                                // Yes.
-                                // However, in the page, I need to pass the state setters.
+                                (error) => alert(t("community.header.location.permissionError"))
                             );
                         } else {
-                            alert("Trình duyệt không hỗ trợ định vị.");
+                            alert(t("community.header.location.unsupportedError"));
                         }
                     }
                 }}
@@ -6853,7 +6830,7 @@ export default function LostFoundPage() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: index * 0.05 }}
                         >
-                            <PostCard post={post} />
+                            <PostCard post={post} timeAgo={timeAgo} />
                         </motion.div>
                     ))}
                 </div>
@@ -6863,13 +6840,13 @@ export default function LostFoundPage() {
                     {loading && (
                         <div className="flex items-center gap-2 text-primary font-medium">
                             <div className="h-5 w-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin"></div>
-                            Đang tải thêm tin...
+                            {t("lostFound.loading") || "Đang tải thêm tin..."}
                         </div>
                     )}
 
                     {!loading && !hasMore && posts.length > 0 && (
                         <div className="text-muted-foreground text-sm flex items-center gap-2 px-4 py-2 rounded-full bg-muted/50">
-                            <CheckCircle2 className="h-4 w-4" /> Bạn đã xem hết tin
+                            <CheckCircle2 className="h-4 w-4" /> {t("lostFound.noMore") || "Bạn đã xem hết tin"}
                         </div>
                     )}
 
@@ -6878,12 +6855,12 @@ export default function LostFoundPage() {
                             <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
                                 <Filter className="h-8 w-8 text-muted-foreground opacity-50" />
                             </div>
-                            <h3 className="text-lg font-bold mb-2">Không tìm thấy kết quả</h3>
+                            <h3 className="text-lg font-bold mb-2">{t("lostFound.noResults") || "Không tìm thấy kết quả"}</h3>
                             <p className="text-muted-foreground text-sm mb-4">
-                                Chưa có tin đăng nào phù hợp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc bộ lọc.
+                                {t("lostFound.noResultsHint") || "Chưa có tin đăng nào phù hợp với bộ lọc hiện tại. Hãy thử thay đổi từ khóa hoặc bộ lọc."}
                             </p>
                             <Button variant="outline" onClick={() => { setBreedFilter(""); setActiveTab("all"); setSortByDistance(false); }}>
-                                Xóa bộ lọc
+                                {t("lostFound.clearFilters") || "Xóa bộ lọc"}
                             </Button>
                         </div>
                     )}
@@ -6894,7 +6871,8 @@ export default function LostFoundPage() {
 }
 
 // --- REDESIGNED POST CARD ---
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, timeAgo }: { post: Post; timeAgo: (date: string | Date) => string }) {
+    const { t } = useI18n();
     const isLost = post.type === "LOST";
 
     return (
@@ -6909,7 +6887,7 @@ function PostCard({ post }: { post: Post }) {
                     />
                 ) : (
                     <div className="w-full h-full flex items-center justify-center bg-secondary/30">
-                        <span className="text-muted-foreground text-xs">No image</span>
+                        <span className="text-muted-foreground text-xs">{t("community.noImage")}</span>
                     </div>
                 )}
 
@@ -6923,7 +6901,7 @@ function PostCard({ post }: { post: Post }) {
                         !isLost && "bg-green-600 hover:bg-green-700"
                     )}>
                         {isLost ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CheckCircle2 className="w-3 h-3 mr-1" />}
-                        {isLost ? "THẤT LẠC" : "TÌM THẤY"}
+                        {isLost ? t("community.lostStatus") : t("community.foundStatus")}
                     </Badge>
                 </div>
 
@@ -6970,7 +6948,7 @@ function PostCard({ post }: { post: Post }) {
                 <div className="mt-auto pt-2">
                     <div className="inline-flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2.5 py-1.5 rounded-lg max-w-full">
                         <MapPin className="h-3 w-3 shrink-0 text-red-500" />
-                        <span className="truncate">{post.location?.address || "Không xác định"}</span>
+                        <span className="truncate">{post.location?.address || t("community.unknownLocation")}</span>
                     </div>
                 </div>
             </CardContent>
@@ -6980,7 +6958,7 @@ function PostCard({ post }: { post: Post }) {
                 <Link href={`/community/${post._id}`} className="w-full">
                     <Button variant="ghost" size="sm" className="w-full h-9 hover:bg-primary/10 hover:text-primary">
                         <MessageCircle className="h-4 w-4 mr-2" />
-                        Chi tiết
+                        {t("community.details")}
                     </Button>
                 </Link>
                 <Button
@@ -6995,13 +6973,13 @@ function PostCard({ post }: { post: Post }) {
                                 url: window.location.href + "/" + post._id
                             }).catch(console.error);
                         } else {
-                            // Fallback copy logic if needed
-                            alert("Link copied!");
+                            navigator.clipboard.writeText(window.location.href + "/" + post._id);
+                            alert(t("community.linkCopied"));
                         }
                     }}
                 >
                     <Share2 className="h-4 w-4 mr-2" />
-                    Chia sẻ
+                    {t("lostFound.share") || "Chia sẻ"}
                 </Button>
             </CardFooter>
         </Card>
@@ -9238,7 +9216,7 @@ function NewDogContent() {
         </div>
 
         <Card className="border-0 shadow-2xl bg-card/60 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border/50">
+          <CardHeader className="pt-2">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Dog className="h-5 w-5 text-primary" />
@@ -9249,10 +9227,8 @@ function NewDogContent() {
               </div>
             </div>
           </CardHeader>
-
-          <CardContent className="p-6 md:p-8">
+          <CardContent>
             <form onSubmit={handleSubmit} className="space-y-8">
-
               {/* AI SCANNER SECTION */}
               <div className="relative group">
                 <input
@@ -10190,7 +10166,7 @@ export default function Home() {
         </div>
 
         {/* CONTACT */}
-        <Card className="mt-20 md:mt-32 relative bg-gradient-to-b from-background/0 to-background/80 w-[100%] md:w-[50%] mx-auto px-10 border-0 shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
+        <Card className="my-12 md:my-24 relative bg-gradient-to-b from-background/0 to-background/80 w-[100%] md:w-[50%] mx-auto px-10 border-0 shadow-2xl rounded-3xl md:rounded-[2rem] overflow-hidden">
           <div className="max-w-xl mx-auto">
             <div className="text-center mb-8 md:mb-12">
               <h2 className="text-2xl md:text-4xl font-bold mb-4">
@@ -11233,376 +11209,6 @@ export default function ProfilePage() {
       <ProfileContent />
     </ProtectedRoute>
   );
-}
-</file>
-
-<file path="app/public/[id]/page.tsx">
-"use client";
-
-import { useEffect, useState, use } from "react";
-import { apiClient } from "@/lib/api-client";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { MapPin, MessageSquare, AlertTriangle, ShieldCheck, Calendar, Palette, User, Loader2, Mail, Home, Settings } from "lucide-react";
-import { useI18n } from "@/lib/i18n-context";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/lib/auth-context";
-
-import { MapLocationPicker } from "@/components/MapLocationPicker";
-
-interface PublicDogProfile {
-    id: string;
-    name: string;
-    breed: string;
-    gender: string;
-    avatarPath: string;
-    avatarUrl?: string;
-    birthday?: string;
-    attributes: {
-        color?: string;
-    };
-    isLost: boolean;
-    showSystemForm?: boolean;
-    ownerName?: string;
-    ownerEmail?: string;
-    ownerAvatar?: string;
-    owner_id?: string;
-}
-
-export default function PublicDogPage({ params }: { params: Promise<{ id: string }> }) {
-    const { id } = use(params);
-    const { t } = useI18n();
-    const { user } = useAuth();
-    const router = useRouter();
-    const [dog, setDog] = useState<PublicDogProfile | null>(null);
-    const [loading, setLoading] = useState(true);
-
-    // Check if current user is the owner
-    const isOwner = user && dog && (dog.owner_id === user.id || dog.ownerEmail === user.email);
-
-    // Contact Form State
-    const [contactForm, setContactForm] = useState({
-        finderName: "",
-        finderPhone: "",
-        message: "",
-        locationAddress: "",
-        lat: 0,
-        lng: 0
-    });
-    const [sending, setSending] = useState(false);
-
-    useEffect(() => {
-        async function fetchDog() {
-            try {
-                const data = await apiClient.getPublicDog(id);
-                setDog(data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setLoading(false);
-            }
-        }
-        fetchDog();
-    }, [id]);
-
-    async function handleContactSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!dog) return;
-
-        setSending(true);
-        try {
-            await apiClient.contactOwner({
-                dogId: dog.id,
-                finderName: contactForm.finderName,
-                finderPhone: contactForm.finderPhone,
-                message: contactForm.message,
-                location: {
-                    address: contactForm.locationAddress,
-                    lat: contactForm.lat,
-                    lng: contactForm.lng
-                }
-            });
-            toast.success(t("publicDog.messageSent"));
-            setContactForm({ finderName: "", finderPhone: "", message: "", locationAddress: "", lat: 0, lng: 0 });
-        } catch (error) {
-            toast.error(t("publicDog.sendFailed"));
-        } finally {
-            setSending(false);
-        }
-    }
-
-    if (loading) return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
-            <Loader2 className="animate-spin h-10 w-10 text-primary" />
-            <p className="text-muted-foreground text-sm font-medium">{t("common.loading") || "Loading Profile..."}</p>
-        </div>
-    );
-
-    if (!dog) return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-background text-muted-foreground gap-4">
-            <div className="bg-muted p-4 rounded-full"><ShieldCheck className="h-10 w-10 opacity-20" /></div>
-            <p className="font-medium">{t("publicDog.dogNotFound")}</p>
-        </div>
-    );
-
-    return (
-        <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 md:p-8">
-
-            {/* OWNER VIEW BANNER */}
-            {isOwner && (
-                <motion.div
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="w-full max-w-2xl mb-6 relative z-10"
-                >
-                    <div className="bg-gradient-to-r from-primary to-primary/80 text-white p-4 rounded-xl shadow-lg flex items-center gap-4 border border-primary/50">
-                        <div className="p-2 bg-white/20 rounded-full">
-                            <Home className="h-6 w-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-lg font-bold">{t("publicDog.thisIsYourDog") || "Đây là chó của bạn!"}</h2>
-                            <p className="text-sm text-white/80">{t("publicDog.ownerViewDescription") || "Bạn đang xem trang công khai của bé."}</p>
-                        </div>
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => router.push(`/my-dogs/${dog.id}`)}
-                            className="bg-white/20 hover:bg-white/30 text-white border-0"
-                        >
-                            <Settings className="h-4 w-4 mr-1" />
-                            {t("common.manage") || "Quản lý"}
-                        </Button>
-                    </div>
-                </motion.div>
-            )}
-
-            {/* LOST ALERT BANNER - Only show if NOT owner */}
-            {dog.isLost && !isOwner && (
-                <motion.div
-                    initial={{ y: -20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    className="w-full max-w-2xl mb-6 relative z-10"
-                >
-                    <div className="bg-red-500 text-white p-4 rounded-xl shadow-lg shadow-red-500/20 flex items-center gap-4 border border-red-400">
-                        <div className="p-2 bg-white/20 rounded-full animate-pulse">
-                            <AlertTriangle className="h-6 w-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                            <h2 className="text-lg font-bold uppercase tracking-wide">{t("publicDog.dogIsLost") || "MISSING DOG"}</h2>
-                            <p className="text-sm text-red-100 font-medium">{t("publicDog.helpContactOwner") || "Please help contact the owner immediately!"}</p>
-                        </div>
-                    </div>
-                </motion.div>
-            )}
-
-            <motion.div
-                initial={{ scale: 0.95, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-full max-w-2xl"
-            >
-                <Card className="overflow-hidden border-0 shadow-2xl bg-card rounded-3xl ring-1 ring-border/50">
-                    {/* Header Image */}
-                    <div className="h-96 md:h-[450px] bg-muted relative group overflow-hidden">
-                        {dog.avatarPath ? (
-                            <img
-                                src={dog.avatarUrl || dog.avatarPath}
-                                alt={dog.name}
-                                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                            />
-                        ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/30 text-muted-foreground">
-                                <span className="text-6xl mb-2">🐕</span>
-                                <span className="text-sm font-medium">No Image Available</span>
-                            </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
-
-                        <div className="absolute bottom-0 left-0 right-0 p-8 text-white">
-                            <h1 className="text-5xl font-extrabold mb-3 tracking-tight">{dog.name}</h1>
-                            <div className="flex items-center gap-2">
-                                <Badge className="bg-white/20 hover:bg-white/30 text-white border-0 backdrop-blur-md px-4 py-1.5 text-base font-medium">
-                                    {dog.breed}
-                                </Badge>
-                                <Badge variant={dog.gender === "male" ? "default" : "secondary"} className={cn("px-4 py-1.5 text-base border-0 font-medium", dog.gender === "male" ? "bg-blue-500/80 text-white" : "bg-pink-500/80 text-white")}>
-                                    {dog.gender === "male" ? "Male" : "Female"}
-                                </Badge>
-                            </div>
-                        </div>
-                    </div>
-
-                    <CardContent className="p-8 space-y-10">
-                        {/* Info Grid */}
-                        <div className="grid grid-cols-2 gap-6">
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-muted/30 border border-border/50">
-                                <div className="p-3 bg-background rounded-xl shadow-sm"><Palette className="w-5 h-5 text-primary" /></div>
-                                <div>
-                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1">{t("publicDog.color")}</p>
-                                    <p className="font-bold text-base">{dog.attributes.color || "N/A"}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-4 p-4 rounded-2xl bg-muted/30 border border-border/50">
-                                <div className="p-3 bg-background rounded-xl shadow-sm"><Calendar className="w-5 h-5 text-primary" /></div>
-                                <div>
-                                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1">{t("publicDog.birthday")}</p>
-                                    <p className="font-bold text-base">{dog.birthday ? new Date(dog.birthday).toLocaleDateString() : "Unknown"}</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Owner Info */}
-                        <div className="flex items-center gap-5 p-5 rounded-2xl bg-secondary/30 border border-secondary">
-                            <Avatar className="h-16 w-16 border-2 border-background shadow-md">
-                                <AvatarImage src={dog.ownerAvatar} />
-                                <AvatarFallback><User className="h-8 w-8" /></AvatarFallback>
-                            </Avatar>
-                            <div className="space-y-1">
-                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider">{t("publicDog.owner")}</p>
-                                <div className="flex flex-col">
-                                    <p className="font-bold text-xl">{dog.ownerName || "Anonymous Owner"}</p>
-                                    {dog.ownerEmail && (
-                                        <p className="text-sm text-muted-foreground flex items-center gap-1.5">
-                                            <Mail className="w-3.5 h-3.5" />
-                                            {dog.ownerEmail}
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Contact Section - Different for owner vs stranger */}
-                        {isOwner ? (
-                            /* OWNER VIEW: Show stats and manage options */
-                            <div className="space-y-4 pt-4 border-t border-border/50">
-                                <div className="text-center py-6 bg-primary/5 rounded-2xl border border-primary/20">
-                                    <div className="w-14 h-14 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
-                                        <Home className="h-7 w-7 text-primary" />
-                                    </div>
-                                    <h3 className="text-lg font-bold text-primary mb-1">
-                                        {t("publicDog.ownerViewTitle") || "Trang công khai của bé"}
-                                    </h3>
-                                    <p className="text-muted-foreground text-sm max-w-md mx-auto mb-4">
-                                        {t("publicDog.ownerViewInfo") || "Đây là trang mà người khác sẽ thấy khi quét mã QR của bé."}
-                                    </p>
-                                    <Button
-                                        onClick={() => router.push(`/my-dogs/${dog.id}`)}
-                                        className="mt-2"
-                                    >
-                                        <Settings className="h-4 w-4 mr-2" />
-                                        {t("publicDog.goToProfile") || "Quản lý hồ sơ"}
-                                    </Button>
-                                </div>
-                            </div>
-                        ) : dog.showSystemForm ? (
-                            <div className="space-y-6 pt-4 border-t border-border/50">
-                                <div className="space-y-2">
-                                    <h3 className="font-bold text-2xl flex items-center gap-3 text-foreground">
-                                        <div className="p-2 bg-primary/10 rounded-lg text-primary">
-                                            <MessageSquare className="h-6 w-6" />
-                                        </div>
-                                        {t("publicDog.contactOwner")}
-                                    </h3>
-                                    <p className="text-muted-foreground leading-relaxed">
-                                        {t("publicDog.phoneSecure") || "Your message will be sent directly to the owner via our secure system."}
-                                    </p>
-                                </div>
-
-                                <form onSubmit={handleContactSubmit} className="space-y-5">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <div className="space-y-2">
-                                            <Label className="font-semibold">{t("publicDog.yourName")}</Label>
-                                            <Input
-                                                required
-                                                value={contactForm.finderName}
-                                                onChange={e => setContactForm({ ...contactForm, finderName: e.target.value })}
-                                                placeholder="John Doe"
-                                                className="h-11 bg-muted/30"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="font-semibold">{t("publicDog.yourPhone")}</Label>
-                                            <Input
-                                                required
-                                                type="tel"
-                                                value={contactForm.finderPhone}
-                                                onChange={e => setContactForm({ ...contactForm, finderPhone: e.target.value })}
-                                                placeholder="0912..."
-                                                className="h-11 bg-muted/30"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2 col-span-1 md:col-span-2">
-                                        <Label className="font-semibold">{t("publicDog.currentLocation")}</Label>
-                                        <MapLocationPicker
-                                            onLocationSelect={(lat, lng, address) => {
-                                                setContactForm(prev => ({
-                                                    ...prev,
-                                                    locationAddress: address || "",
-                                                    lat: lat,
-                                                    lng: lng
-                                                }));
-                                            }}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label className="font-semibold">{t("publicDog.message")}</Label>
-                                        <Textarea
-                                            required
-                                            value={contactForm.message}
-                                            onChange={e => setContactForm({ ...contactForm, message: e.target.value })}
-                                            placeholder="I found a dog matching this profile..."
-                                            className="min-h-[120px] resize-none bg-muted/30"
-                                        />
-                                    </div>
-
-                                    <Button
-                                        type="submit"
-                                        size="lg"
-                                        className="w-full h-12 text-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-xl shadow-red-600/20 rounded-xl transition-all hover:scale-[1.01]"
-                                        disabled={sending}
-                                    >
-                                        {sending ? (
-                                            <><Loader2 className="animate-spin mr-2 h-5 w-5" /> {t("publicDog.sending")}</>
-                                        ) : (
-                                            <><AlertTriangle className="mr-2 h-5 w-5" /> {t("publicDog.sendAlert")}</>
-                                        )}
-                                    </Button>
-                                </form>
-                            </div>
-                        ) : (
-                            <div className="text-center py-10 bg-green-50 dark:bg-green-900/10 rounded-2xl border border-green-100 dark:border-green-900/30">
-                                <div className="w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
-                                    <ShieldCheck className="h-8 w-8 text-green-600 dark:text-green-400" />
-                                </div>
-                                <h3 className="text-lg font-bold text-green-800 dark:text-green-400 mb-2">{t("publicDog.dogSafe")}</h3>
-                                <p className="text-green-700/80 dark:text-green-500/80 max-w-md mx-auto">
-                                    {t("publicDog.privacyHidden") || "This dog is safe with their owner. Contact information is hidden for privacy."}
-                                </p>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <div className="mt-8 text-center space-y-2 pb-8">
-                    <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
-                        {t("publicDog.poweredBy")} <span className="font-bold text-foreground">DogDex System</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground/50">
-                        Scan ID: {dog.id} • Verified Profile
-                    </p>
-                </div>
-            </motion.div>
-        </div>
-    );
 }
 </file>
 
@@ -12803,7 +12409,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
 
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [view, setView] = useState<"form" | "otp" | "forgot" | "reset">("form")
+  const [view, setView] = useState<"form" | "otp" | "forgot" | "reset-otp" | "reset-password">("form")
   const [message, setMessage] = useState("")
 
   // --- HANDLER ---
@@ -12912,7 +12518,7 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
       const { apiClient } = await import("@/lib/api-client");
       await apiClient.forgotPassword(forgotEmail);
       toast.success("Đã gửi mã OTP!", { description: "Vui lòng kiểm tra email của bạn." });
-      setView("reset");
+      setView("reset-otp");
     } catch (err: any) {
       toast.error("Lỗi", { description: err.message || "Không thể gửi mã OTP" });
       setError(err.message);
@@ -13181,18 +12787,26 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
           </form>
         )}
 
-        {view === 'reset' && (
-          <form id="reset-form" onSubmit={handleResetPassword} className="space-y-4 py-4">
+        {view === 'reset-otp' && (
+          <form id="reset-otp-form" onSubmit={(e) => {
+            e.preventDefault();
+            if (otp.length !== 6) {
+              setError("Vui lòng nhập đủ 6 số OTP");
+              return;
+            }
+            setError("");
+            setView("reset-password");
+          }} className="space-y-4 py-4">
             <div className="text-center space-y-2 mb-4">
-              <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
-                <KeyRound className="h-6 w-6 text-green-600" />
+              <div className="mx-auto w-12 h-12 bg-blue-500/10 rounded-full flex items-center justify-center">
+                <KeyRound className="h-6 w-6 text-blue-600" />
               </div>
-              <h3 className="font-semibold">Đặt lại mật khẩu</h3>
+              <h3 className="font-semibold">Xác thực mã OTP</h3>
               <p className="text-sm text-muted-foreground">Mã OTP đã được gửi đến <span className="font-medium">{forgotEmail}</span></p>
             </div>
 
             <div className="space-y-2">
-              <Label>Mã OTP (6 số)</Label>
+              <Label>Nhập mã OTP (6 số)</Label>
               <div className="flex justify-center">
                 <InputOTP maxLength={6} value={otp} onChange={setOtp}>
                   <InputOTPGroup>
@@ -13201,6 +12815,30 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
                   </InputOTPGroup>
                 </InputOTP>
               </div>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={otp.length !== 6}>
+              Xác thực OTP
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => { setView('forgot'); setOtp(''); setError(''); }}
+              className="w-full text-sm text-muted-foreground hover:text-primary flex items-center justify-center gap-1"
+            >
+              <ArrowLeft className="h-3 w-3" /> Gửi lại mã
+            </button>
+          </form>
+        )}
+
+        {view === 'reset-password' && (
+          <form id="reset-form" onSubmit={handleResetPassword} className="space-y-4 py-4">
+            <div className="text-center space-y-2 mb-4">
+              <div className="mx-auto w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center">
+                <Lock className="h-6 w-6 text-green-600" />
+              </div>
+              <h3 className="font-semibold">Đặt mật khẩu mới</h3>
+              <p className="text-sm text-muted-foreground">Nhập mật khẩu mới cho tài khoản của bạn</p>
             </div>
 
             <div className="space-y-2">
@@ -13238,40 +12876,46 @@ export function AuthModal({ isOpen, onClose, mode, onSwitchMode }: AuthModalProp
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading || otp.length !== 6}>
+            <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Đang xử lý..." : "Đặt lại mật khẩu"}
             </Button>
 
             <button
               type="button"
-              onClick={() => { setView('forgot'); setOtp(''); setError(''); }}
+              onClick={() => { setView('reset-otp'); setError(''); }}
               className="w-full text-sm text-muted-foreground hover:text-primary flex items-center justify-center gap-1"
             >
-              <ArrowLeft className="h-3 w-3" /> Gửi lại mã
+              <ArrowLeft className="h-3 w-3" /> Quay lại nhập OTP
             </button>
           </form>
         )}
 
         {error && <p className="text-sm text-red-500 text-center mt-2">{error}</p>}
 
-        <Button
-          type="submit"
-          form={view === 'form' ? 'auth-form' : 'otp-form'}
-          className="w-full mt-4"
-          disabled={isLoading}
-        >
-          {isLoading ? "Đang xử lý..." :
-            view === "otp" ? "Xác thực OTP" :
-              mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
-        </Button>
+        {/* Only show main submit button for form and otp views */}
+        {(view === 'form' || view === 'otp') && (
+          <Button
+            type="submit"
+            form={view === 'form' ? 'auth-form' : 'otp-form'}
+            className="w-full mt-4"
+            disabled={isLoading}
+          >
+            {isLoading ? "Đang xử lý..." :
+              view === "otp" ? "Xác thực OTP" :
+                mode === "login" ? t("auth.loginButton") : t("auth.registerButton")}
+          </Button>
+        )}
 
-        <div className="text-center text-sm mt-4">
-          {mode === "login" ? (
-            <span>{t("auth.noAccount")} <button type="button" onClick={() => onSwitchMode("register")} className="text-primary hover:underline font-medium">{t("auth.registerNow")}</button></span>
-          ) : (
-            <span>{t("auth.hasAccount")} <button type="button" onClick={() => onSwitchMode("login")} className="text-primary hover:underline font-medium">{t("auth.loginNow")}</button></span>
-          )}
-        </div>
+        {/* Only show login/register switch for main form view */}
+        {view === 'form' && (
+          <div className="text-center text-sm mt-4">
+            {mode === "login" ? (
+              <span>{t("auth.noAccount")} <button type="button" onClick={() => onSwitchMode("register")} className="text-primary hover:underline font-medium">{t("auth.registerNow")}</button></span>
+            ) : (
+              <span>{t("auth.hasAccount")} <button type="button" onClick={() => onSwitchMode("login")} className="text-primary hover:underline font-medium">{t("auth.loginNow")}</button></span>
+            )}
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -13922,15 +13566,6 @@ export const CommunityHeader = memo(function CommunityHeader({
                                         {t("community.header.subtitle")}
                                     </p>
                                 </div>
-
-                                <Link href="/community/create">
-                                    <Button
-                                        size="lg"
-                                        className="rounded-xl font-bold shadow-lg shadow-primary/25 hover:scale-105 transition-transform bg-gradient-to-r from-primary to-purple-600 border-0 w-full md:w-auto m-2"
-                                    >
-                                        <Plus className="mr-2 h-5 w-5" /> {t("community.header.postButton")}
-                                    </Button>
-                                </Link>
                             </div>
 
                             {/* CONTROLS BAR */}
@@ -14726,14 +14361,22 @@ export function DogQrCode({ shortCode, dogName }: DogQrCodeProps) {
                     {t("dogQrCode.petId")}
                 </h3>
 
-                {/* QR CODE GENERATOR */}
+                {/* QR CODE GENERATOR with Logo */}
                 <div className="p-2 border border-black/10 rounded-lg">
                     <QRCodeCanvas
                         id="dog-qr-canvas"
                         value={qrValue}
                         size={200}
-                        level={"M"}
+                        level={"H"} // High error correction để QR vẫn scan được với logo
                         includeMargin={true}
+                        imageSettings={{
+                            src: "/LogoWebBlack.png", // Logo app (black cho nền trắng QR)
+                            x: undefined,
+                            y: undefined,
+                            height: 40,
+                            width: 40,
+                            excavate: true, // Tạo vùng trống cho logo
+                        }}
                     />
                 </div>
 
@@ -16846,7 +16489,7 @@ import { useI18n } from "@/lib/i18n-context"
 import { useMounted } from "@/hooks/use-mounted"
 import { Button } from "@/components/ui/button"
 import { AuthModal } from "@/components/auth-modal"
-import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus, ImageIcon, Video, Radio, MessageSquare } from "lucide-react"
+import { User, Shield, Coins, Settings, Menu, LogOut, LogIn, UserPlus, ImageIcon, Video, Radio, MessageSquare, PawPrint } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16905,9 +16548,8 @@ export function Navbar() {
 
   const navLinks = useMemo(() => [
     { href: "/", label: t("nav.detect"), auth: false },
-    { href: "/my-dogs", label: "My Dogs", auth: true },
-    { href: "/community/lost-found", label: "Lost & Found", auth: false },
     { href: "/live", label: t("nav.live"), auth: false },
+    { href: "/community", label: t("nav.lostFound"), auth: false },
     { href: "/dogdex", label: t("nav.dogdex"), auth: false },
     { href: "/history", label: t("nav.history"), auth: true },
     { href: "/rank", label: t("nav.rank"), auth: false },
@@ -16965,7 +16607,7 @@ export function Navbar() {
             href={link.href}
             ref={(el) => { itemsRef.current[index] = el }}
             className={cn(
-              "relative transition-colors duration-300 px-5 py-2 rounded-full text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
+              "relative transition-colors duration-300 px-3 lg:px-5 py-2 rounded-full text-xs lg:text-sm font-bold z-10 whitespace-nowrap flex items-center h-full select-none",
               active
                 ? "text-white"
                 : "text-muted-foreground hover:text-primary"
@@ -17089,6 +16731,7 @@ export function Navbar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem asChild><Link href="/profile" className="cursor-pointer hover:text-primary focus:text-primary"><User className="h-4 w-4 mr-2" />{t("nav.profile")}</Link></DropdownMenuItem>
+            <DropdownMenuItem asChild><Link href="/my-dogs" className="cursor-pointer hover:text-primary focus:text-primary"><PawPrint className="h-4 w-4 mr-2" />{t("nav.myPets")}</Link></DropdownMenuItem>
             {user.role === "admin" && (
               <React.Fragment key="admin-menu">
                 <DropdownMenuSeparator />
@@ -17136,12 +16779,12 @@ export function Navbar() {
             : "bg-transparent border-transparent"
         )}
       >
-        <div className="container mx-auto px-4 py-2 md:py-3 flex items-center justify-between">
+        <div className="w-full px-4 lg:px-8 py-2 md:py-3 flex items-center justify-between">
 
           {/* ======================= */}
           {/* 1. LEFT SECTION (Logo + Tokens) */}
           {/* ======================= */}
-          <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1">
+          <div className="flex items-center justify-start gap-4 md:gap-6 md:flex-1 min-w-fit">
             <Link href="/" className="flex items-center gap-2 md:gap-3 text-2xl font-bold group flex-shrink-0">
               <div className="relative">
                 <img
@@ -17156,22 +16799,25 @@ export function Navbar() {
                 />
               </div>
 
-              <span className="hidden lg:inline bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
+              <span className="hidden xl:inline whitespace-nowrap bg-clip-text text-transparent bg-gradient-to-r from-primary to-primary font-extrabold tracking-tight group-hover:to-primary transition-all">
                 {t("common.appName")}
               </span>
-              <span className="text-base sm:text-lg uppercase tracking-widest font-black lg:hidden text-primary mt-1">
+              <span className="text-base uppercase tracking-widest font-black xl:hidden text-primary mt-1">
                 DogDex
               </span>
             </Link>
+            <div className="hidden pr-6 lg:block">
+              {mounted && tokenDisplay}
+            </div>
           </div>
 
           {/* ======================= */}
           {/* 2. CENTER SECTION (Nav Pill) */}
           {/* ======================= */}
-          <div className="hidden md:flex justify-center flex-shrink-0">
+          <div className="hidden lg:flex justify-center flex-shrink">
             <div
               ref={navContainerRef}
-              className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-11 px-1.5 shadow-sm max-w-full overflow-hidden"
+              className="flex items-center justify-around relative bg-white/60 dark:bg-secondary/30 backdrop-blur-md border border-white/40 dark:border-white/5 rounded-full h-10 lg:h-11 px-1 lg:px-1.5 shadow-sm max-w-full overflow-hidden"
             >
               {mounted ? (
                 <>
@@ -17197,7 +16843,7 @@ export function Navbar() {
           <div className="flex items-center justify-end gap-1.5 sm:gap-2 md:gap-3 md:flex-1">
 
             {/* Hiển thị Token trên Mobile (nếu muốn) hoặc ẩn đi. Ở đây tôi để ẩn trên Desktop (vì đã có ở bên trái), hiện trên Mobile để user check */}
-            <div className="md:hidden">
+            <div className="lg:hidden">
               {mounted && tokenDisplay}
             </div>
 
@@ -17210,10 +16856,6 @@ export function Navbar() {
                   <span className="sr-only">Settings</span>
                 </Button>
               </DropdownMenuTrigger>
-              {/* Token Display Moved Here */}
-              <div className="hidden md:block">
-                {mounted && tokenDisplay}
-              </div>
               <DropdownMenuContent align="end" className="w-56 bg-background/90 backdrop-blur-xl border-border shadow-lg">
                 <DropdownMenuLabel className="text-primary">{t('nav.light')}/{t('nav.dark')}</DropdownMenuLabel>
                 <div className="px-2 py-1"><ThemeToggle /></div>
@@ -17223,7 +16865,7 @@ export function Navbar() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <div className="md:hidden">
+            <div className="lg:hidden">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" className="h-9 w-9 text-primary hover:bg-primary/10 rounded-full">
@@ -17723,6 +17365,211 @@ export default function RecaptchaProvider({
       {children}
     </GoogleReCaptchaProvider>
   );
+}
+</file>
+
+<file path="components/ReportFoundForm.tsx">
+"use client";
+
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { MapLocationPicker } from "@/components/MapLocationPicker";
+import { apiClient } from "@/lib/api-client";
+import { toast } from "sonner";
+import { Loader2, AlertTriangle, CheckCircle, MapPin, User, Phone, FileText } from "lucide-react";
+import { useI18n } from "@/lib/i18n-context";
+
+interface ReportFoundFormProps {
+    dogId: string;
+    dogName: string;
+    dogBreed: string;
+    isLost: boolean;
+    onSuccess?: () => void;
+}
+
+export function ReportFoundForm({ dogId, dogName, dogBreed, isLost, onSuccess }: ReportFoundFormProps) {
+    const { t } = useI18n();
+    const [sending, setSending] = useState(false);
+
+    const [formData, setFormData] = useState({
+        finderName: "",
+        finderPhone: "",
+        message: "",
+        locationAddress: "",
+        lat: 0,
+        lng: 0,
+        postTitle: "",
+        postContent: ""
+    });
+
+    async function handleSubmit(e: React.FormEvent) {
+        e.preventDefault();
+
+        if (formData.lat === 0 && formData.lng === 0) {
+            toast.error(t("publicDog.selectLocation") || "Vui lòng chọn vị trí trên bản đồ");
+            return;
+        }
+
+        setSending(true);
+        try {
+            // 1. Create community FOUND post (if dog is lost) so it shows on owner's radar
+            if (isLost) {
+                try {
+                    await apiClient.createQrFoundPost({
+                        dog_id: dogId,
+                        title: formData.postTitle || `Đã tìm thấy ${dogName} - ${dogBreed}`,
+                        content: formData.postContent || formData.message || `Tôi đã tìm thấy chú chó này tại ${formData.locationAddress}`,
+                        location: {
+                            lat: formData.lat,
+                            lng: formData.lng,
+                            address: formData.locationAddress
+                        },
+                        contact_info: {
+                            name: formData.finderName,
+                            phone: formData.finderPhone
+                        }
+                    });
+                } catch (postError) {
+                    console.error("Failed to create FOUND post:", postError);
+                    // Continue with direct notification even if post creation fails
+                }
+            }
+
+            // 2. Send direct notification to owner
+            await apiClient.contactOwner({
+                dogId: dogId,
+                finderName: formData.finderName,
+                finderPhone: formData.finderPhone,
+                message: formData.message,
+                location: {
+                    address: formData.locationAddress,
+                    lat: formData.lat,
+                    lng: formData.lng
+                }
+            });
+
+            toast.success(t("publicDog.messageSent"));
+            setFormData({ finderName: "", finderPhone: "", message: "", locationAddress: "", lat: 0, lng: 0, postTitle: "", postContent: "" });
+            onSuccess?.();
+        } catch (error) {
+            toast.error(t("publicDog.sendFailed"));
+        } finally {
+            setSending(false);
+        }
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-5">
+            {/* Contact Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="space-y-2">
+                    <Label className="font-semibold flex items-center gap-2">
+                        <User className="h-4 w-4 text-muted-foreground" />
+                        {t("publicDog.yourName")}
+                    </Label>
+                    <Input
+                        required
+                        value={formData.finderName}
+                        onChange={e => setFormData({ ...formData, finderName: e.target.value })}
+                        placeholder="John Doe"
+                        className="h-11 bg-muted/30"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label className="font-semibold flex items-center gap-2">
+                        <Phone className="h-4 w-4 text-muted-foreground" />
+                        {t("publicDog.yourPhone")}
+                    </Label>
+                    <Input
+                        required
+                        type="tel"
+                        value={formData.finderPhone}
+                        onChange={e => setFormData({ ...formData, finderPhone: e.target.value })}
+                        placeholder="0912..."
+                        className="h-11 bg-muted/30"
+                    />
+                </div>
+            </div>
+
+            {/* Location Picker */}
+            <div className="space-y-2">
+                <Label className="font-semibold flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    {t("publicDog.currentLocation")}
+                </Label>
+                <MapLocationPicker
+                    onLocationSelect={(lat, lng, address) => {
+                        setFormData(prev => ({
+                            ...prev,
+                            locationAddress: address || "",
+                            lat: lat,
+                            lng: lng
+                        }));
+                    }}
+                />
+            </div>
+
+            {/* Post Title & Content - only show if dog is lost */}
+            {isLost && (
+                <div className="space-y-4 p-4 bg-green-50 dark:bg-green-900/20 rounded-xl border border-green-200 dark:border-green-800">
+                    <p className="text-sm text-green-700 dark:text-green-400 font-medium flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        {t("publicDog.postWillBeCreated") || "Thông tin này sẽ được đăng lên cộng đồng để chủ nhân dễ tìm thấy bạn"}
+                    </p>
+                    <div className="space-y-2">
+                        <Label className="font-semibold">{t("publicDog.postTitle") || "Tiêu đề bài đăng"}</Label>
+                        <Input
+                            value={formData.postTitle || `Đã tìm thấy ${dogName} - ${dogBreed}`}
+                            onChange={e => setFormData({ ...formData, postTitle: e.target.value })}
+                            placeholder={`Đã tìm thấy ${dogName}`}
+                            className="h-11 bg-white dark:bg-background"
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label className="font-semibold">{t("publicDog.postContent") || "Mô tả chi tiết"}</Label>
+                        <Textarea
+                            value={formData.postContent}
+                            onChange={e => setFormData({ ...formData, postContent: e.target.value })}
+                            placeholder={t("publicDog.postContentPlaceholder") || "Mô tả thêm về tình trạng chó, nơi bạn tìm thấy..."}
+                            className="min-h-[80px] resize-none bg-white dark:bg-background"
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* Message to owner */}
+            <div className="space-y-2">
+                <Label className="font-semibold flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    {t("publicDog.message")}
+                </Label>
+                <Textarea
+                    required
+                    value={formData.message}
+                    onChange={e => setFormData({ ...formData, message: e.target.value })}
+                    placeholder={t("publicDog.messagePlaceholder") || "Tôi đã tìm thấy chú chó này..."}
+                    className="min-h-[120px] resize-none bg-muted/30"
+                />
+            </div>
+
+            {/* Submit Button */}
+            <Button
+                type="submit"
+                size="lg"
+                className="w-full h-12 text-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-xl shadow-red-600/20 rounded-xl transition-all hover:scale-[1.01]"
+                disabled={sending}
+            >
+                {sending ? (
+                    <><Loader2 className="animate-spin mr-2 h-5 w-5" /> {t("publicDog.sending")}</>
+                ) : (
+                    <><AlertTriangle className="mr-2 h-5 w-5" /> {t("publicDog.sendAlert")}</>
+                )}
+            </Button>
+        </form>
+    );
 }
 </file>
 
@@ -18229,7 +18076,7 @@ export function ResultModal({ isOpen, onClose, resultData, onCleanup }: ResultMo
               variant="secondary"
               className="flex-1 gap-2"
               onClick={() => {
-                router.push(`/community/lost-found?breed=${encodeURIComponent(detection.detectedBreed)}`);
+                router.push(`/community?breed=${encodeURIComponent(detection.detectedBreed)}`);
                 onClose();
               }}
               disabled={isSaving}
@@ -26250,2448 +26097,6 @@ function useToast() {
 export { useToast, toast }
 </file>
 
-<file path="i18n/messages/en.ts">
-export default {
-  common: {
-    appName: "DogDex",
-    loading: "Loading...",
-    error: "An error occurred",
-    success: "Success",
-    cancel: "Cancel",
-    save: "Save",
-    delete: "Delete",
-    edit: "Edit",
-    close: "Close",
-    back: "Back",
-    saveChanges: "Save Changes",
-    previous: "Previous",
-    search: "Search",
-    searchPlaceholder: "Search...",
-    page: "Page",
-    filter: "Filter",
-    all: "All",
-    sort: "Sort",
-    viewAll: "View All",
-    guest: "Guest",
-    getStarted: "Get Started",
-    dogBreed: "dog breed",
-    optional: "Optional",
-    manage: "Manage",
-  },
-  nav: {
-    detect: "Detect",
-    live: "Live",
-    about: "About",
-    results: "Results",
-    dogdex: "DogDex",
-    achievements: "Achievements",
-    profile: "Profile",
-    adminPanel: "Admin Panel",
-    login: "Login",
-    register: "Register",
-    logout: "Logout",
-    english: "EN",
-    vietnamese: "VI",
-    light: "Light",
-    dark: "Dark",
-    system: "System",
-    history: "History",
-    myLibrary: "My Library",
-    pricing: "Upgrade",
-    tokens: "Tokens",
-    rank: "Rank",
-
-  },
-  auth: {
-    loginTitle: "Login",
-    registerTitle: "Register",
-    loginDescription: "Login to access all features",
-    registerDescription: "Create a new account to get started",
-    email: "Email",
-    password: "Password",
-    username: "Username",
-    firstName: "First Name",
-    lastName: "Last Name",
-    phoneNumber: "Phone Number",
-    avatar: "Avatar (optional)",
-    emailPlaceholder: "email@example.com",
-    passwordPlaceholder: "••••••••",
-    usernamePlaceholder: "Enter your username",
-    loginButton: "Login",
-    registerButton: "Register",
-    processing: "Processing...",
-    noAccount: "Don't have an account?",
-    hasAccount: "Already have an account?",
-    registerNow: "Register now",
-    loginNow: "Login",
-    errorUsernameRequired: "Please enter your username",
-    errorInvalidCredentials: "Invalid email or password",
-    errorEmailExists: "Email already in use",
-    errorGeneral: "An error occurred",
-    errorNameRequired: "Please enter your name",
-    enterOtp: "Enter OTP Code",
-    logoutSuccess: "Logout successful",
-    verify: "Verify",
-    otpSuccess: "Verification successful! Please log in.",
-    optional: "optional",
-    // Forgot / Reset password
-    forgotPassword: "Forgot password?",
-    forgotSent: "A reset code has been sent to your email.",
-    sendResetCode: "Send reset code",
-    backToLogin: "Back to login",
-    resetSuccess: "Password reset successful. Please login.",
-    newPassword: "New Password",
-    otp: "OTP",
-    resetPasswordButton: "Reset Password",
-  },
-  about: {
-    title: "About DogDex AI",
-    subtitle: "Revolutionizing dog breed identification with artificial intelligence",
-    mission: "Our Mission",
-    missionText:
-      "We believe that technology should make the world more connected. DogDex AI uses cutting-edge AI to help dog lovers, veterinarians, and researchers identify dog breeds instantly. Our mission is to make dog breed identification accessible to everyone, everywhere.",
-    team: "Our Team",
-    teamText:
-      "Built by a passionate team of AI researchers, dog lovers, and software engineers dedicated to creating the best dog breed identification experience.",
-    ready: "Ready to get started?",
-    fastTitle: "Lightning Fast",
-    fastDesc: "Real-time dog breed detection powered by advanced AI",
-    secureTitle: "Secure & Private",
-    secureDesc: "Your data is encrypted and never shared with third parties",
-    communityTitle: "Community Driven",
-    communityDesc: "Join thousands of dog lovers improving AI together",
-    globalTitle: "Global Scale",
-    globalDesc: "Supports 200+ dog breeds from around the world",
-  },
-  home: {
-    heroTitle: "Dog Breed Recognition with",
-    heroDescription:
-      "Identify dog breeds and details from your media.",
-    dragDropTitle: "Drag & Drop, Paste an Image, or Click to Upload",
-    dragDropDescription: "Or select a file from your device",
-    dragDropDescriptionMobile: "Drag & drop or tap to upload from your device",
-    selectImage: "Select Image",
-    selectVideo: "Select Video",
-    supportedFormats: "Supported: JPG, PNG, GIF, MP4, MOV (max 50MB)",
-    selectAnother: "Select Another File",
-    detectButton: "Detect Dog Breed",
-    detecting: "Detecting...",
-    loginToSave: "Login to save results to your collection",
-    feature1Title: "Accurate Recognition",
-    feature1Description: "AI trained on hundreds of dog breeds",
-    feature2Title: "Detailed Information",
-    feature2Description: "Learn about personality, care, and characteristics",
-    feature3Title: "Video Support",
-    feature3Description: "Detect dogs in both images and videos",
-    uploadingFile: "Uploading file...",
-    processingFile: "Processing, please wait...",
-    uploading: "Uploading...",
-    detectionFailed: "Detection failed. Please try again.",
-    contactTitle: "Get in Touch",
-    contactDescription:
-      "Have questions, feedback, or suggestions? We'd love to hear from you!",
-    simulation: {
-      uploading: "Uploading file to server...",
-      preparing: "Initializing AI model...",
-      analyzing: "Analyzing image...",
-      finishing: "Almost there, compiling results...",
-      success: "Done! Redirecting...",
-    },
-    fileTooLarge: "File too large (Max 50MB)",
-    tabs: {
-      upload: "Upload File",
-      url: "Paste URL",
-    },
-    urlInputTitle: "Enter Image URL",
-    urlInputDesc: "Paste a link to an image (JPG, PNG, WebP) to identify the dog breed.",
-    errors: {
-      emptyUrl: "Please enter a URL",
-    },
-    securityWarning: "Security Warning",
-    securityWarningDesc: "Only use URLs from trusted sources. Malicious links can be harmful.",
-  },
-  results: {
-    title: "Detection Results",
-    confidence: "Confidence",
-    addToCollection: "Add to Collection",
-    added: "Added",
-    viewInDogDex: "View in DogDex",
-    viewDetails: "View Details",
-    detectAnother: "Detect Another",
-    characteristics: "Characteristics",
-    commonHealthIssues: "Common Health Issues",
-    origin: "Origin",
-    size: "Size",
-    lifespan: "Lifespan",
-    favoriteFoods: "Favorite Foods",
-    healthIssues: "Common Health Issues",
-    suitableFor: "Suitable For",
-    unsuitableFor: "Unsuitable For",
-    climatePreference: "Climate Preference",
-    maintenanceDifficulty: "Maintenance Difficulty",
-    trainableSkills: "Trainable Skills",
-    funFact: "Fun Fact",
-    temperament: "Temperament",
-    years: "years",
-    provideFeedback: "Provide Feedback",
-    detectionResults: "Detection Results",
-    collected: "Collected",
-    noDetectionsTitle: "No Dogs Detected",
-    noDetectionsDescription:
-      "We couldn't find any recognizable dogs in the uploaded file. Please try again with a different image or video.",
-    tryAgain: "Try Again",
-    chatWithAI: {
-      title: "Ask DogDex",
-      placeholder: "Type your question about the {breedName}...",
-      send: "Send",
-      remaining: "{count} messages left",
-      limitReached: "You have reached the message limit.",
-      intro: "You can ask me anything about the {breedName} breed!",
-      prompts: {
-        funFact: "Tell me a fun fact about this breed.",
-        diet: "What kind of food should I feed a {breedName}?",
-        activities: "What activities or games are suitable for this breed?",
-        apartment: "Is this breed suitable for apartment living?",
-      },
-    },
-    description: "Description",
-    detailsTitle: "Breed Details",
-    physicalInfo: "Physical Information",
-    behavioralInfo: "Behavioral Information",
-    healthInfo: "Health Information",
-    height: "Height",
-    weight: "Weight",
-    group: "Group",
-    coatType: "Coat Type",
-    coatColors: "Coat Colors",
-    energy: "Energy Level",
-    trainability: "Trainability",
-    shedding: "Shedding Level",
-    selectBreedPlaceholder: "Select another detected breed...",
-    healthRecommendations: "Recommendations for Common Health Issues",
-    recommendedProductsTitle: "Recommended Products for {breedName}",
-    findOnShopee: "Find on Shopee",
-  },
-  dogDetails: {
-    backToDogDex: "Back to DogDex",
-    quickStats: "Quick Stats",
-    maintenance: "Maintenance Difficulty",
-    livingConditions: "Living Conditions",
-    climatePreference: "Climate Preference",
-    goodWithChildren: "Good with Children",
-    goodWithPets: "Good with Other Pets",
-    suitableFor: "Suitable For",
-    notSuitableFor: "Not Suitable For",
-    favoriteFoods: "Favorite Foods",
-    healthIssues: "Common Health Issues",
-    trainableSkills: "Trainable",
-    funFact: "Fun Fact",
-  },
-  live: {
-    title: "Live Detection",
-    subtitle: "Use camera for real-time dog breed detection",
-    cameraError: "Cannot access camera. Please check permissions.",
-    startCamera: "Start Camera",
-    stopCamera: "Stop Camera",
-    clickToStart: 'Click "Start Camera" to begin',
-    searching: "Searching for dogs...",
-    noDetection: "No dogs detected",
-    instructions: "Instructions",
-    instruction1: "Ensure good lighting",
-    instruction2: "Keep camera steady",
-    instruction3: "Center the dog in frame",
-    instruction4: "System will auto-detect",
-    detectionsTitle: "Real-time Detections",
-    connected: "Connected to AI Service",
-    insufficientTokens: "Not enough tokens for streaming session.",
-    tips: {
-      title: "Tips for Better Detection",
-      tip1: "Ensure adequate lighting, avoid backlight.",
-      hint: "Keep the dog in the center of the frame for analysis",
-      adaptiveMatch: "Holding... Maintaining match with {label}...",
-      successAdaptive: "Confirmed match with {label} after consistent detection!",
-      tip2: "Keep the camera steady and avoid shaking.",
-      tip3: "Include the entire dog in the frame.",
-      tip4: "The system will automatically detect when a dog is found.",
-      tip5: "For best results, use a high-resolution camera.",
-      tip6: "Minimize background distractions.",
-    },
-  },
-  errors: {
-    insufficientTokensTitle: "Not Enough Tokens",
-    insufficientTokensForStream: "You don't have enough tokens to start a live stream.",
-    // ... các lỗi khác
-  },
-  dogdex: {
-    title: "My DogDex",
-    description: "Your collection of discovered dog breeds",
-    emptyTitle: "Your DogDex is empty",
-    emptyDescription: "Start detecting dog breeds to build your collection",
-    startDetecting: "Start Detecting",
-    breeds: "breeds",
-    collected: "Collected",
-    searchPlaceholder: "Search breeds...",
-    showingCount: "Showing {count} of {total} breeds",
-    loadingMore: "Loading more breeds...",
-    noResults: "No dogs found matching your criteria",
-    collectedOn: "Collected on",
-    sourceImage: "Collected via Image Upload",
-    sourceVideo: "Collected via Video Upload",
-    sourceStream: "Collected via Live Camera",
-    sourceManual: "Added Manually",
-    unlockDetails: "Collect this dog to unlock details",
-    notCollectedTooltip: "Not collected. Identify this breed to unlock!",
-    sort: {
-      nameAsc: "Name (A-Z)",
-      nameDesc: "Name (Z-A)",
-      rarityDesc: "Rarity (High to Low)",
-      rarityAsc: "Rarity (Low to High)",
-      collectedAtDesc: "Collected Date (Newest)",
-      collectedAtAsc: "Collected Date (Oldest)",
-    },
-    filter: {
-      all: "All Dogs",
-      collected: "Collected",
-      notCollected: "Not Collected",
-    },
-  },
-  achievements: {
-    title: "Achievements",
-    description: "Track your progress and unlock achievements",
-    stats: "Statistics",
-    totalDetections: "Total Detections",
-    uniqueBreeds: "Unique Breeds",
-    accuracy: "Accuracy",
-    unlocked: "Unlocked",
-    locked: "Locked",
-    progress: "Progress",
-    backToHome: "Back to Home",
-    pageDescription: "Track your progress and unlock rewards as you collect dog breeds",
-    dogsCollected: "Dogs Collected",
-    achievementsUnlocked: "Achievements Unlocked",
-    nextAchievement: "Next Achievement",
-    allAchievements: "All Achievements",
-    completed: "Completed",
-    collectCount: "Collect {count} dogs",
-  },
-  contact: {
-    formTitle: "Contact Us",
-    formDesc: "Do you have any questions or feedback? Send us a message.",
-    emailLabel: "Email",
-    emailPlaceholder: "yourname@example.com",
-    messageLabel: "Message",
-    messagePlaceholder: "Enter your message here...",
-    submitButton: "Send Message",
-    submitting: "Sending...",
-    successTitle: "Message Sent!",
-    successDescription: "We have received your message.",
-    errorTitle: "Failed to Send",
-    errorDescription: "An error occurred, please try again later.",
-    captchaError: "Captcha verification failed. Please try again.",
-    thankYouTitle: "Thank You!",
-    thankYouDesc: "Your message has been sent. Our support team will respond as soon as possible.",
-    sendAnother: "Send Another Message",
-    recaptchaText: "This site is protected by reCAPTCHA and the Google Privacy Policy and Terms of Service apply."
-  },
-  profile: {
-    title: "Profile",
-    backToHome: "Back to Home",
-    description: "Manage your account settings",
-    stats: {
-      collected: "Dogs Collected",
-      achievements: "Achievements",
-      completion: "Completion",
-      tokensRemaining: "Tokens this week: {remaining}/{limit}",
-      tokens: "Tokens",
-      guestTokens: "Trial Detections",
-    },
-    account: {
-      title: "Account Information",
-      description: "Update your personal details",
-      editButton: "Edit Profile",
-      name: "Full Name",
-      username: "Username",
-      email: "Email Address",
-      country: "Country",
-      city: "City",
-    },
-    password: {
-      title: "Change Password",
-      current: "Current Password",
-      new: "New Password",
-      confirm: "Confirm New Password",
-    },
-    links: {
-      title: "Quick Links",
-      description: "Access your collections and achievements",
-      viewCollection: "View My Collection",
-      viewAchievements: "View Achievements",
-    },
-    danger: {
-      title: "Danger Zone",
-      description: "Irreversible actions for your account",
-      deleteAccount: "Delete Account",
-      deleteDescription:
-        "Permanently delete your account and all associated data.",
-      deleteConfirmTitle: "Are you sure you want to delete your account?",
-      deleteConfirmDescription: "This action cannot be undone. All your data, including collections, achievements, and history will be deleted. Please enter your password to confirm.",
-      passwordConfirmation: "Confirm your password",
-      confirmDeleteButton: "I understand, delete my account",
-      passwordRequired: "Password is required to confirm.",
-      deleteAccountButton: "Delete Account",
-
-    },
-  },
-  feedback: {
-    title: "Feedback",
-    feedback: "Feedback",
-    description: "Help us improve by providing feedback",
-    wasCorrect: "Was this detection correct?",
-    yes: "Yes",
-    no: "No",
-    correctBreed: "What is the correct breed?",
-    selectBreed: "Select breed...",
-    additionalComments: "Additional comments (optional)",
-    commentsPlaceholder: "Tell us more about the detection...",
-    submit: "Submit Feedback",
-    submitting: "Submitting...",
-    thankYou: "Thank you for your feedback!",
-    thankYouDescription:
-      "Your feedback helps us improve the accuracy of our AI model.",
-    error: "Failed to submit feedback",
-    loginRequiredTitle: "Login to Provide Feedback",
-    loginRequiredDescription: "Your insights are valuable! Please log in to help us improve our AI.",
-    loginToFeedback: "Login to Give Feedback",
-  },
-  admin: {
-    dashboard: "Dashboard",
-    users: "Users",
-    models: "Models",
-    analytics: "Analytics",
-    feedback: {
-      feedback: "Feedback",
-      title: "Feedback Management",
-      description: "View, analyze, and approve feedback from users.",
-      stats: {
-        pending: "Pending Review",
-        approved: "Approved",
-        rejected: "Rejected",
-        approvalRate: "Approval Rate",
-      },
-      tabs: {
-        list: "Feedback List",
-        userStats: "User Statistics",
-      },
-      table: {
-        title: "Feedback List",
-        description: "All feedback submitted by users.",
-        headers: {
-          time: "Time",
-          user: "User",
-          prediction: "Prediction",
-          result: "Result",
-          status: "Status",
-          action: "Action",
-        },
-        noFeedback: "No feedback yet",
-      },
-      filters: {
-        all: "All",
-        pending: "Pending",
-        approved: "Approved",
-        rejected: "Rejected",
-        searchPlaceholder: "Search by user or breed...",
-        pickDate: "Pick a date range",
-        clear: "Clear",
-      },
-      dialog: {
-        title: "Feedback Details",
-        description: "Review the prediction and user's feedback.",
-        originalImage: "Original Image",
-        aiPrediction: "AI Prediction",
-        userSays: "User Says",
-        mustBe: "must be",
-        notes: "Notes",
-        approveTitle: "Approve this feedback?",
-        approveDescription: "This action will mark the feedback as 'approved' and move the image to the training dataset. You can correct the label if needed.",
-        correctedLabel: "Corrected Breed Label",
-        correctedLabelPlaceholder: "Enter the correct breed if different...",
-        selectOrEnterBreed: "Select or enter a breed...",
-        noBreedFound: "No breed found.",
-        rejectTitle: "Reject this feedback?",
-        rejectDescription: "This action will mark the feedback as 'rejected' and move the image to the corresponding folder. You can enter a rejection reason (optional).",
-        rejectionReason: "Rejection Reason (optional)",
-        rejectionReasonPlaceholder: "e.g., blurry image, not a dog...",
-      },
-      actions: {
-        approving: "Approving feedback...",
-        rejecting: "Rejecting feedback...",
-        approve: "Approve",
-        reject: "Reject",
-      },
-      status: {
-        approved: "Approved",
-        rejected: "Rejected",
-      },
-      errors: {
-        fetchFailed: "Failed to fetch feedback.",
-        approveFailed: "Failed to approve feedback.",
-        rejectFailed: "Failed to reject feedback.",
-        approvalRateDescription: "Approval Rate",
-      },
-      userStats: {
-        title: "User Statistics",
-        description: "Top 10 users who submitted the most feedback.",
-        headers: {
-          user: "User",
-          total: "Total Submissions",
-          approved: "Approved",
-          rejected: "Rejected",
-        },
-      },
-    },
-    subscriptions: {
-      title: "Subscriptions Management",
-      description: "View and manage user subscription requests.",
-      noSubscriptions: "No subscriptions found.",
-      approveSuccess: "Subscription approved successfully.",
-      approveFailed: "Failed to approve subscription.",
-      rejectSuccess: "Subscription rejected successfully.",
-      rejectFailed: "Failed to reject subscription.",
-      cancelSuccess: "Subscription canceled successfully.",
-      cancelFailed: "Failed to cancel subscription.",
-      confirmCancel: "Are you sure you want to cancel this subscription?",
-      confirmApprove: "Are you sure you want to approve this subscription?",
-      confirmReject: "Are you sure you want to reject this subscription?",
-      status: {
-        pending: "Pending Approval",
-        active: "Active",
-        canceled: "Canceled",
-        pending_approval: "Pending Approval",
-        past_due: "Past Due",
-        unpaid: "Unpaid",
-        rejected: "Rejected",
-      },
-      table: {
-        user: "User",
-        plan: "Plan",
-        status: "Status",
-        period: "Billing Period",
-        createdAt: "Created At",
-        actions: "Actions",
-      },
-      actions: {
-        approve: "Approve",
-        reject: "Reject",
-      },
-    },
-    histories: {
-      title: "Prediction Histories",
-      description: "Browse user prediction histories in a folder structure.",
-      viewMedia: "View media",
-      viewFeedback: "View Feedback",
-      noPrediction: "No predictions",
-      table: {
-        title: "Histories for the Day",
-        description: "A list of all predictions made in this folder.",
-        headers: {
-          user: "User",
-          media: "Media",
-          processedMedia: "Processed Media",
-          prediction: "Prediction",
-          time: "Time",
-          source: "Source",
-        },
-        noHistory: "No histories found.",
-      },
-      errors: {
-        fetchFailed: "Failed to fetch histories.",
-      },
-      filters: {
-        datePlaceholder: "Filter by date...",
-      },
-      sources: {
-        image_upload: "Image Upload",
-        video_upload: "Video Upload",
-        stream_capture: "Stream Capture",
-      },
-      browse: {
-        emptyFolder: "This folder is empty.",
-      },
-    },
-    imageManagement: "File Manager",
-    imageManagementDescription: "Manage user media files and folders",
-    folderContents: "Folder Contents",
-    noMedia: "No items found",
-    imageManagementRoot: "Root Folder",
-    showingDescription: 'Showing {count} items in folder "{folderName}".',
-    dashboardTitle: "Dashboard Overview",
-    dashboardDescription: "Monitor your application's performance and usage statistics",
-    newBreedAlertTitle: "New Breed Alert",
-    newBreedAlertDescription: "Detected {count} breeds with multiple incorrect reports - may need to be added to the model",
-    viewAllFeedback: "View all feedback",
-    trialRunsToday: "Trial Runs (Today)",
-    trialRunsDescription: "Number of predictions from guests",
-    predictionsToday: "Predictions (Today)",
-    predictionsDescription: "Number of predictions from users",
-    totalUsers: "Total Users",
-    totalUsersDescription: "Total number of registered accounts",
-    feedbackAccuracy: "Feedback Accuracy",
-    weeklyActivity: "Weekly Activity",
-    weeklyActivityDescription: "Number of predictions in the last 7 days",
-    topPredictedBreeds: "Top Predicted Breeds",
-    topPredictedBreedsDescription: "Top 5 most frequently predicted breeds",
-    predictionsCount: "{count} predictions",
-    usageTracking: "Usage Tracking",
-    usageTrackingDescription: "Monitor user activity and resource consumption",
-    exportReport: "Export Report",
-    totalDetections: "Total Detections",
-    allTime: "All Time",
-    totalStorage: "Total Storage",
-    across: "Across all users",
-    avgDetections: "Avg Detections/User",
-    perUser: "Per user",
-    detectionsOverTime: "Detections Over Time",
-    storageUsage: "Storage Usage",
-    userUsageDetails: "User Usage Details",
-    detailedBreakdown: "A detailed breakdown of each user's resource consumption",
-    filterByPlan: "Filter by plan",
-    detections: "Detections",
-    storage: "Storage",
-    lastActive: "Last Active",
-    trend: "Trend",
-    plan: "Plan",
-    noData: "No data found",
-    usage: {
-      searchPlaceholder: "Search users...",
-      tokensUsed: "Tokens Used",
-      totalTokensUsed: "Total Tokens Used",
-      avgTokens: "Avg Tokens/User",
-      tokensOverTime: "Tokens Over Time",
-      usersByPlan: "Users by Plan",
-      headers: {
-        name: "Name",
-        email: "Email",
-        plan: "Plan",
-        detections: "Detections",
-        storage: "Storage",
-        trend: "Trend",
-        lastActive: "Last Active",
-      },
-      cloudinaryCredits: "Cloudinary Plan Credits ({plan})",
-      creditInfo: "1 Credit = 1000 Transformations or 1GB Storage/Bandwidth",
-      used: "Used",
-      transformations: "Transformations",
-      transformationsDesc: "Resizing, AI Generation, Optimizing",
-      netStorage: "Net Storage",
-      limit: "Limit",
-      sharedCreditLimit: "Shared Credit Limit",
-      bandwidth: "Bandwidth (30d)",
-      csv: {
-        userName: "User Name",
-        email: "Email",
-        plan: "Plan",
-        tokensUsed: "Tokens Used",
-        tokensLimit: "Tokens Limit",
-      },
-    },
-    userManagement: {
-      title: "User Management",
-      description: "Manage and monitor registered users",
-      searchPlaceholder: "Search users...",
-      errors: {
-        noUsersFound: "No users found",
-        usersByPlan: "Users by Plan",
-        userPageIndicator: "Showing {start}-{end} of {total} users",
-      },
-    },
-    transactions: {
-      title: "Transaction History",
-      description: "View all payment transactions.",
-      user: "User",
-      plan: "Plan",
-      status: "Status",
-      amount: "Amount",
-      gateway: "Gateway",
-      date: "Date",
-      completed: "Completed",
-      pending: "Pending",
-      failed: "Failed",
-    },
-  },
-  history: {
-    title: "Prediction History",
-    subtitle: "View all your past detections",
-    searchPlaceholder: "Search by breed name...",
-    filterType: "Filter by type",
-    typeAll: "All",
-    typeImage: "Image",
-    typeVideo: "Video",
-    sortBy: "Sort by",
-    sortNewest: "Newest First",
-    sortOldest: "Oldest First",
-    sortConfidence: "Highest Confidence",
-    noPredictions: "No predictions yet. Start detecting!",
-    confidence: "Confidence",
-    videoFile: "Video File",
-    view: "View",
-    download: "Download",
-    delete: "Delete",
-    confirmDelete: "Are you sure you want to delete this prediction?",
-    deleteSuccess: "Prediction deleted successfully.",
-    deleteError: "Failed to delete prediction.",
-    loginRequired: "Please login to view your prediction history",
-    loadMore: "Load More",
-    sourceStream: "Live Capture",
-    sourceImage: "Image Upload",
-    sourceVideo: "Video Upload",
-    sourceUrl: "URL Input",
-  },
-  footer: {
-    company: "Company",
-    about: "About Us",
-    blog: "Blog",
-    careers: "Careers",
-    press: "Press",
-    product: "Product",
-    dogdex: "DogDex",
-    liveDetection: "Live Detection",
-    pricing: "Pricing",
-    documentation: "Documentation",
-    support: "Support",
-    help: "Help Center",
-    contact: "Contact Us",
-    faq: "FAQ",
-    status: "Status",
-    contactInfo: "Contact",
-    email: "Email",
-    phone: "Phone",
-    address: "Address",
-    privacy: "Privacy",
-    terms: "Terms",
-    cookies: "Cookies",
-    copyright: "© 2025 Dog DogDex. All rights reserved.",
-    learnMore: "Learn More",
-    adSection1Title: "Premium Features",
-    adSection1Description: "Unlock unlimited detections and advanced analytics",
-    adSection2Title: "API Access",
-    adSection2Description: "Integrate dog detection into your applications",
-    adSection3Title: "Enterprise",
-    adSection3Description: "Custom solutions for large-scale deployments",
-  },
-  ad: {
-    banner: "🎉 Upgrade to Premium and get unlimited detections!",
-    upgrade: "Upgrade Now",
-  },
-  pricing: {
-    featureTokenLimit: "{count} Tokens / day",
-    featureStorage: "History Storage",
-    priority: "Priority Support",
-    customModels: "Custom Models",
-    faq: "Frequently Asked Questions",
-    faqQ1: "Can I change my plan at any time?",
-    faqA1:
-      "Yes, you can upgrade or downgrade your plan at any time. Changes will take effect immediately.",
-    faqQ2: "What payment methods do you accept?",
-    faqA2:
-      "We accept all major credit cards, PayPal, and bank transfers for enterprise plans.",
-    faqQ3: "Is there a free trial?",
-    faqA3: "Yes, the Free plan includes 10 detections per month with no credit card required.",
-    title: "Upgrade to unlock unlimited detections!",
-    description: "Choose the perfect plan for your needs",
-    monthly: "Monthly",
-    yearly: "Yearly",
-    save: "Save 20%",
-    free: "Free",
-    starter: "Starter",
-    professional: "Professional",
-    enterprise: "Enterprise",
-    freeDescription: "Perfect for trying out",
-    starterDescription: "For casual users",
-    professionalDescription: "For power users",
-    enterpriseDescription: "For large organizations",
-    unlimited: "Unlimited",
-    apiAccess: "API Access",
-    getStarted: "Get Started",
-    currentPlan: "Current Plan",
-    upgrade: "Upgrade",
-    downgrade: "Downgrade",
-    features: "Features",
-    noLimit: "No limit",
-    included: "Included",
-    notIncluded: "Not included",
-    perMonth: "/month",
-    perYear: "/year",
-  },
-  faq: "Frequently Asked Questions",
-  faqQ4: "Do you offer refunds?",
-  faqA4: "We offer a 30-day money-back guarantee on all paid plans.",
-  ready: "Ready to get started?",
-  readyDescription: "Join thousands of users identifying dog breeds with AI",
-  startFree: "Start for free",
-  featured: "Most Popular",
-  getStarted: "Get Started",
-  checkout: {
-    title: "Checkout",
-    orderSummary: "Order Summary",
-    total: "Total",
-    billingInfo: "Billing Information",
-    email: "Email",
-    cardInfo: "Card Information",
-    cardPlaceholder: "Payment form will be integrated here with Stripe/MoMo",
-    pay: "Pay",
-    failed: "Payment failed",
-  },
-  language: {
-    toggle: "Toggle language",
-  },
-  profilePage: {
-    upgradeSuccessTitle: "Upgrade Successful!",
-    upgradeSuccessDescription: "Your plan has been upgraded to {planName}. Enjoy the new features!",
-  },
-  plans: {
-    title: "Plans"
-  },
-  rankPage: {
-    title: "Leaderboard | DogDex",
-    description: "View the leaderboards for top dog breed collectors worldwide, by country, and by city.",
-    headerTitle: "Leaderboard",
-    headerDescription: "Honoring the most outstanding collectors",
-    scope: {
-      global: "Global",
-      country: "Country",
-      city: "City",
-    },
-    search: {
-      country: "Enter country name...",
-      city: "Enter city name...",
-    },
-    loading: "Updating data...",
-    error: "Could not load the leaderboard.",
-    empty: {
-      title: "No ranking data yet.",
-      description: "Enter a region to start searching.",
-    },
-    table: {
-      rank: "Rank",
-      collector: "Collector",
-      region: "Region",
-      achievement: "Achievement",
-    },
-    unupdated: "Not updated",
-  },
-  loadingMessages: {
-    sniffing: { title: "Sniffing data...", desc: "Sniffing every corner for data..." },
-    wakingBoss: { title: "Waking up the Boss...", desc: "Calling the Boss (he's a bit lazy)..." },
-    analyzingFur: { title: "Analyzing fur patterns...", desc: "Examining every single hair..." },
-    lookingBones: { title: "Looking for bones...", desc: "Searching for the lost bone..." },
-    didYouKnow: { title: "Did you know?", desc: "A dog's nose is wet to help absorb scent chemicals!" },
-    summoningAI: { title: "Summoning AI...", desc: "Summoning the power of the Good Boy..." },
-    identifying: { title: "Identifying breed...", desc: "Is this a Husky or a Corgi?" },
-    funFact: { title: "Fun Fact", desc: "Phu Quoc Ridgeback is one of only three breeds with a ridge on its back." },
-    processing: "Processing",
-  },
-  radar: {
-    title: "Search Radar",
-    subtitle: 'Showing "{type}" dogs near the reported location',
-    noLocation: "No location info to scan radar.",
-    radius: "Radius",
-    refresh: "Refresh",
-    foundMatches: "Found {count} potential matches!",
-    noMatches: "No matches found yet. System will keep scanning.",
-    expandRadius: "Expand:",
-    lostCenter: "Lost Location",
-    viewDetails: "View Details",
-  },
-  community: {
-    header: {
-      title: "Community Watch",
-      subtitle: "Join hands to reunite lost pets with their families. Fast and effective community support.",
-      aiBadge: "AI-Powered Rescue Network",
-      postButton: "Post New",
-      filters: {
-        all: "All",
-        lost: "Lost",
-        found: "Found",
-      },
-      searchPlaceholder: "Filter by breed...",
-      location: {
-        nearMe: "Near Me",
-        nearMeActive: "Nearest",
-        permissionError: "Location access is required to use this feature.",
-        unsupportedError: "Geolocation is not supported by your browser.",
-      },
-      expand: "Expand",
-      collapse: "Collapse",
-    },
-    helpFindDog: "HELP FIND THIS DOG",
-    dogFound: "DOG FOUND",
-    postedOn: "Posted on",
-    rescueRadar: "Rescue Radar",
-    rescueRadarDesc: 'Showing "{type}" dogs (matching breed: {breed}) near the location.',
-    breedAI: "Breed (AI)",
-    confidence: "Confidence",
-    contactInfo: "Contact Info",
-    shareToCommunity: "Share to Community",
-    sharingNotSupported: "Sharing not supported on this device.",
-    postNotFound: "Post not found.",
-    loadFailed: "Failed to load post.",
-    analyzing: "Analyzing Data...",
-    noImage: "No image",
-    lostStatus: "Missing",
-    foundStatus: "Found",
-    breed: "Breed",
-    status: "Status",
-    urgentAlert: "Urgent Alert",
-    goodNews: "Good News",
-    lostMessage: "If you see this dog, please enable location to help the owner.",
-    foundMessage: "This dog has been found. The owner should contact the finder.",
-    shareTitle: "Help find dog: {title}",
-    shareTextPrefix: "Please help find this dog: {breed}!",
-    linkCopied: "Link copied",
-    datePosted: "Posted on",
-    unknownLocation: "Unknown Location",
-    searchArea: "Search Area",
-    searchAreaDesc: "Real-time data of related posts",
-    liveRadar: "Live Radar",
-    details: "Details",
-    verifySuccess: "Thank you! Information has been sent to the owner.",
-    back: "Back",
-  },
-  report: {
-    postTitle: "URGENT: Lost Dog {name} - Breed {breed}",
-    postContent: "Lost dog {name} last seen at {address}. \nAttributes: {color}, {size}. \nBreed: {breed}. \nPlease help!",
-    unknownColor: "Unknown color",
-    unknownSize: "Unknown size",
-    button: "Report Lost",
-    title: "Report Lost {name}",
-    description: "The system will automatically post a search notice and scan for clues in the selected area.",
-    locationLabel: "Lost Location (required)",
-    locationHint: "Select the location where you last saw {name}. Drag the pin to adjust.",
-    contactLabel: "Contact Information",
-    contactHint: "Auto-filled from account. You can edit if needed.",
-    contactAutoFillNote: "Contact info will be taken from your profile ({email}).",
-    contactPrivacyNote: "We respect your privacy.",
-    contactName: "Contact Name *",
-    contactPhone: "Phone Number *",
-    contactEmail: "Email (optional)",
-    confirmButton: "Confirm Report",
-    processing: "Processing...",
-    successMessage: "Reported successfully! The system will automatically search for nearby clues.",
-    errorLocation: "Please select the lost location on the map",
-    errorName: "Please enter a contact name",
-    errorPhone: "Please enter a contact phone number",
-    errorGeneral: "An error occurred while reporting",
-    noPhone: "Not provided",
-    searchPlaceholder: "Enter address (e.g. Central Park, District 1...)",
-    locationFound: "Location found!",
-    locationNotFound: "Location not found. Try a different keyword.",
-    selectedAddress: "Selected Address",
-    contentLabel: "Post Content",
-    titleField: "Post Title",
-    titlePlaceholder: "E.g. [URGENT] Lost Poodle in District 1...",
-    detailsField: "Additional Details (Optional)",
-    detailsPlaceholder: "Describe more about features, collar or circumstances...",
-    phonePlaceholder: "Enter phone number...",
-    emailPlaceholder: "Enter contact email...",
-  },
-  verifyFound: {
-    button: "REPORT FOUND",
-    title: "Verify Found Dog",
-    description: "Please verify this is indeed {name} ({breed}).",
-    tabs: {
-      camera: "AI Scan",
-      qr: "QR Code",
-    },
-    camera: {
-      searching: "Searching for {breed}...",
-      detected: "Detected: {label}",
-      match: "Match: {label}!",
-      start: "Start Camera",
-      hint: "Point camera at the dog. AI will auto-capture on match.",
-      error: "Cannot start Camera",
-      serverError: "AI Server Connection Error",
-      success: "Verified breed match: {label}!",
-    },
-    qr: {
-      scan: "Scan QR code on dog's collar/tag.",
-      upload: "Or upload QR image (if using Laptop)",
-      match: "QR Code Matched!",
-      mismatch: "QR Code mismatch!",
-      notFound: "No QR code found in this image",
-      fileMatch: "QR Code Matched (from file)!",
-    },
-    contact: {
-      successTitle: "Verification Successful!",
-      aiSuccess: "AI confirmed breed {label}",
-      qrSuccess: "Valid QR Code",
-      autoFill: "Your contact info has been auto-filled.",
-      nameLabel: "Your Name *",
-      phoneLabel: "Phone Number *",
-      emailLabel: "Email (for owner to contact) *",
-      locationLabel: "Current Location (Found spot) *",
-      messageLabel: "Message to owner",
-      submit: "Send Information to Owner",
-      back: "Back to verification",
-      errorMissing: "Please enter name and phone number",
-    },
-  },
-  locationPicker: {
-    loadingMap: "Loading Map...",
-    locating: "Locating you...",
-    resolvingAddress: "Resolving address...",
-    noLocation: "No location selected",
-    addressLabel: "Address:",
-    gpsLabel: "GPS:",
-    getLocation: "Get Current Location",
-    hint: "💡 Drag the red pin to adjust exact location",
-    errors: {
-      unsupported: "Geolocation is not supported by your browser",
-      permission: "Cannot get location. Please allow GPS access.",
-    },
-  },
-  healthRecords: {
-    title: "Medical History",
-    addRecord: "Add Record",
-    editRecord: "Edit Record",
-    addTitle: "Add New Health Record",
-    empty: {
-      title: "No health records found",
-      description: "Start tracking your dog's vaccines and checkups.",
-    },
-    form: {
-      type: "Event Type",
-      date: "Date",
-      title: "Title / Procedure Name",
-      titlePlaceholder: "e.g. Annual Rabies Vaccination",
-      vet: "Vet / Clinic Name",
-      vetPlaceholder: "Dr. John Doe",
-      nextDue: "Next Due Date",
-      cost: "Cost (VND)",
-      weight: "Weight (kg)",
-      symptoms: "Symptoms",
-      symptomsPlaceholder: "e.g. Vomiting, Lethargy...",
-      diagnosis: "Diagnosis",
-      diagnosisPlaceholder: "e.g. Parvovirus...",
-      notes: "Notes",
-      notesPlaceholder: "Details about treatment...",
-      attachments: "Attachments (Prescriptions, receipts...)",
-      currentAttachments: "Current attachments:",
-      cancel: "Cancel",
-      save: "Save Record",
-      update: "Update Record",
-      saving: "Saving...",
-    },
-    types: {
-      vaccine: "Vaccine",
-      checkup: "Checkup",
-      medicine: "Medicine",
-      surgery: "Surgery",
-      hygiene: "Hygiene",
-      other: "Other",
-    },
-    card: {
-      diagnosis: "Diagnosis:",
-      symptoms: "Symptoms:",
-      weight: "Weight:",
-      nextDue: "NEXT DUE",
-      vetPrefix: "👨‍⚕️",
-    },
-    messages: {
-      updateSuccess: "Record updated successfully",
-      createSuccess: "Record added successfully",
-      deleteSuccess: "Record deleted",
-      errorSave: "Failed to save record",
-      errorDelete: "Failed to delete record",
-      confirmDelete: "Are you sure you want to delete this record?",
-    },
-  },
-  myDogs: {
-    title: "My Dogs",
-    subtitle: "Manage your pets and their health records.",
-    addDog: "Add Dog",
-    noDogs: "No dogs added yet",
-    noDogsDescription: "Create a profile for your dog to track their health, vaccines, and keep them safe.",
-    addFirstDog: "Add Your First Dog",
-    male: "Male",
-    female: "Female",
-    lost: "LOST",
-    noBirthday: "No birthday",
-    getPetId: "Get Pet ID (QR)",
-    petIdCard: "Pet Identity Card",
-    markAsFound: "Mark as Found",
-  },
-  newDog: {
-    backToMyDogs: "Back to My Dogs",
-    title: "New Dog Profile",
-    subtitle: "Register your furry friend to the DogDex system.",
-    basicInfo: "Basic Information",
-    uploadToDetect: "Upload a photo to auto-detect breed",
-    clickToUpload: "Click to Upload Photo",
-    fileSupport: "JPG, PNG (Max 10MB)",
-    analyzing: "AI ANALYZING...",
-    changePhoto: "Change Photo",
-    name: "Name",
-    namePlaceholder: "What's your dog's name?",
-    gender: "Gender",
-    selectGender: "Select gender",
-    male: "Male",
-    female: "Female",
-    breed: "Breed",
-    aiSuggestion: "AI Suggestion",
-    breedPlaceholder: "e.g. Golden Retriever",
-    breedHint: "Upload a photo above to let our AI identify the breed automatically.",
-    birthday: "Birthday",
-    size: "Size",
-    selectSize: "Select size",
-    sizeSmall: "Small (<10kg)",
-    sizeMedium: "Medium (10-25kg)",
-    sizeLarge: "Large (25-45kg)",
-    sizeGiant: "Giant (>45kg)",
-    color: "Color",
-    selectColor: "Select color from breed standard",
-    otherColor: "Other... (Type manually)",
-    colorPlaceholder: "e.g. Black & White",
-    backToList: "Back to list",
-    pattern: "Pattern (Optional)",
-    patternPlaceholder: "e.g. Spotted, Brindle",
-    sterilized: "Sterilized / Spayed",
-    sterilizedHint: "Is your dog fixed?",
-    creatingProfile: "Creating Profile...",
-    createProfile: "Create Dog Profile",
-    successMessage: "Dog profile created successfully!",
-    failedMessage: "Failed to create profile",
-    identifiedAs: "Identified as {breed} ({confidence}%)",
-    analysisFailed: "Analysis failed. Please try manual entry.",
-  },
-  createPost: {
-    lostTitle: "Report Lost Dog",
-    foundTitle: "Report Found Dog",
-    aiHint: "AI will assist in identifying the dog breed for more accurate information.",
-    iFoundDog: "I found a dog",
-    iLostDog: "I lost my dog",
-    verificationImage: "Verification Image",
-    liveCamera: "Live Camera",
-    upload: "Upload",
-    scanQr: "Scan QR",
-    enableCamera: "Enable Camera",
-    photoTaken: "Photo taken!",
-    aiDetected: "AI Detect",
-    selectFromLibrary: "Select from library",
-    fileSupport: "Supports JPG, PNG (Max 5MB)",
-    scanQrHint: "Scan QR code on dog's tag",
-    postTitle: "Post Title",
-    lostPlaceholder: "e.g. Lost Husky in District 1",
-    foundPlaceholder: "e.g. Found Golden in the park",
-    addBreedHint: "Add \"{breed}\" to title?",
-    description: "Detailed Description",
-    descriptionPlaceholder: "Describe features, collar, health condition...",
-    locationLost: "Lost Location",
-    locationFound: "Found Location",
-    addressPlaceholder: "Specific address (Street number, street name...)",
-    contactName: "Contact Name",
-    phone: "Phone Number",
-    processing: "Processing...",
-    postNow: "Post Now",
-    needPhoto: "Please take or upload at least 1 photo.",
-    postSuccess: "Post submitted successfully!",
-    postError: "Error submitting post",
-    cameraError: "Cannot enable Camera. Please check permissions.",
-    autoFilledBreed: "Auto-filled breed: {breed}",
-    qrMatched: "QR Code Matched",
-    foundDogWithTag: "Found dog with tag (ID: {id})",
-    qrScannedContent: "Scanned QR code ID: {id}. Dog has collar.",
-    lostPrefix: "Lost dog: ",
-    foundPrefix: "Found dog: ",
-    featurePrefix: "Features: Breed {breed}, ...",
-  },
-  dogQrCode: {
-    petId: "DOGDEX PET ID",
-    download: "Download Image",
-    print: "Print Now",
-    hint: "* Print this code and attach to collar. When scanned, it will show your secure contact information.",
-  },
-  countryStatePicker: {
-    country: "Country",
-    city: "City",
-    selectCountry: "Select country",
-    selectCity: "Select city",
-  },
-  publicDog: {
-    dogNotFound: "Dog not found",
-    dogIsLost: "MISSING DOG",
-    helpContactOwner: "Please help contact the owner immediately!",
-    color: "Color",
-    birthday: "Birthday",
-    owner: "Owner",
-    contactOwner: "Contact Owner",
-    phoneSecure: "Your message will be sent directly to the owner via our secure system.",
-    yourName: "Your Name",
-    yourPhone: "Your Phone",
-    currentLocation: "Current Location",
-    message: "Message",
-    sendAlert: "Send Alert",
-    sending: "Sending...",
-    messageSent: "Message sent successfully!",
-    sendFailed: "Failed to send message. Please try again.",
-    dogSafe: "This dog is safe",
-    privacyHidden: "This dog is safe with their owner. Contact information is hidden for privacy.",
-    poweredBy: "Powered by",
-    thisIsYourDog: "This is your dog!",
-    ownerViewDescription: "You are viewing the public page of your pet.",
-    ownerViewTitle: "Your pet's public page",
-    ownerViewInfo: "This is the page others will see when scanning your pet's QR code.",
-    goToProfile: "Manage Profile",
-  },
-};
-</file>
-
-<file path="i18n/messages/vi.ts">
-export default {
-  common: {
-    appName: "DogDex",
-    loading: "Đang tải...",
-    error: "Đã có lỗi xảy ra",
-    success: "Thành công",
-    cancel: "Hủy",
-    save: "Lưu",
-    delete: "Xóa",
-    edit: "Chỉnh sửa",
-    close: "Đóng",
-    back: "Quay lại",
-    saveChanges: "Lưu thay đổi",
-    previous: "Trước",
-    search: "Tìm kiếm",
-    searchPlaceholder: "Tìm kiếm...",
-    page: "Trang",
-    filter: "Lọc",
-    all: "Tất cả",
-    sort: "Sắp xếp",
-    viewAll: "Xem tất cả",
-    guest: "Khách",
-    getStarted: "Bắt đầu ngay",
-    dogBreed: "giống chó",
-    optional: "Tùy chọn",
-    manage: "Quản lý",
-  },
-  nav: {
-    detect: "Nhận diện",
-    live: "Trực tiếp",
-    about: "Giới thiệu",
-    results: "Kết quả",
-    dogdex: "DogDex",
-    achievements: "Thành tích",
-    profile: "Hồ sơ",
-    adminPanel: "Quản trị",
-    login: "Đăng nhập",
-    register: "Đăng ký",
-    logout: "Đăng xuất",
-    english: "EN",
-    vietnamese: "VI",
-    light: "Sáng",
-    dark: "Tối",
-    system: "Hệ thống",
-    history: "Lịch sử",
-    myLibrary: "Thư viện",
-    pricing: "Nâng cấp",
-    tokens: "Tokens",
-    rank: "Xếp hạng",
-    sourceImage: "Upload ảnh",
-    sourceVideo: "Upload video",
-    sourceStream: "Live Capture",
-    sourceUrl: "URL Input",
-  },
-  auth: {
-    loginTitle: "Đăng nhập",
-    registerTitle: "Đăng ký",
-    loginDescription: "Đăng nhập để sử dụng đầy đủ tính năng",
-    registerDescription: "Tạo tài khoản mới để bắt đầu",
-    email: "Email",
-    password: "Mật khẩu",
-    username: "Tên người dùng",
-    firstName: "Họ",
-    lastName: "Tên",
-    phoneNumber: "Số điện thoại",
-    avatar: "Ảnh đại diện (tùy chọn)",
-    emailPlaceholder: "email@example.com",
-    passwordPlaceholder: "••••••••",
-    usernamePlaceholder: "Nhập tên người dùng",
-    loginButton: "Đăng nhập",
-    registerButton: "Đăng ký",
-    processing: "Đang xử lý...",
-    noAccount: "Chưa có tài khoản?",
-    hasAccount: "Đã có tài khoản?",
-    registerNow: "Đăng ký ngay",
-    loginNow: "Đăng nhập",
-    errorUsernameRequired: "Vui lòng nhập tên người dùng",
-    errorInvalidCredentials: "Email hoặc mật khẩu không đúng",
-    errorEmailExists: "Email đã được sử dụng",
-    errorGeneral: "Đã có lỗi xảy ra",
-    errorUsernameInvalid:
-      "Username phải viết thường, không dấu, không cách và chỉ chứa chữ, số, gạch dưới (_).",
-    errorNameRequired: "Vui lòng nhập tên",
-    enterOtp: "Nhập mã OTP",
-    logoutSuccess: "Đăng xuất thành công",
-    verify: "Xác thực",
-    otpSuccess: "Xác thực thành công! Vui lòng đăng nhập.",
-    optional: "tùy chọn",
-    forgotPassword: "Quên mật khẩu?",
-    forgotSent: "Mã đặt lại đã được gửi đến email của bạn.",
-    sendResetCode: "Gửi mã đặt lại",
-    backToLogin: "Quay về đăng nhập",
-    resetSuccess: "Đặt lại mật khẩu thành công. Vui lòng đăng nhập.",
-    newPassword: "Mật khẩu mới",
-    otp: "Mã OTP",
-    resetPasswordButton: "Đặt lại mật khẩu",
-    errorCaptcha: "Xác thực Captcha thất bại. Vui lòng thử lại.",
-  },
-  about: {
-    title: "Về DogDex AI",
-    subtitle: "Cách mạng hóa việc nhận dạng giống chó bằng trí tuệ nhân tạo",
-    mission: "Sứ mệnh của chúng tôi",
-    missionText:
-      "Chúng tôi tin rằng công nghệ nên làm cho thế giới kết nối hơn. DogDex AI sử dụng AI tiên tiến để giúp những người yêu chó, bác sĩ thú y và nhà nghiên cứu nhận dạng giống chó ngay lập tức. Sứ mệnh của chúng tôi là làm cho việc nhận dạng giống chó có thể tiếp cận được với mọi người, ở mọi nơi.",
-    team: "Đội ngũ của chúng tôi",
-    teamText:
-      "Được xây dựng bởi một đội ngũ tâm huyết gồm các nhà nghiên cứu AI, những người yêu chó và các kỹ sư phần mềm tận tâm tạo ra trải nghiệm nhận dạng giống chó tốt nhất.",
-    ready: "Sẵn sàng để bắt đầu?",
-    fastTitle: "Nhanh như chớp",
-    fastDesc:
-      "Nhận dạng giống chó theo thời gian thực được hỗ trợ bởi AI tiên tiến",
-    secureTitle: "An toàn & Riêng tư",
-    secureDesc:
-      "Dữ liệu của bạn được mã hóa và không bao giờ chia sẻ với bên thứ ba",
-    communityTitle: "Phát triển bởi cộng đồng",
-    communityDesc:
-      "Tham gia cùng hàng ngàn người yêu chó để cùng nhau cải thiện AI",
-    globalTitle: "Quy mô toàn cầu",
-    globalDesc: "Hỗ trợ hơn 200 giống chó từ khắp nơi trên thế giới",
-  },
-  home: {
-    heroTitle: "Nhận diện giống chó với",
-    heroDescription:
-      "Nhận diện ngay để biết tên giống và đặc điểm cún cưng",
-    dragDropTitle: "Kéo thả, dán ảnh, hoặc nhấn để tải lên",
-    dragDropDescription: "Hoặc chọn file từ thiết bị của bạn",
-    dragDropDescriptionMobile: "Kéo thả hoặc nhấn để tải lên từ thiết bị của bạn",
-    selectImage: "Chọn ảnh",
-    selectVideo: "Chọn video",
-    supportedFormats: "Hỗ trợ: JPG, PNG, GIF, MP4, MOV (tối đa 50MB)",
-    selectAnother: "Chọn file khác",
-    detectButton: "Nhận diện giống chó",
-    detecting: "Đang nhận diện...",
-    loginToSave: "Đăng nhập để lưu kết quả vào bộ sưu tập của bạn",
-    feature1Title: "Nhận diện chính xác",
-    feature1Description: "AI được huấn luyện trên hàng trăm giống chó",
-    feature2Title: "Thông tin chi tiết",
-    feature2Description: "Tìm hiểu về tính cách, chăm sóc và đặc điểm",
-    feature3Title: "Hỗ trợ video",
-    feature3Description: "Nhận diện chó trong cả ảnh và video",
-    uploadingFile: "Đang tải file lên...",
-    processingFile: "Đang xử lý, vui lòng đợi...",
-    uploading: "Đang tải lên...",
-    detectionFailed: "Nhận diện thất bại. Vui lòng thử lại.",
-    contactTitle: "Liên hệ",
-    contactDescription:
-      "Có câu hỏi, phản hồi hoặc góp ý? Chúng tôi rất muốn nghe từ bạn!",
-    simulation: {
-      uploading: "Đang tải tệp lên máy chủ...",
-      preparing: "Đang khởi tạo mô hình AI...",
-      analyzing: "Đang phân tích hình ảnh...",
-      finishing: "Sắp xong rồi, đang tổng hợp kết quả...",
-      success: "Hoàn tất! Đang chuyển hướng...",
-    },
-    fileTooLarge: "File quá lớn (Tối đa 50MB)",
-    tabs: {
-      upload: "Tải file lên",
-      url: "Dán URL",
-    },
-    urlInputTitle: "Nhập URL hình ảnh",
-    urlInputDesc: "Dán liên kết đến hình ảnh (JPG, PNG, WebP) để nhận diện giống chó.",
-    errors: {
-      emptyUrl: "Vui lòng nhập URL",
-    },
-    securityWarning: "Cảnh báo bảo mật",
-    securityWarningDesc: "Chỉ sử dụng URL từ các nguồn đáng tin cậy. Các liên kết độc hại có thể gây hại.",
-  },
-  results: {
-    title: "Kết quả nhận diện",
-    confidence: "Độ tin cậy",
-    addToCollection: "Thêm vào bộ sưu tập",
-    added: "Đã thêm",
-    viewInDogDex: "Xem trong DogDex",
-    viewDetails: "Xem chi tiết",
-    detectAnother: "Nhận diện ảnh khác",
-    characteristics: "Đặc điểm",
-    commonHealthIssues: "Vấn đề sức khỏe thường gặp",
-    origin: "Xuất xứ",
-    size: "Kích thước",
-    lifespan: "Tuổi thọ",
-    favoriteFoods: "Thức ăn yêu thích",
-    healthIssues: "Các vấn đề sức khỏe thường gặp",
-    suitableFor: "Phù hợp với",
-    unsuitableFor: "Không phù hợp với",
-    climatePreference: "Sở thích khí hậu",
-    maintenanceDifficulty: "Mức sống",
-    trainableSkills: "Khả năng có thể huấn luyện",
-    funFact: "Sự thật thú vị",
-    temperament: "Tính cách",
-    years: "năm",
-    provideFeedback: "Đánh giá kết quả",
-    detectionResults: "Kết quả nhận diện",
-    collected: "Đã sưu tầm",
-    noDetectionsTitle: "Không Tìm Thấy Chó",
-    noDetectionsDescription:
-      "Chúng tôi không thể tìm thấy bất kỳ con chó nào trong tệp bạn đã tải lên. Vui lòng thử lại với một hình ảnh hoặc video khác.",
-    tryAgain: "Thử Lại",
-    chatWithAI: {
-      title: "Hỏi DogDex",
-      placeholder: "Nhập câu hỏi của bạn về giống chó {breedName}...",
-      send: "Gửi",
-      remaining: "Còn lại {count} lượt hỏi",
-      limitReached: "Bạn đã hết lượt hỏi đáp.",
-      intro: "Bạn có thể hỏi tôi bất cứ điều gì về giống chó {breedName}!",
-      prompts: {
-        funFact: "Kể một sự thật thú vị về giống chó này.",
-        diet: "Nên cho chó {breedName} ăn loại thức ăn nào?",
-        activities: "Những hoạt động/trò chơi nào phù hợp với giống chó này?",
-        apartment: "Giống chó này có phù hợp để nuôi trong căn hộ không?",
-      },
-    },
-    description: "Mô tả",
-    detailsTitle: "Chi tiết giống chó",
-    physicalInfo: "Thông tin thể chất",
-    behavioralInfo: "Thông tin hành vi",
-    healthInfo: "Thông tin sức khỏe",
-    height: "Chiều cao",
-    weight: "Cân nặng",
-    group: "Nhóm",
-    coatType: "Loại lông",
-    coatColors: "Màu lông",
-    energy: "Mức năng lượng",
-    trainability: "Khả năng huấn luyện",
-    shedding: "Mức rụng lông",
-    selectBreedPlaceholder: "Chọn giống chó khác được phát hiện...",
-    healthRecommendations: "Khuyến nghị cho các vấn đề sức khỏe thường gặp",
-    recommendedProductsTitle: "Sản phẩm đề xuất cho {breedName}",
-    findOnShopee: "Tìm trên Shopee",
-  },
-  dogDetails: {
-    backToDogDex: "Quay lại DogDex",
-    quickStats: "Thống kê nhanh",
-    maintenance: "Mức sống",
-    livingConditions: "Điều kiện sống",
-    climatePreference: "Sở thích khí hậu",
-    goodWithChildren: "Thân thiện với trẻ em",
-    goodWithPets: "Thân thiện với thú cưng khác",
-    suitableFor: "Phù hợp với",
-    notSuitableFor: "Không phù hợp với",
-    favoriteFoods: "Thức ăn yêu thích",
-    healthIssues: "Các vấn đề sức khỏe thường gặp",
-    trainableSkills: "Kỹ năng có thể huấn luyện",
-    funFact: "Sự thật thú vị",
-  },
-  live: {
-    title: "Nhận diện trực tiếp",
-    subtitle: "Sử dụng camera để nhận diện giống chó theo thời gian thực",
-    cameraError: "Không thể truy cập camera. Vui lòng kiểm tra quyền truy cập.",
-    startCamera: "Bật camera",
-    stopCamera: "Tắt camera",
-    clickToStart: 'Nhấn "Bật camera" để bắt đầu',
-    searching: "Đang tìm kiếm chó...",
-    detectionsTitle: "Kết quả thời gian thực",
-    connected: "Đã kết nối đến dịch vụ AI",
-    insufficientTokens: "Không đủ token để bắt đầu phiên stream.",
-    redirectError: "Không lấy được ID dự đoán để chuyển hướng.",
-    serverError: "Lỗi máy chủ",
-    disconnectedError: "Đã mất kết nối với máy chủ.",
-    connectError: "Kết nối thất bại",
-    tips: {
-      title: "Mẹo để nhận diện tốt hơn",
-      tip1: "Đảm bảo có đủ ánh sáng, tránh ngược sáng.",
-      tip2: "Giữ camera ổn định và không bị rung.",
-      tip3: "Đưa toàn bộ cơ thể chó vào khung hình.",
-      tip4: "Hệ thống sẽ tự động nhận diện khi tìm thấy chó.",
-      tip5: "Để có kết quả tốt nhất, hãy sử dụng camera có độ phân giải cao.",
-      tip6: "Giảm thiểu các yếu tố gây xao nhãng nền.",
-    },
-  },
-  errors: {
-    insufficientTokensTitle: "Không đủ Token",
-    insufficientTokensForStream: "Bạn không có đủ token để bắt đầu nhận diện trực tiếp.",
-    // ... các lỗi khác
-  },
-  dogdex: {
-    title: "DogDex của tôi",
-    description: "Bộ sưu tập giống chó bạn đã khám phá",
-    emptyTitle: "DogDex của bạn đang trống",
-    emptyDescription: "Bắt đầu nhận diện giống chó để xây dựng bộ sưu tập",
-    startDetecting: "Bắt đầu nhận diện",
-    breeds: "giống",
-    collected: "Đã sưu tầm",
-    searchPlaceholder: "Tìm kiếm giống chó...",
-    showingCount: "Hiển thị {count} trên {total} giống",
-    loadingMore: "Đang tải thêm...",
-    noResults: "Không tìm thấy chó nào khớp với ",
-    collectedOn: "Sưu tầm ngày",
-    sourceImage: "Sưu tầm qua Ảnh",
-    sourceVideo: "Sưu tầm qua Video",
-    sourceStream: "Sưu tầm qua Camera",
-    sourceManual: "Thêm thủ công",
-    unlockDetails: "Sưu tầm để mở khóa chi tiết",
-    notCollectedTooltip: "Chưa sưu tầm. Hãy nhận diện giống chó này để mở khóa!",
-    sort: {
-      nameAsc: "Tên (A-Z)",
-      nameDesc: "Tên (Z-A)",
-      rarityDesc: "Độ hiếm (Cao-Thấp)",
-      rarityAsc: "Độ hiếm (Thấp-Cao)",
-      collectedAtDesc: "Ngày sưu tầm (Mới nhất)",
-      collectedAtAsc: "Ngày sưu tầm (Cũ nhất)",
-    },
-    filter: {
-      all: "Tất cả",
-      collected: "Đã sưu tầm",
-      notCollected: "Chưa sưu tầm",
-    },
-  },
-  achievements: {
-    title: "Thành tích",
-    description: "Theo dõi tiến trình và mở khóa thành tích",
-    stats: "Thống kê",
-    totalDetections: "Tổng số lần nhận diện",
-    uniqueBreeds: "Giống chó độc nhất",
-    accuracy: "Độ chính xác",
-    unlocked: "Đã mở khóa",
-    locked: "Đã khóa",
-    progress: "Tiến trình",
-    backToHome: "Quay về trang chủ",
-    pageDescription:
-      "Theo dõi tiến trình và mở khóa phần thưởng khi bạn sưu tầm các giống chó",
-    dogsCollected: "Chó đã sưu tầm",
-    achievementsUnlocked: "Thành tích đã mở khóa",
-    nextAchievement: "Thành tích tiếp theo",
-    allAchievements: "Tất cả thành tích",
-    completed: "Đã hoàn thành",
-    collectCount: "Sưu tầm {count} chó",
-    unlockedOn: "Mở khóa vào",
-  },
-  contact: {
-    formTitle: "Liên hệ với chúng tôi",
-    formDesc: "Bạn có câu hỏi hoặc góp ý? Hãy gửi tin nhắn cho chúng tôi.",
-    emailLabel: "Email",
-    emailPlaceholder: "tenban@example.com",
-    messageLabel: "Tin nhắn",
-    messagePlaceholder: "Nhập nội dung tin nhắn của bạn...",
-    submitButton: "Gửi tin nhắn",
-    submitting: "Đang gửi...",
-    successTitle: "Gửi thành công!",
-    successDescription: "Chúng tôi đã nhận được tin nhắn của bạn.",
-    errorTitle: "Gửi thất bại",
-    errorDescription: "Có lỗi xảy ra, vui lòng thử lại sau.",
-    captchaError: "Không thể xác minh Captcha. Vui lòng thử lại.",
-    thankYouTitle: "Cảm ơn bạn!",
-    thankYouDesc: "Tin nhắn của bạn đã được gửi đi. Đội ngũ hỗ trợ sẽ phản hồi sớm nhất có thể.",
-    sendAnother: "Gửi tin nhắn khác",
-    recaptchaText: "Trang web được bảo vệ bởi reCAPTCHA và tuân thủ Chính sách quyền riêng tư cũng như Điều khoản dịch vụ của Google."
-  },
-  profile: {
-    title: "Hồ sơ",
-    backToHome: "Quay về trang chủ",
-    description: "Quản lý cài đặt tài khoản",
-    stats: {
-      collected: "Chó đã sưu tầm",
-      achievements: "Thành tích",
-      completion: "Hoàn thành",
-      tokensRemaining: "Token trong tuần: {remaining}/{limit}",
-      tokens: "Tokens",
-      guestTokens: "Lượt dùng thử",
-    },
-    account: {
-      title: "Thông tin tài khoản",
-      description: "Cập nhật thông tin cá nhân của bạn",
-      editButton: "Chỉnh sửa hồ sơ",
-      name: "Họ và tên",
-      username: "Tên người dùng",
-      email: "Địa chỉ Email",
-      city: "Thành phố",
-      country: "Quốc gia",
-    },
-    password: {
-      title: "Đổi mật khẩu",
-      current: "Mật khẩu hiện tại",
-      new: "Mật khẩu mới",
-      confirm: "Xác nhận mật khẩu mới",
-    },
-    links: {
-      title: "Liên kết nhanh",
-      description: "Truy cập bộ sưu tập và thành tích của bạn",
-      viewCollection: "Xem bộ sưu tập",
-      viewAchievements: "Xem thành tích",
-    },
-    danger: {
-      title: "Khu vực nguy hiểm",
-      description: "Các hành động không thể hoàn tác cho tài khoản của bạn",
-      deleteAccountButton: "Xóa tài khoản",
-      deleteConfirmTitle: "Bạn có chắc chắn muốn xóa tài khoản?",
-      deleteConfirmDescription: "Hành động này không thể hoàn tác. Tất cả dữ liệu của bạn, bao gồm bộ sưu tập, thành tích và lịch sử sẽ bị xóa. Vui lòng nhập mật khẩu của bạn để xác nhận.",
-      passwordConfirmation: "Xác nhận mật khẩu của bạn",
-      confirmDeleteButton: "Tôi hiểu, xóa tài khoản của tôi",
-      passwordRequired: "Yêu cầu nhập mật khẩu để xác nhận.",
-    },
-  },
-  feedback: {
-    feedback: "Phản hồi",
-    title: "Phản hồi",
-    description: "Giúp chúng tôi cải thiện bằng cách đóng góp ý kiến",
-    wasCorrect: "Kết quả nhận diện có chính xác không?",
-    yes: "Có",
-    no: "Không",
-    correctBreed: "giống chó đúng là gì?",
-    selectBreed: "Chọn giống chó...",
-    additionalComments: "Nhận xét thêm (tùy chọn)",
-    commentsPlaceholder: "Cho chúng tôi biết thêm về kết quả nhận diện...",
-    submit: "Gửi phản hồi",
-    submitting: "Đang gửi...",
-    thankYou: "Cảm ơn bạn đã đóng góp ý kiến!",
-    thankYouDescription:
-      "Phản hồi của bạn giúp chúng tôi cải thiện độ chính xác của mô hình AI.",
-    error: "Gửi phản hồi thất bại",
-    loginRequiredTitle: "Đăng nhập để Gửi Phản hồi",
-    loginRequiredDescription:
-      "Thông tin của bạn rất quý giá! Vui lòng đăng nhập để giúp chúng tôi cải thiện AI.",
-    loginToFeedback: "Đăng nhập để Gửi Phản hồi",
-  },
-  admin: {
-    dashboard: "Bảng điều khiển",
-    users: "Người dùng",
-    models: "Mô hình",
-    analytics: "Phân tích",
-    feedback: {
-      feedback: "Phản hồi",
-      title: "Quản lý phản hồi",
-      description: "Xem, phân tích và duyệt các phản hồi từ người dùng.",
-      stats: {
-        pending: "Chờ duyệt",
-        approved: "Đã duyệt",
-        rejected: "Đã từ chối",
-        approvalRate: "Tỷ lệ duyệt",
-      },
-      tabs: {
-        list: "Danh sách phản hồi",
-        userStats: "Thống kê người dùng",
-      },
-      table: {
-        title: "Danh sách phản hồi",
-        description: "Tất cả phản hồi từ người dùng.",
-        headers: {
-          time: "Thời gian",
-          user: "Người dùng",
-          prediction: "Dự đoán",
-          result: "Kết quả",
-          status: "Trạng thái",
-          action: "Hành động",
-        },
-        noFeedback: "Chưa có phản hồi nào",
-      },
-      filters: {
-        all: "Tất cả",
-        pending: "Chờ duyệt",
-        approved: "Đã duyệt",
-        rejected: "Đã từ chối",
-        searchPlaceholder: "Tìm theo người dùng hoặc giống chó...",
-        pickDate: "Chọn khoảng thời gian",
-        clear: "Xóa bộ lọc",
-      },
-      dialog: {
-        title: "Chi tiết phản hồi",
-        description: "Xem lại dự đoán và phản hồi của người dùng.",
-        originalImage: "Ảnh gốc",
-        aiPrediction: "AI dự đoán",
-        userSays: "Người dùng nói",
-        mustBe: "phải là",
-        notes: "Ghi chú",
-        approveTitle: "Duyệt phản hồi này?",
-        approveDescription:
-          "Hành động này sẽ đánh dấu phản hồi là 'Đã duyệt' và di chuyển ảnh vào bộ dữ liệu huấn luyện. Bạn có thể sửa lại nhãn nếu cần.",
-        correctedLabel: "Nhãn giống chó đã sửa",
-        correctedLabelPlaceholder: "Nhập giống chó đúng nếu khác...",
-        selectOrEnterBreed: "Chọn hoặc nhập giống chó...",
-        noBreedFound: "Không tìm thấy giống chó.",
-        rejectTitle: "Từ chối phản hồi này?",
-        rejectDescription:
-          "Hành động này sẽ đánh dấu phản hồi là 'Đã từ chối' và di chuyển ảnh vào thư mục tương ứng. Bạn có thể nhập lý do từ chối (tùy chọn).",
-        rejectionReason: "Lý do từ chối (tùy chọn)",
-        rejectionReasonPlaceholder: "Ví dụ: ảnh mờ, không phải chó...",
-      },
-      actions: {
-        approving: "Đang duyệt...",
-        rejecting: "Đang từ chối...",
-        approve: "Duyệt",
-        reject: "Từ chối",
-      },
-      status: {
-        approved: "Đã duyệt",
-        rejected: "Đã từ chối",
-      },
-      errors: {
-        fetchFailed: "Lấy danh sách phản hồi thất bại.",
-        approveFailed: "Duyệt phản hồi thất bại.",
-        rejectFailed: "Từ chối phản hồi thất bại.",
-        approvalRateDescription: "Tỷ lệ duyệt",
-      },
-      userStats: {
-        title: "Thống kê người dùng",
-        description: "Top 10 người dùng gửi phản hồi nhiều nhất.",
-        headers: {
-          user: "Người dùng",
-          total: "Tổng gửi",
-          approved: "Đã duyệt",
-          rejected: "Đã từ chối",
-        },
-      },
-    },
-    subscriptions: {
-      title: "Quản lý Đăng ký",
-      description:
-        "Xem và quản lý các yêu cầu đăng ký gói cước của người dùng.",
-      noSubscriptions: "Không tìm thấy đăng ký nào.",
-      approveSuccess: "Duyệt đăng ký thành công.",
-      approveFailed: "Duyệt đăng ký thất bại.",
-      rejectSuccess: "Từ chối đăng ký thành công.",
-      rejectFailed: "Từ chối đăng ký thất bại.",
-      cancelSuccess: "Hủy đăng ký thành công.",
-      cancelFailed: "Hủy đăng ký thất bại.",
-      confirmCancel: "Bạn có chắc chắn muốn hủy đăng ký này không?",
-      confirmApprove: "Bạn có chắc chắn muốn duyệt đăng ký này không?",
-      confirmReject: "Bạn có chắc chắn muốn từ chối đăng ký này không?",
-      status: {
-        pending: "Chờ duyệt",
-        active: "Đang hoạt động",
-        canceled: "Đã hủy",
-        pending_approval: "Chờ duyệt",
-        past_due: "Quá hạn",
-        unpaid: "Chưa thanh toán",
-        rejected: "Đã từ chối",
-      },
-      table: {
-        user: "Người dùng",
-        plan: "Gói",
-        status: "Trạng thái",
-        period: "Chu kỳ",
-        createdAt: "Ngày tạo",
-        actions: "Hành động",
-      },
-      actions: {
-        approve: "Duyệt",
-        reject: "Từ chối",
-      },
-    },
-    histories: {
-      title: "Lịch sử dự đoán",
-      description:
-        "Duyệt lịch sử dự đoán của người dùng theo cấu trúc thư mục.",
-      viewMedia: "Xem media",
-      viewFeedback: "Xem Feedback",
-      noPrediction: "Không có dự đoán",
-      table: {
-        title: "Lịch sử trong ngày",
-        description: "Danh sách tất cả các lần dự đoán trong thư mục này.",
-        headers: {
-          user: "Người dùng",
-          media: "Media",
-          processedMedia: "Media đã xử lý",
-          prediction: "Dự đoán",
-          time: "Thời gian",
-          source: "Nguồn",
-        },
-        noHistory: "Không có lịch sử nào được tìm thấy.",
-      },
-      errors: {
-        fetchFailed: "Lấy lịch sử thất bại.",
-      },
-      filters: {
-        datePlaceholder: "Lọc theo ngày...",
-      },
-      sources: {
-        image_upload: "Ảnh tải lên",
-        video_upload: "Video tải lên",
-        stream_capture: "Chụp từ Camera",
-      },
-      browse: {
-        emptyFolder: "Thư mục này trống.",
-      },
-    },
-    imageManagement: "Quản lý File",
-    imageManagementDescription:
-      "Quản lý các tệp media và thư mục của người dùng",
-    folderContents: "Nội dung thư mục",
-    noMedia: "Không tìm thấy mục nào",
-    imageManagementRoot: "Thư mục gốc",
-    showingDescription:
-      'Đang hiển thị {count} mục trong thư mục "{folderName}".',
-    dashboardTitle: "Tổng quan Dashboard",
-    dashboardDescription:
-      "Theo dõi hiệu suất và thống kê sử dụng ứng dụng của bạn",
-    newBreedAlertTitle: "Cảnh báo giống chó mới",
-    newBreedAlertDescription:
-      "Phát hiện {count} giống chó có nhiều báo cáo sai - có thể cần thêm vào model",
-    viewAllFeedback: "Xem tất cả phản hồi",
-    trialRunsToday: "Lượt dùng thử (hôm nay)",
-    trialRunsDescription: "Số lượt dự đoán từ khách",
-    predictionsToday: "Dự đoán (hôm nay)",
-    predictionsDescription: "Số lượt dự đoán từ user",
-    totalUsers: "Tổng người dùng",
-    totalUsersDescription: "Tổng số tài khoản đã đăng ký",
-    feedbackAccuracy: "Độ chính xác (Feedback)",
-    weeklyActivity: "Hoạt động trong tuần",
-    weeklyActivityDescription: "Số lượt dự đoán trong 7 ngày qua",
-    topPredictedBreeds: "Các giống chó được dự đoán nhiều nhất",
-    topPredictedBreedsDescription:
-      "Top 5 giống chó xuất hiện nhiều nhất trong các dự đoán",
-    predictionsCount: "{count} lần",
-    usageTracking: "Theo dõi sử dụng",
-    usageTrackingDescription:
-      "Giám sát hoạt động của người dùng và tiêu thụ tài nguyên",
-    exportReport: "Xuất báo cáo",
-    totalDetections: "Tổng lượt dự đoán",
-    allTime: "Toàn thời gian",
-    totalStorage: "Tổng dung lượng",
-    across: "Trên tất cả người dùng",
-    avgDetections: "Dự đoán trung bình/Người dùng",
-    perUser: "Trên mỗi người dùng",
-    detectionsOverTime: "Lượt dự đoán theo thời gian",
-    storageUsage: "Dung lượng sử dụng",
-    userUsageDetails: "Chi tiết sử dụng của người dùng",
-    detailedBreakdown:
-      "Phân tích chi tiết về việc tiêu thụ tài nguyên của mỗi người dùng",
-    filterByPlan: "Lọc theo gói",
-    detections: "Lượt dự đoán",
-    storage: "Dung lượng",
-    lastActive: "Hoạt động cuối",
-    trend: "Xu hướng",
-    plan: "Gói",
-    noData: "Không tìm thấy dữ liệu",
-    usage: {
-      searchPlaceholder: "Tìm kiếm người dùng...",
-      tokensUsed: "Tokens đã dùng",
-      totalTokensUsed: "Tổng Tokens đã dùng",
-      avgTokens: "Tokens TB/Người dùng",
-      tokensOverTime: "Tokens theo thời gian",
-      usersByPlan: "Người dùng theo Gói",
-      headers: {
-        name: "Tên",
-        email: "Email",
-        plan: "Gói",
-        detections: "Lượt dự đoán",
-        storage: "Dung lượng",
-        tokensRemaining: "Token còn lại",
-        trend: "Xu hướng",
-        lastActive: "Hoạt động cuối",
-      },
-      cloudinaryCredits: "Credits gói Cloudinary ({plan})",
-      creditInfo: "1 Credit = 1000 Biến đổi hoặc 1GB Lưu trữ/Băng thông",
-      used: "Đã dùng",
-      transformations: "Số lần biến đổi",
-      transformationsDesc: "Thay đổi kích thước, tạo bằng AI, tối ưu hóa",
-      netStorage: "Lưu trữ ròng",
-      limit: "Giới hạn",
-      sharedCreditLimit: "Dùng chung giới hạn Credit",
-      bandwidth: "Băng thông (30 ngày)",
-      csv: {
-        userName: "Tên người dùng",
-        email: "Email",
-        plan: "Gói",
-        tokensUsed: "Tokens đã dùng",
-        tokensLimit: "Giới hạn Tokens",
-        lastActive: "Hoạt động cuối",
-      },
-    },
-    userManagement: {
-      title: "Quản lý người dùng",
-      description: "Quản lý và theo dõi người dùng đã đăng ký",
-      searchPlaceholder: "Tìm kiếm người dùng...",
-      errors: {
-        noUsersFound: "Không tìm thấy người dùng nào",
-        usersByPlan: "Người dùng theo Gói",
-        userPageIndicator: "Hiển thị {start}-{end} trên {total} người dùng",
-      },
-    },
-    transactions: {
-      title: "Lịch sử Giao dịch",
-      description: "Xem tất cả các giao dịch thanh toán.",
-      user: "Người dùng",
-      plan: "Gói",
-      status: "Trạng thái",
-      amount: "Số tiền",
-      gateway: "Cổng thanh toán",
-      date: "Ngày",
-      completed: "Hoàn thành",
-      pending: "Chờ xử lý",
-      failed: "Thất bại",
-    },
-    reports: {
-      title: "Báo cáo & Thống kê",
-      description:
-        "Tạo và xuất các báo cáo chi tiết về hoạt động của hệ thống.",
-      reportControls: "Tùy chọn báo cáo",
-      selectDateRange: "Chọn khoảng thời gian",
-      usersByPlanDesc: "Phân bổ người dùng hiện tại theo các gói cước.",
-      predictionSourceTitle: "Phân tích nguồn dự đoán",
-      predictionSourceDesc: "Tỷ lệ dự đoán từ ảnh, video và camera trực tiếp.",
-      feedbackStatusTitle: "Tình trạng Feedback",
-      revenueByPlanTitle: "Doanh thu theo Gói",
-      revenueByPlanDesc: "Tổng doanh thu từ mỗi gói trong khoảng thời gian đã chọn.",
-      generateReport: "Tạo báo cáo",
-      export: "Xuất file",
-      exportExcel: "Xuất Excel (.xlsx)",
-      exportWord: "Xuất Word (.docx)",
-      previewTitle: "Xem trước báo cáo",
-      previewDescription:
-        "Dữ liệu sẽ được tổng hợp trong khoảng thời gian đã chọn.",
-      generating: "Đang tạo báo cáo...",
-      exporting: "Đang xuất file...",
-      errorGenerate: "Tạo báo cáo thất bại.",
-      errorExport: "Xuất file thất bại.",
-    },
-  },
-  history: {
-    title: "Lịch sử dự đoán",
-    subtitle: "Xem tất cả các lần dự đoán trước đây của bạn",
-    searchPlaceholder: "Tìm kiếm theo tên giống chó...",
-    filterType: "Lọc theo loại",
-    typeAll: "Tất cả",
-    typeImage: "Ảnh",
-    typeVideo: "Video",
-    sourceImage: "Ảnh tải lên",
-    sourceVideo: "Video tải lên",
-    sourceStream: "Chụp từ Camera",
-    sourceUrl: "Nhập URL",
-    source: "Nguồn",
-    sortBy: "Sắp xếp theo",
-    sortNewest: "Mới nhất trước",
-    sortOldest: "Cũ nhất trước",
-    sortConfidence: "Độ tin cậy cao nhất",
-    noPredictions: "Chưa có dự đoán nào. Bắt đầu nhận diện!",
-    confidence: "Độ tin cậy",
-    videoFile: "Tệp Video",
-    view: "Xem",
-    download: "Tải xuống",
-    delete: "Xóa",
-    confirmDelete: "Bạn có chắc chắn muốn xóa dự đoán này không?",
-    deleteSuccess: "Xóa dự đoán thành công.",
-    deleteError: "Xóa dự đoán thất bại.",
-    loginRequired: "Vui lòng đăng nhập để xem lịch sử dự đoán của bạn",
-    loadMore: "Tải thêm",
-  },
-  footer: {
-    company: "Công ty",
-    about: "Về chúng tôi",
-    blog: "Blog",
-    careers: "Tuyển dụng",
-    press: "Báo chí",
-    product: "Sản phẩm",
-    dogdex: "DogDex",
-    liveDetection: "Nhận diện trực tiếp",
-    pricing: "Bảng giá",
-    documentation: "Tài liệu",
-    support: "Hỗ trợ",
-    help: "Trung tâm trợ giúp",
-    contact: "Liên hệ",
-    faq: "Câu hỏi thường gặp",
-    status: "Trạng thái",
-    contactInfo: "Thông tin liên hệ",
-    email: "Email",
-    phone: "Điện thoại",
-    address: "Địa chỉ",
-    privacy: "Chính sách bảo mật",
-    terms: "Điều khoản dịch vụ",
-    cookies: "Cookies",
-    copyright: "© 2025 Dog DogDex. Đã đăng ký bản quyền.",
-    learnMore: "Tìm hiểu thêm",
-    adSection1Title: "Tính năng Premium",
-    adSection1Description:
-      "Mở khóa nhận diện không giới hạn và phân tích nâng cao",
-    adSection2Title: "Truy cập API",
-    adSection2Description: "Tích hợp nhận diện chó vào ứng dụng của bạn",
-    adSection3Title: "Doanh nghiệp",
-    adSection3Description: "Giải pháp tùy chỉnh cho các déploi quy mô lớn",
-  },
-  ad: {
-    banner: "🎉 Nâng cấp lên Premium và nhận diện không giới hạn!",
-    upgrade: "Nâng cấp ngay",
-  },
-  pricing: {
-    featureTokenLimit: "{count} Tokens / ngày",
-    featureStorage: "Lưu trữ lịch sử",
-    priority: "Hỗ trợ ưu tiên",
-    customModels: "Mô hình tùy chỉnh",
-    faq: "Câu hỏi thường gặp",
-    faqQ1: "Tôi có thể thay đổi gói của mình bất cứ lúc nào không?",
-    faqA1:
-      "Có, bạn có thể nâng cấp hoặc hạ cấp gói của mình bất cứ lúc nào. Các thay đổi sẽ có hiệu lực ngay lập tức.",
-    faqQ2: "Bạn chấp nhận những phương thức thanh toán nào?",
-    faqA2:
-      "Chúng tôi chấp nhận tất cả các loại thẻ tín dụng chính, PayPal và chuyển khoản ngân hàng cho gói doanh nghiệp.",
-    faqQ3: "Có bản dùng thử miễn phí không?",
-    faqA3:
-      "Có, gói Miễn phí bao gồm 10 lượt nhận diện mỗi tháng mà không cần thẻ tín dụng.",
-    title: "Nâng cấp để dùng không giới hạn",
-    description: "Chọn gói hoàn hảo cho nhu cầu của bạn",
-    monthly: "Hàng tháng",
-    yearly: "Hàng năm",
-    perMonth: "/tháng",
-    perYear: "/năm",
-    save: "Tiết kiệm 20%",
-    free: "Miễn phí",
-    starter: "Khởi đầu",
-    professional: "Chuyên nghiệp",
-    enterprise: "Doanh nghiệp",
-    freeDescription: "Hoàn hảo để dùng thử",
-    starterDescription: "Cho người dùng thông thường",
-    professionalDescription: "Cho người dùng chuyên sâu",
-    enterpriseDescription: "Cho các tổ chức lớn",
-    detectionsPerMonth: "Lượt nhận diện mỗi tháng",
-    unlimited: "Không giới hạn",
-    storageGB: "Lưu trữ",
-    apiAccess: "Truy cập API",
-    getStarted: "Bắt đầu",
-    currentPlan: "Gói hiện tại",
-    upgrade: "Nâng cấp",
-    downgrade: "Hạ cấp",
-    features: "Tính năng",
-    noLimit: "Không giới hạn",
-    included: "Bao gồm",
-    notIncluded: "Không bao gồm",
-  },
-  faq: "Câu hỏi thường gặp",
-  faqQ4: "Bạn có hoàn tiền không?",
-  faqA4:
-    "Chúng tôi cung cấp bảo đảm hoàn tiền trong 30 ngày cho tất cả các gói trả phí.",
-  ready: "Sẵn sàng để bắt đầu?",
-  readyDescription:
-    "Tham gia cùng hàng ngàn người dùng nhận diện giống chó bằng AI",
-  startFree: "Bắt đầu miễn phí",
-  featured: "Nổi bật nhất",
-  getStarted: "Bắt đầu",
-  checkout: {
-    title: "Thanh toán",
-    orderSummary: "Tóm tắt đơn hàng",
-    total: "Tổng cộng",
-    billingInfo: "Thông tin thanh toán",
-    email: "Email",
-    cardInfo: "Phương thức thanh toán",
-    cardPlaceholder:
-      "Bạn sẽ được chuyển hướng đến cổng thanh toán MoMo để hoàn tất giao dịch.",
-    pay: "Thanh toán",
-    failed: "Thanh toán thất bại",
-  },
-  language: {
-    toggle: "Chuyển đổi ngôn ngữ",
-  },
-  profilePage: {
-    upgradeSuccessTitle: "Nâng cấp thành công!",
-    upgradeSuccessDescription:
-      "Gói cước của bạn đã được nâng cấp lên {planName}. Tận hưởng các tính năng mới!",
-  },
-  plans: {
-    title: "Gói cước",
-  },
-  rankPage: {
-    title: "Bảng Xếp Hạng | DogDex",
-    description: "Xem bảng xếp hạng các nhà sưu tầm giống chó hàng đầu trên toàn thế giới, quốc gia và thành phố.",
-    headerTitle: "Bảng Xếp Hạng",
-    headerDescription: "Vinh danh những nhà sưu tầm xuất sắc nhất",
-    scope: {
-      global: "Toàn cầu",
-      country: "Quốc gia",
-      city: "Thành phố",
-    },
-    search: {
-      country: "Nhập tên quốc gia...",
-      city: "Nhập tên thành phố...",
-    },
-    loading: "Đang cập nhật dữ liệu...",
-    error: "Không thể tải bảng xếp hạng.",
-    empty: {
-      title: "Chưa có dữ liệu xếp hạng.",
-      description: "Nhập khu vực để bắt đầu tìm kiếm.",
-    },
-    table: {
-      rank: "Hạng",
-      collector: "Nhà sưu tầm",
-      region: "Khu vực",
-      achievement: "Thành tích",
-    },
-    unupdated: "Chưa cập nhật",
-  },
-  loadingMessages: {
-    sniffing: { title: "Đang đánh hơi dữ liệu...", desc: "Đang đánh hơi dữ liệu từng ngóc ngách..." },
-    wakingBoss: { title: "Đang gọi Boss dậy...", desc: "Đang gọi Boss dậy làm việc (Boss hơi lười)..." },
-    analyzingFur: { title: "Đang phân tích lông...", desc: "Đang soi từng cọng lông..." },
-    lookingBones: { title: "Đang tìm khúc xương...", desc: "Đang tìm khúc xương bị thất lạc..." },
-    didYouKnow: { title: "Bạn có biết?", desc: "Mũi của chó ướt là để hấp thụ mùi hương tốt hơn đó!" },
-    summoningAI: { title: "Đang triệu hồi AI...", desc: "Đang triệu hồi sức mạnh của Cậu Vàng..." },
-    identifying: { title: "Đang nhận diện...", desc: "Liệu đây là Husky ngáo hay Corgi mông to?" },
-    funFact: { title: "Sự thật thú vị", desc: "Chó Phú Quốc là một trong 3 giống chó có xoáy trên lưng hiếm nhất thế giới." },
-    processing: "Đang xử lý",
-  },
-  radar: {
-    title: "Radar Tìm Kiếm",
-    subtitle: 'Hiển thị các bài đăng "{type}" quanh khu vực bạn báo',
-    noLocation: "Chưa có thông tin vị trí để quét radar.",
-    radius: "Bán kính",
-    refresh: "Làm mới",
-    foundMatches: "Tìm thấy {count} manh mối phù hợp!",
-    noMatches: "Chưa có manh mối nào. Hệ thống sẽ tiếp tục quét.",
-    expandRadius: "Mở rộng:",
-    lostCenter: "Vị trí báo mất",
-    viewDetails: "Xem chi tiết",
-  },
-  community: {
-    header: {
-      title: "Community Watch",
-      subtitle: "Giúp thú cưng lạc trở về nhà — cộng đồng hỗ trợ tìm kiếm nhanh và hiệu quả.",
-      aiBadge: "Mạng lưới Cứu hộ AI",
-      postButton: "Đăng tin mới",
-      filters: {
-        all: "Tất cả",
-        lost: "Thất lạc",
-        found: "Tìm thấy",
-      },
-      searchPlaceholder: "Lọc theo giống chó...",
-      location: {
-        nearMe: "Gần tôi",
-        nearMeActive: "Gần tôi nhất",
-        permissionError: "Cần cấp quyền truy cập vị trí để sử dụng tính năng này.",
-        unsupportedError: "Trình duyệt không hỗ trợ định vị.",
-      },
-      expand: "Mở rộng",
-      collapse: "Thu gọn",
-    },
-    helpFindDog: "GIÚP TÌM CHÓ NÀY",
-    dogFound: "ĐÃ TÌM THẤY CHÓ",
-    postedOn: "Đăng lúc",
-    rescueRadar: "Radar Cứu Hộ",
-    rescueRadarDesc: 'Hiển thị chó "{type}" (giống: {breed}) gần vị trí báo.',
-    breedAI: "Giống chó (AI)",
-    confidence: "Độ tin cậy",
-    contactInfo: "Thông tin liên hệ",
-    shareToCommunity: "Chia sẻ lên cộng đồng",
-    sharingNotSupported: "Thiết bị không hỗ trợ chia sẻ.",
-    postNotFound: "Không tìm thấy bài đăng.",
-    loadFailed: "Không thể tải bài đăng.",
-    analyzing: "Đang phân tích dữ liệu...",
-    noImage: "Chưa có hình ảnh",
-    lostStatus: "Đang thất lạc",
-    foundStatus: "Đã tìm thấy",
-    breed: "Giống loài",
-    status: "Trạng thái",
-    urgentAlert: "Thông báo khẩn cấp",
-    goodNews: "Tin vui từ cộng đồng",
-    lostMessage: "Nếu bạn nhìn thấy chú chó này, vui lòng xác nhận bên dưới để liên hệ với chủ nhân.",
-    foundMessage: "Chú chó này đã được tìm thấy. Chủ nhân vui lòng liên hệ để nhận lại thú cưng sớm nhất.",
-    shareTitle: "Giúp tìm chó: {title}",
-    shareTextPrefix: "Xin hãy giúp tìm chú chó {breed} này!",
-    linkCopied: "Link đã được copy",
-    datePosted: "Đăng ngày",
-    unknownLocation: "Khu vực không xác định",
-    searchArea: "Khu vực tìm kiếm",
-    searchAreaDesc: "Dữ liệu real-time các bài viết liên quan",
-    liveRadar: "Live Radar",
-    details: "Chi tiết",
-    verifySuccess: "Cảm ơn bạn! Thông tin đã được gửi tới chủ nhân.",
-    back: "Quay lại",
-  },
-  report: {
-    postTitle: "KHẨN CẤP: Tìm chó lạc {name} - Giống {breed}",
-    postContent: "Bé {name} bị lạc tại khu vực {address}. \nĐặc điểm: {color}, {size}. \nGiống: {breed}. \nXin hãy giúp đỡ!",
-    unknownColor: "Không rõ màu",
-    unknownSize: "Không rõ kích thước",
-    button: "Báo Mất",
-    title: "Báo mất {name}",
-    description: "Hệ thống sẽ tự động đăng tin tìm kiếm và quét các manh mối xung quanh khu vực bạn chọn.",
-    locationLabel: "Vị trí mất (bắt buộc)",
-    locationHint: "Chọn vị trí mà bạn nhìn thấy {name} lần cuối. Kéo ghim để điều chỉnh.",
-    contactLabel: "Thông tin liên hệ",
-    contactHint: "Đã tự động điền từ tài khoản. Bạn có thể chỉnh sửa nếu cần.",
-    contactAutoFillNote: "Thông tin liên hệ sẽ được lấy từ hồ sơ của bạn ({email}).",
-    contactPrivacyNote: "Chúng tôi tôn trọng quyền riêng tư của bạn.",
-    contactName: "Tên liên hệ *",
-    contactPhone: "Số điện thoại *",
-    contactEmail: "Email (tùy chọn)",
-    confirmButton: "Xác nhận báo mất",
-    processing: "Đang xử lý...",
-    successMessage: "Đã báo mất thành công! Hệ thống sẽ tự động tìm kiếm các manh mối xung quanh.",
-    errorLocation: "Vui lòng chọn vị trí mất chó trên bản đồ",
-    errorName: "Vui lòng nhập tên liên hệ",
-    errorPhone: "Vui lòng nhập số điện thoại liên hệ",
-    errorGeneral: "Đã có lỗi xảy ra khi báo mất",
-    noPhone: "Chưa cung cấp",
-    searchPlaceholder: "Nhập địa chỉ (VD: Công viên 23/9, Quận 1...)",
-    locationFound: "Đã tìm thấy địa điểm!",
-    locationNotFound: "Không tìm thấy địa điểm này. Hãy thử từ khóa khác.",
-    selectedAddress: "Địa chỉ đã chọn",
-    contentLabel: "Nội dung bài đăng",
-    titleField: "Tiêu đề bài viết",
-    titlePlaceholder: "VD: [KHẨN CẤP] Tìm chó Poodle lạc tại Quận 1...",
-    detailsField: "Chi tiết thêm (Tùy chọn)",
-    detailsPlaceholder: "Mô tả thêm về đặc điểm, vòng cổ hoặc hoàn cảnh mất tích...",
-    phonePlaceholder: "Nhập SĐT liên hệ...",
-    emailPlaceholder: "Nhập email liên hệ...",
-  },
-  verifyFound: {
-    button: "BÁO ĐÃ TÌM THẤY",
-    title: "Xác thực tìm thấy",
-    description: "Hãy xác minh đây đúng là {name} ({breed}).",
-    tabs: {
-      camera: "AI Scan",
-      qr: "QR Code",
-    },
-    camera: {
-      searching: "Đang tìm {breed}...",
-      detected: "Phát hiện: {label}",
-      match: "Đúng giống: {label}!",
-      start: "Bắt đầu Camera",
-      hint: "Giữ chó ở giữa khung hình để phân tích",
-      adaptiveMatch: "Đang giữ... Duy trì khớp với {label}...",
-      successAdaptive: "Xác nhận khớp với {label} sau khi nhận diện ổn định!",
-      error: "Không thể bật Camera",
-      serverError: "Lỗi kết nối AI Server",
-      success: "Đã xác thực đúng giống: {label}!",
-    },
-    qr: {
-      scan: "Quét mã QR trên vòng cổ/thẻ tên của chó.",
-      upload: "Hoặc tải ảnh chứa mã QR (nếu dùng Laptop)",
-      match: "QR Code Khớp!",
-      mismatch: "QR Code không đúng với chó này!",
-      notFound: "Không tìm thấy mã QR trong ảnh này",
-      fileMatch: "QR Code Khớp (từ ảnh)!",
-    },
-    contact: {
-      successTitle: "Xác thực thành công!",
-      aiSuccess: "AI xác nhận giống {label}",
-      qrSuccess: "QR Code hợp lệ",
-      autoFill: "Thông tin liên hệ của bạn đã được điền tự động.",
-      nameLabel: "Tên của bạn *",
-      phoneLabel: "Số điện thoại *",
-      emailLabel: "Email (để chủ chó liên hệ) *",
-      locationLabel: "Vị trí hiện tại (Nơi tìm thấy) *",
-      messageLabel: "Lời nhắn cho chủ nhân",
-      submit: "Gửi thông tin cho chủ chó",
-      back: "Quay lại bước xác thực",
-      errorMissing: "Vui lòng điền tên và số điện thoại",
-    },
-  },
-  locationPicker: {
-    loadingMap: "Đang tải bản đồ...",
-    locating: "Đang xác định vị trí của bạn...",
-    resolvingAddress: "Đang xác định địa chỉ...",
-    noLocation: "Chưa chọn vị trí",
-    addressLabel: "Địa chỉ:",
-    gpsLabel: "GPS:",
-    getLocation: "Lấy vị trí hiện tại",
-    hint: "💡 Kéo ghim đỏ trên bản đồ để điều chỉnh vị trí chính xác",
-    errors: {
-      unsupported: "Trình duyệt không hỗ trợ Geolocation",
-      permission: "Không thể lấy vị trí. Vui lòng cho phép truy cập GPS.",
-    },
-  },
-  healthRecords: {
-    title: "Lịch sử Sức khỏe",
-    addRecord: "Thêm hồ sơ",
-    editRecord: "Chỉnh sửa hồ sơ",
-    addTitle: "Thêm hồ sơ sức khỏe mới",
-    empty: {
-      title: "Chưa có hồ sơ sức khỏe",
-      description: "Bắt đầu theo dõi tiêm phòng và khám bệnh của chó.",
-    },
-    form: {
-      type: "Loại sự kiện",
-      date: "Ngày",
-      title: "Tiêu đề / Tên thủ tục",
-      titlePlaceholder: "Ví dụ: Tiêm phòng dại hàng năm",
-      vet: "Bác sĩ / Phòng khám",
-      vetPlaceholder: "Bác sĩ Nguyễn Văn A",
-      nextDue: "Ngày tái khám/tiêm",
-      cost: "Chi phí (VND)",
-      weight: "Cân nặng (kg)",
-      symptoms: "Triệu chứng",
-      symptomsPlaceholder: "Ví dụ: Nôn mửa, Mệt mỏi...",
-      diagnosis: "Chẩn đoán",
-      diagnosisPlaceholder: "Ví dụ: Parvovirus...",
-      notes: "Ghi chú",
-      notesPlaceholder: "Chi tiết về điều trị...",
-      attachments: "Đính kèm (Đơn thuốc, hóa đơn...)",
-      currentAttachments: "Tệp đính kèm hiện tại:",
-      cancel: "Hủy",
-      save: "Lưu hồ sơ",
-      update: "Cập nhật hồ sơ",
-      saving: "Đang lưu...",
-    },
-    types: {
-      vaccine: "Vaccine (Tiêm phòng)",
-      checkup: "Checkup (Khám bệnh)",
-      medicine: "Medicine (Thuốc)",
-      surgery: "Surgery (Phẫu thuật)",
-      hygiene: "Hygiene (Spa/Tắm)",
-      other: "Khác",
-    },
-    card: {
-      diagnosis: "Chẩn đoán:",
-      symptoms: "Triệu chứng:",
-      weight: "Cân nặng:",
-      nextDue: "TÁI KHÁM",
-      vetPrefix: "👨‍⚕️",
-    },
-    messages: {
-      updateSuccess: "Cập nhật hồ sơ thành công",
-      createSuccess: "Thêm hồ sơ thành công",
-      deleteSuccess: "Đã xóa hồ sơ",
-      errorSave: "Lưu hồ sơ thất bại",
-      errorDelete: "Xóa hồ sơ thất bại",
-      confirmDelete: "Bạn có chắc chắn muốn xóa hồ sơ này không?",
-    },
-  },
-  myDogs: {
-    title: "Chó Của Tôi",
-    subtitle: "Quản lý thú cưng và hồ sơ sức khỏe.",
-    addDog: "Thêm Chó",
-    noDogs: "Chưa có chó nào",
-    noDogsDescription: "Tạo hồ sơ cho chó của bạn để theo dõi sức khỏe, vaccine và bảo vệ chúng.",
-    addFirstDog: "Thêm Chó Đầu Tiên",
-    male: "Đực",
-    female: "Cái",
-    lost: "MẤT TÍCH",
-    noBirthday: "Chưa có ngày sinh",
-    getPetId: "Lấy Pet ID (QR)",
-    petIdCard: "Thẻ Định Danh Thú Cưng",
-    markAsFound: "Đánh dấu đã tìm thấy",
-  },
-  newDog: {
-    backToMyDogs: "Quay lại Chó Của Tôi",
-    title: "Hồ Sơ Chó Mới",
-    subtitle: "Đăng ký người bạn lông xù vào hệ thống DogDex.",
-    basicInfo: "Thông Tin Cơ Bản",
-    uploadToDetect: "Tải ảnh lên để tự động nhận diện giống",
-    clickToUpload: "Nhấn để Tải Ảnh Lên",
-    fileSupport: "JPG, PNG (Tối đa 10MB)",
-    analyzing: "ĐANG PHÂN TÍCH...",
-    changePhoto: "Đổi Ảnh",
-    name: "Tên",
-    namePlaceholder: "Tên của chó bạn là gì?",
-    gender: "Giới tính",
-    selectGender: "Chọn giới tính",
-    male: "Đực",
-    female: "Cái",
-    breed: "Giống",
-    aiSuggestion: "Gợi ý AI",
-    breedPlaceholder: "VD: Golden Retriever",
-    breedHint: "Tải ảnh lên để AI tự động nhận diện giống chó.",
-    birthday: "Ngày sinh",
-    size: "Kích thước",
-    selectSize: "Chọn kích thước",
-    sizeSmall: "Nhỏ (<10kg)",
-    sizeMedium: "Trung bình (10-25kg)",
-    sizeLarge: "Lớn (25-45kg)",
-    sizeGiant: "Khổng lồ (>45kg)",
-    color: "Màu lông",
-    selectColor: "Chọn màu từ tiêu chuẩn giống",
-    otherColor: "Khác... (Nhập thủ công)",
-    colorPlaceholder: "VD: Đen & Trắng",
-    backToList: "Quay lại danh sách",
-    pattern: "Họa tiết (Tùy chọn)",
-    patternPlaceholder: "VD: Đốm, Vằn",
-    sterilized: "Đã Triệt Sản",
-    sterilizedHint: "Chó của bạn đã được triệt sản chưa?",
-    creatingProfile: "Đang Tạo Hồ Sơ...",
-    createProfile: "Tạo Hồ Sơ Chó",
-    successMessage: "Tạo hồ sơ chó thành công!",
-    failedMessage: "Tạo hồ sơ thất bại",
-    identifiedAs: "Nhận diện: {breed} ({confidence}%)",
-    analysisFailed: "Phân tích thất bại. Vui lòng nhập thủ công.",
-  },
-  createPost: {
-    lostTitle: "Báo Mất Chó",
-    foundTitle: "Báo Tìm Thấy Chó",
-    aiHint: "AI sẽ hỗ trợ nhận diện giống chó để thông tin chính xác hơn.",
-    iFoundDog: "Tôi nhặt được chó",
-    iLostDog: "Tôi bị mất chó",
-    verificationImage: "Hình ảnh xác thực",
-    liveCamera: "Live Camera",
-    upload: "Tải lên",
-    scanQr: "Quét QR",
-    enableCamera: "Bật Camera",
-    photoTaken: "Đã chụp ảnh!",
-    aiDetected: "AI Detect",
-    selectFromLibrary: "Chọn ảnh từ thư viện",
-    fileSupport: "Hỗ trợ JPG, PNG (Tối đa 5MB)",
-    scanQrHint: "Quét mã QR trên thẻ tên của chó",
-    postTitle: "Tiêu đề bài viết",
-    lostPlaceholder: "VD: Tìm chó Husky bị lạc ở Q1",
-    foundPlaceholder: "VD: Tìm thấy chó Golden ở công viên",
-    addBreedHint: "Thêm \"{breed}\" vào tiêu đề?",
-    description: "Mô tả chi tiết",
-    descriptionPlaceholder: "Mô tả đặc điểm, vòng cổ, tình trạng sức khỏe...",
-    locationLost: "Vị trí bị mất",
-    locationFound: "Vị trí tìm thấy",
-    addressPlaceholder: "Địa chỉ cụ thể (Số nhà, đường...)",
-    contactName: "Tên liên hệ",
-    phone: "Số điện thoại",
-    processing: "Đang xử lý...",
-    postNow: "Đăng bài ngay",
-    needPhoto: "Vui lòng chụp hoặc tải lên ít nhất 1 ảnh.",
-    postSuccess: "Đăng bài thành công!",
-    postError: "Lỗi khi đăng bài",
-    cameraError: "Không thể bật Camera. Vui lòng kiểm tra quyền truy cập.",
-    autoFilledBreed: "Đã tự động điền giống chó: {breed}",
-    qrMatched: "QR Code Khớp",
-    foundDogWithTag: "Tìm thấy chó có thẻ tên (ID: {id})",
-    qrScannedContent: "Quét được mã QR ID: {id}. Chó có đeo vòng cổ.",
-    lostPrefix: "Tìm chó lạc: ",
-    foundPrefix: "Tìm thấy chó: ",
-    featurePrefix: "Đặc điểm: Giống {breed}, ...",
-  },
-  dogQrCode: {
-    petId: "DOGDEX PET ID",
-    download: "Tải ảnh về",
-    print: "In ngay",
-    hint: "* In mã này và gắn vào vòng cổ. Khi quét, nó sẽ hiện thông tin liên hệ bảo mật của bạn.",
-  },
-  countryStatePicker: {
-    country: "Quốc gia",
-    city: "Thành phố",
-    selectCountry: "Chọn quốc gia",
-    selectCity: "Chọn thành phố",
-  },
-  publicDog: {
-    dogNotFound: "Không tìm thấy chó",
-    dogIsLost: "CHÓ ĐANG MẤT",
-    helpContactOwner: "Hãy giúp liên hệ chủ nhân ngay!",
-    color: "Màu lông",
-    birthday: "Ngày sinh",
-    owner: "Chủ nhân",
-    contactOwner: "Liên hệ chủ nhân",
-    phoneSecure: "Tin nhắn sẽ được gửi qua hệ thống bảo mật của chúng tôi.",
-    yourName: "Tên của bạn",
-    yourPhone: "Số điện thoại",
-    currentLocation: "Vị trí hiện tại",
-    message: "Tin nhắn",
-    sendAlert: "Gửi thông báo",
-    sending: "Đang gửi...",
-    messageSent: "Đã gửi tin nhắn thành công!",
-    sendFailed: "Không thể gửi tin nhắn. Vui lòng thử lại.",
-    dogSafe: "Chú chó đang an toàn",
-    privacyHidden: "Chó này đang an toàn với chủ nhân. Thông tin liên hệ được ẩn vì lý do bảo mật.",
-    poweredBy: "Cung cấp bởi",
-    thisIsYourDog: "Đây là chó của bạn!",
-    ownerViewDescription: "Bạn đang xem trang công khai của bé.",
-    ownerViewTitle: "Trang công khai của bé",
-    ownerViewInfo: "Đây là trang mà người khác sẽ thấy khi quét mã QR của bé.",
-    goToProfile: "Quản lý hồ sơ",
-  },
-};
-</file>
-
 <file path="lib/admin-api-client.ts">
 // @ts-nocheck
 import type { ApiClient } from "./api-client";
@@ -29661,6 +27066,20 @@ export class ApiClient {
     }
 
     return this.requestWithFormData<any>("/bff/post", formData, true);
+  }
+
+  // Create FOUND post from QR scan (no auth or photo required)
+  async createQrFoundPost(data: {
+    dog_id: string;
+    title?: string;
+    content?: string;
+    location: { lat: number; lng: number; address: string };
+    contact_info: { name: string; phone?: string; email?: string };
+  }) {
+    return this.request<any>("/bff/post/qr-found", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, false); // No auth required
   }
 
   async getCommunityPosts(params: {
