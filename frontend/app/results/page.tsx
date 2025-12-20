@@ -34,89 +34,110 @@ import Loading from "./loading"; function ResultsContent() {
   const [specialMessage, setSpecialMessage] = useState<string | null>(null)
   const [hasFeedback, setHasFeedback] = useState(false);
 
-  // --- WEBSOCKET PUSH (replaces polling) ---
+  // --- HYBRID: WEBSOCKET + BACKUP POLLING (for slow networks) ---
   const subscribeToStatus = (id: string) => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:3000';
-    const ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/prediction-status`);
+    let isResolved = false; // Flag to prevent double-fetching
+    let pollInterval: NodeJS.Timeout | null = null;
+    let ws: WebSocket | null = null;
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ action: 'subscribe', predictionId: id }));
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.event === 'completed' && data.predictionId === id) {
-          ws.close();
-          fetchHistoryById();
-        } else if (data.event === 'failed' && data.predictionId === id) {
-          ws.close();
-          setError(data.message || "Prediction failed.");
-          setLoading(false);
-        }
-      } catch (e) {
-        console.error("WebSocket message parse error:", e);
+    // Cleanup function
+    const cleanup = () => {
+      isResolved = true;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
       }
-    };
-
-    ws.onerror = (error) => {
-      console.error("WebSocket error, falling back to polling:", error);
-      ws.close();
-      // Fallback to polling if WebSocket fails
-      fallbackPoll(id);
-    };
-
-    // Timeout fallback: if no response in 5 minutes, close and show error
-    const timeout = setTimeout(() => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.close();
-        setError("Timeout waiting for prediction result.");
-        setLoading(false);
       }
-    }, 5 * 60 * 1000);
-
-    ws.onclose = () => {
-      clearTimeout(timeout);
     };
-  };
 
-  // Fallback polling (only used if WebSocket fails)
-  const fallbackPoll = async (id: string) => {
+    // === WEBSOCKET (Primary - Fast) ===
+    try {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:3000';
+      ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/prediction-status`);
+
+      ws.onopen = () => {
+        ws?.send(JSON.stringify({ action: 'subscribe', predictionId: id }));
+      };
+
+      ws.onmessage = (event) => {
+        if (isResolved) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.event === 'completed' && data.predictionId === id) {
+            cleanup();
+            fetchHistoryById();
+          } else if (data.event === 'failed' && data.predictionId === id) {
+            cleanup();
+            setError(data.message || "Prediction failed.");
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error("WebSocket message parse error:", e);
+        }
+      };
+
+      ws.onerror = () => {
+        console.warn("WebSocket error - backup polling will handle it");
+      };
+
+      // Timeout for WebSocket
+      setTimeout(() => {
+        if (!isResolved && ws?.readyState === WebSocket.OPEN) {
+          console.warn("WebSocket timeout - relying on backup polling");
+        }
+      }, 30 * 1000); // 30s WebSocket grace period
+    } catch (e) {
+      console.warn("WebSocket init failed:", e);
+    }
+
+    // === BACKUP POLLING (Secondary - Reliable) ===
+    // Runs alongside WebSocket with slower interval (every 5s)
     let attempts = 0;
-    const maxAttempts = 60; // 60 * 2s = 120s (2 minutes, reduced since WS is primary)
+    const maxAttempts = 60; // 60 * 5s = 5 minutes
 
     const poll = async () => {
-      if (attempts >= maxAttempts) {
-        setError("Timeout waiting for prediction result.");
-        setLoading(false);
+      if (isResolved || attempts >= maxAttempts) {
+        if (attempts >= maxAttempts && !isResolved) {
+          cleanup();
+          setError("Timeout waiting for prediction result.");
+          setLoading(false);
+        }
         return;
       }
 
       try {
         const status = await apiClient.getPredictionStatus(id);
 
-        if (status.status === 'completed') {
-          if (status.result) {
+        if (status.status === 'completed' && status.result) {
+          if (!isResolved) {
+            cleanup();
             fetchHistoryById();
-            return;
           }
         } else if (status.status === 'failed') {
-          setError(status.message || "Prediction failed.");
-          setLoading(false);
-          return;
+          if (!isResolved) {
+            cleanup();
+            setError(status.message || "Prediction failed.");
+            setLoading(false);
+          }
         } else {
           attempts++;
-          setTimeout(poll, 2000); // 2s interval instead of 1s
         }
       } catch (e) {
-        console.error("Polling error:", e);
+        console.error("Backup polling error:", e);
         attempts++;
-        setTimeout(poll, 2000);
       }
     };
 
-    poll();
+    // Start backup polling after 3s delay (give WebSocket a head start)
+    setTimeout(() => {
+      if (!isResolved) {
+        poll(); // First poll
+        pollInterval = setInterval(poll, 5000); // Then every 5s
+      }
+    }, 3000);
   };
 
   const processResultData = (result: BffPredictionResponse) => {

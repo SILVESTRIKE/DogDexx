@@ -145,11 +145,6 @@ const transformPaths = (req: Request, data: any): any => {
         // Chuẩn hóa path
         const normalizedPath = dbPath.replace(/\\/g, '/').replace(/^\/+/, '');
 
-        // [DEBUG]
-        if (dbPath.includes('processed')) {
-            logger.info(`[TransformDebug] Path: ${dbPath} | Norm: ${normalizedPath} | CloudName: ${CLOUD_NAME} | Match: ${normalizedPath.startsWith('public/')}`);
-        }
-
         // Kiểm tra xem path có phải là file trên Cloudinary không
         if ((normalizedPath.startsWith('public/') || normalizedPath.startsWith('uploads/') || normalizedPath.startsWith('dataset/') || normalizedPath.startsWith('processed/') || normalizedPath.startsWith('dog-data-img/')) && CLOUD_NAME) {
 
