@@ -2,38 +2,62 @@ import { Request } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import RedisStore from "rate-limit-redis";
 import { redisClient } from "../utils/redis.util";
+import { UserDoc } from "../models/user.model";
 
 export const apiLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000,
-  max: 500,
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 300, // 300 requests / window
   standardHeaders: true,
   legacyHeaders: false,
-  store: redisClient ? new RedisStore({
-    sendCommand: (...args: string[]) => redisClient!.sendCommand(args),
-    prefix: 'rate_limit:'
-  }) : undefined, // Fallback to memory if Redis is down (though redisClient usually exists)
+
+  store: redisClient
+    ? new RedisStore({
+        sendCommand: (...args: string[]) =>
+          redisClient!.sendCommand(args),
+        prefix: "rate_limit:",
+      })
+    : undefined,
 
   keyGenerator: (req: Request): string => {
-    return (req.fingerprint?.hash || (ipKeyGenerator as unknown as (req: Request) => string)(req));
+    return (
+      req.fingerprint?.hash ||
+      (ipKeyGenerator as unknown as (req: Request) => string)(req)
+    );
   },
 
   skip: (req: Request): boolean => {
-    const user = (req as any).user;
-    // Skip rate limiting for prediction status polling
-    if (req.path.includes('/predictions') && req.path.includes('/status') && req.method === 'GET') {
+    const user = (req as any).user as UserDoc | undefined;
+
+    // Skip admin
+    if (user?.role === "admin") return true;
+
+    // Skip prediction status polling
+    if (
+      req.path.includes("/predictions") &&
+      req.path.includes("/status") &&
+      req.method === "GET"
+    ) {
       return true;
     }
-    // Whitelist Localhost for Load Testing
-    if (req.ip === '::1' || req.ip === '127.0.0.1') {
+
+    // Whitelist localhost (load test)
+    if (req.ip === "::1" || req.ip === "127.0.0.1") {
       return true;
     }
-    return user?.role === "admin";
+
+    return false;
   },
 
-  handler: (req, res, next, options) => {
+  handler: (req, res, _next, options) => {
     res.status(options.statusCode || 429).json({
       success: false,
-      errors: [{ message: "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 5 phút.", field: "rate_limit", },],
+      errors: [
+        {
+          message:
+            "Bạn đã gửi quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.",
+          field: "rate_limit",
+        },
+      ],
     });
   },
 });

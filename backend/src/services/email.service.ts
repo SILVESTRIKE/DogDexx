@@ -572,39 +572,56 @@ function buildFeedbackThankYouTemplate(options: FeedbackApprovedOptions): { subj
 // ============================================
 // EMAIL SENDING FUNCTIONS
 // ============================================
-async function sendGenericEmail(to: string, subject: string, content: string): Promise<void> {
+/**
+ * Hàm gửi email sử dụng Brevo API (HTTP) thay vì SMTP
+ * Cách này khắc phục triệt để lỗi Timeout trên Render.
+ */
+async function sendGenericEmail(
+  to: string,
+  subject: string,
+  content: string
+): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY;
   const senderEmail = process.env.EMAIL_FROM || "ctytest8@gmail.com";
+  const senderName = "DogBreed Support";
 
   if (!apiKey) {
-    throw new Error("Thiếu cấu hình BREVO_API_KEY");
+    throw new Error("Chưa cấu hình BREVO_API_KEY trong biến môi trường.");
   }
 
   const url = "https://api.brevo.com/v3/smtp/email";
+  
   const body = {
-    sender: { name: "DogDex", email: senderEmail },
+    sender: { name: senderName, email: senderEmail },
     to: [{ email: to }],
     subject: subject,
-    htmlContent: `<html><body>${content}</body></html>`,
+    htmlContent: `<html><body>${content}</body></html>`, // Brevo hỗ trợ HTML content
   };
 
   try {
-    logger.info(`[EmailService] Đang gọi API gửi đến: ${to}`);
+    logger.info(`[EmailService] Đang gọi API Brevo gửi mail đến: ${to}`);
+
     const response = await fetch(url, {
       method: "POST",
-      headers: { "accept": "application/json", "api-key": apiKey, "content-type": "application/json" },
+      headers: {
+        "accept": "application/json",
+        "api-key": apiKey,
+        "content-type": "application/json",
+      },
       body: JSON.stringify(body),
     });
 
     if (!response.ok) {
-      const err = await response.json();
-      logger.error(`[EmailService] API Lỗi: ${JSON.stringify(err)}`);
-      throw new Error("Lỗi gửi mail từ Brevo API");
+      const errorData = await response.json();
+      logger.error("[EmailService] Brevo API Error:", JSON.stringify(errorData));
+      throw new Error(`Lỗi từ Brevo: ${response.statusText}`);
     }
-    logger.info("[EmailService] Gửi mail thành công qua API.");
+
+    const data = await response.json();
+    logger.info(`[EmailService] Gửi thành công! MessageId: ${data.messageId}`);
   } catch (error) {
-    logger.error("[EmailService] Lỗi kết nối:", error);
-    throw error;
+    logger.error(`[EmailService] Lỗi kết nối API:`, error);
+    throw new Error("Không thể gửi email qua API.");
   }
 }
 
@@ -653,12 +670,17 @@ async function sendFeedbackThankYouEmail(options: FeedbackApprovedOptions): Prom
   await sendGenericEmail(options.to, subject, html);
 }
 
-async function sendContactFormEmail(payload: { fromEmail: string; message: string }): Promise<void> {
+async function sendContactFormEmail(payload: ContactFormPayload): Promise<void> {
   const receiverEmail = process.env.EMAIL_FROM;
   if (!receiverEmail) return;
 
-  const htmlBody = `<h3>Feedback mới</h3><p><strong>Từ:</strong> ${payload.fromEmail}</p><p><strong>Nội dung:</strong> ${payload.message}</p>`;
-  await sendGenericEmail(receiverEmail, `Feedback từ ${payload.fromEmail}`, htmlBody);
+  const htmlBody = `
+    <h2>Feedback mới</h2>
+    <p><strong>Từ:</strong> ${payload.fromEmail}</p>
+    <p><strong>Nội dung:</strong></p>
+    <pre>${payload.message}</pre>
+  `;
+  await sendGenericEmail(receiverEmail, `[Feedback] Từ ${payload.fromEmail}`, htmlBody);
 }
 
 // ============================================
