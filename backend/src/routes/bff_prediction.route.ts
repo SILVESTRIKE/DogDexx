@@ -3,14 +3,15 @@ import { bffPredictionController } from "../controllers/bff_prediction.controlle
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { authMiddleware } from "../middlewares/auth.middleware";
-// THAY ĐỔI: Import các middleware token mới
-import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware"; // Giữ lại để kiểm tra
+import { checkTokenLimit } from "../middlewares/tokenLimiter.middleware";
 import { tokenConfig } from "../config/token.config";
-// XÓA: Các import middleware cũ không còn cần thiết
-// import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
-// import { setMediaType } from "../middlewares/setMediaType.middleware";
-// import { checkStreamUsageLimit } from "../middlewares/wsUsageLimiter.middleware";
-
+import { validate } from "../middlewares/validation.middleware";
+import {
+    PredictUrlSchema,
+    FeedbackSchema,
+    StreamResultSchema,
+    ChatSchema,
+} from "../types/zod/prediction.zod";
 const router = Router();
 
 /**
@@ -53,7 +54,7 @@ const router = Router();
  *
  */
 router.post(
-    "/image", 
+    "/image",
     optionalAuthMiddleware,
     uploadSingle,
     checkTokenLimit(tokenConfig.costs.imagePrediction, 'single'),
@@ -99,7 +100,7 @@ router.post(
  *
  */
 router.post(
-    "/video", 
+    "/video",
     optionalAuthMiddleware,
     uploadSingle,
     checkTokenLimit(tokenConfig.costs.videoPrediction, 'single'),
@@ -146,15 +147,44 @@ router.post(
  *         description: Payment Required - Không đủ token để xử lý toàn bộ batch.
  *       500:
  *         description: Lỗi máy chủ nội bộ.
+ *
  */
 router.post(
-    "/batch", 
+    "/batch",
     authMiddleware, // Batch prediction yêu cầu đăng nhập
-    uploadMultiple, 
+    uploadMultiple,
     checkTokenLimit(tokenConfig.costs.imagePrediction, 'batch'),
     bffPredictionController.predictBatch
 );
 
+/**
+ * @swagger
+ * /bff/predict/stream/save:
+ *   post:
+ *     summary: "(BFF) Lưu kết quả từ stream video (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: |
+ *       Lưu một frame từ stream video (đã được xử lý và có bounding box) như một kết quả dự đoán mới.
+ *       Endpoint này được gọi từ client sau khi nhận kết quả từ websocket.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/StreamResultPayload'
+ *     responses:
+ *       201: { description: "Lưu kết quả thành công." }
+ *       400: { description: "Dữ liệu không hợp lệ." }
+ *
+ */
+router.post(
+    "/stream/save",
+    optionalAuthMiddleware,
+    validate(StreamResultSchema),
+    bffPredictionController.saveStreamResult
+);
 /**
  * @swagger
  * /bff/predict/chat/{breedSlug}:
@@ -199,8 +229,9 @@ router.post(
  *         description: Too Many Requests - Người dùng thử (guest) đã hết token.
  */
 router.post(
-    "/chat/:breedSlug", 
+    "/chat/:breedSlug",
     optionalAuthMiddleware,
+    validate(ChatSchema),
     checkTokenLimit(tokenConfig.costs.chatMessage),
     bffPredictionController.chatWithGemini
 );
@@ -231,14 +262,48 @@ router.get(
     bffPredictionController.getChatHistory
 );
 
+/**
+ * @swagger
+ * /bff/predict/{breedSlug}/health-recommendations:
+ *   get:
+ *     summary: "(BFF) Lấy gợi ý sức khỏe cho một giống chó (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy các gợi ý về sức khỏe, chăm sóc dựa trên giống chó cụ thể.
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema: { type: string }
+ *         description: Slug của giống chó.
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách các gợi ý.
+ */
 router.get(
-    "/:breedSlug/health-recommendations", 
+    "/:breedSlug/health-recommendations",
     optionalAuthMiddleware,
     bffPredictionController.getHealthRecommendations
 );
 
+/**
+ * @swagger
+ * /bff/predict/{breedSlug}/recommended-products:
+ *   get:
+ *     summary: "(BFF) Lấy sản phẩm gợi ý cho một giống chó (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy danh sách các sản phẩm (thức ăn, đồ chơi, v.v.) phù hợp với giống chó cụ thể.
+ *     parameters:
+ *       - in: path
+ *         name: breedSlug
+ *         required: true
+ *         schema: { type: string }
+ *         description: Slug của giống chó.
+ *     responses:
+ *       200:
+ *         description: Trả về danh sách các sản phẩm gợi ý.
+ */
 router.get(
-    "/:breedSlug/recommended-products", 
+    "/:breedSlug/recommended-products",
     optionalAuthMiddleware,
     bffPredictionController.getRecommendedProducts
 );
@@ -287,7 +352,7 @@ router.get(
  *       400:
  *         description: Dữ liệu gửi lên không hợp lệ.
  */
-router.post("/:id/feedback", authMiddleware, bffPredictionController.submitFeedback);
+router.post("/:id/feedback", authMiddleware, validate(FeedbackSchema), bffPredictionController.submitFeedback);
 
 /**
  * @swagger
@@ -360,7 +425,100 @@ router.get("/history", authMiddleware, bffPredictionController.getPredictionHist
  *       404:
  *         description: Not Found - Không tìm thấy lịch sử dự đoán.
  */
-router.get("/history/:id", bffPredictionController.getPredictionHistoryById);
+router.get("/history/:id", optionalAuthMiddleware, bffPredictionController.getPredictionHistoryById);
 
+/**
+ * @swagger
+ * /bff/predict/status/{id}:
+ *   get:
+ *     summary: "(BFF) Lấy trạng thái xử lý dự đoán (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Kiểm tra trạng thái xử lý của một dự đoán đang trong hàng đợi hoặc bộ nhớ.
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Trả về trạng thái xử lý. }
+ */
+router.get("/status/:id", optionalAuthMiddleware, bffPredictionController.getPredictionStatus);
+
+/**
+ * @swagger
+ * /bff/predict/history/{id}:
+ *   delete:
+ *     summary: "(BFF) Xóa một lịch sử dự đoán (Miễn phí)"
+ *     tags: [BFF-Prediction]
+ *     description: Xóa một mục trong lịch sử dự đoán của người dùng. Yêu cầu xác thực.
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200: { description: Xóa thành công. }
+ */
+router.delete("/history/:id", authMiddleware, bffPredictionController.deletePredictionHistory);
+
+/**
+ * @swagger
+ * /bff/predict/url:
+ *   post:
+ *     summary: "(BFF) Dự đoán từ URL ảnh (Chi phí: 2 token)"
+ *     tags: [BFF-Prediction]
+ *     description: |
+ *       Gửi một URL ảnh để nhận diện giống chó.
+ *       Endpoint này sử dụng `optionalAuthMiddleware`.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               url:
+ *                 type: string
+ *                 description: URL của ảnh cần dự đoán.
+ *     responses:
+ *       200:
+ *         description: Dự đoán thành công.
+ *       400:
+ *         description: Bad Request - URL không hợp lệ.
+ *       402:
+ *         description: Payment Required.
+ *       500:
+ *         description: Lỗi máy chủ.
+ */
+router.post(
+    "/url",
+    optionalAuthMiddleware,
+    validate(PredictUrlSchema),
+    checkTokenLimit(tokenConfig.costs.imagePrediction, 'single'),
+    bffPredictionController.predictUrl
+);
+
+/**
+ * @swagger
+ * /bff/predict/config:
+ *   get:
+ *     summary: "(BFF) Lấy cấu hình AI Service (Public)"
+ *     tags: [BFF-Prediction]
+ *     description: Lấy thông tin cấu hình hiện tại từ AI Service (ngưỡng confidence, model, v.v.).
+ *     responses:
+ *       200:
+ *         description: Thành công.
+ *       500:
+ *         description: Lỗi kết nối AI Service.
+ */
+router.get(
+    "/config",
+    optionalAuthMiddleware,
+    bffPredictionController.getConfig
+);
 
 export default router;

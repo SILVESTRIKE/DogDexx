@@ -1,4 +1,6 @@
 import { Request, Response, NextFunction } from "express";
+import fs from "fs";
+import path from "path";
 import WebSocket from "ws";
 import { Types } from "mongoose";
 import { predictionService } from "../services/prediction.service";
@@ -11,21 +13,26 @@ import { achievementService } from "../services/achievement.service";
 import { userService } from "../services/user.service";
 import { logger } from "../utils/logger.util";
 import { predictionHistoryService } from "../services/prediction_history.service";
-import { askGemini, getChatHistory as getGeminiChatHistory } from "../services/geminiAI.service";
+import {
+  askGemini,
+  getChatHistory as getGeminiChatHistory,
+} from "../services/geminiAI.service";
 import { redisClient } from "../utils/redis.util";
 import { REDIS_KEYS } from "../constants/redis.constants";
 import { tokenConfig } from "../config/token.config";
-import { getHealthRecommendations, getRecommendedProducts } from "../services/geminiAI.service";
+import {
+  getHealthRecommendations,
+  getRecommendedProducts,
+} from "../services/geminiAI.service";
 import { deductTokensForRequest } from "../middlewares/deductTokens.middleware";
 import { DogBreedWikiDoc } from "../models/dogs_wiki.model";
 import { PREDICTION_SOURCES } from "../constants/prediction.constants";
 import { UserDoc, UnlockedAchievement } from "../models/user.model";
-
-// THÊM: Định nghĩa một kiểu dữ liệu rõ ràng cho một item trong mảng predictions
 interface PredictionItem {
   class: string;
+  confidence: number;
+  box: number[];
 }
-
 function createEnrichedBreedInfo(
   breedInfoDoc: DogBreedWikiDoc | null | undefined
 ) {
@@ -47,7 +54,6 @@ function createEnrichedBreedInfo(
     suitable_for: breedInfoDoc.suitable_for,
   };
 }
-
 async function updateUserCollectionAndAchievements(
   userId: string,
   breedSlugs: string[],
@@ -60,35 +66,27 @@ async function updateUserCollectionAndAchievements(
       ? "vi"
       : "en";
   const userObjectId = new Types.ObjectId(userId);
-
   const [userBeforeUpdate, oldCollections] = await Promise.all([
     userService.getById(userId),
     collectionService.getUserCollection(userObjectId),
   ]);
-
   if (!userBeforeUpdate) return null;
-
   await collectionService.addOrUpdateManyCollections(
     userObjectId,
     breedSlugs,
     predictionId,
     lang
   );
-
   const [userAfterUpdate, newCollections] = await Promise.all([
     userService.getById(userId),
     collectionService.getUserCollection(userObjectId),
   ]);
-
   if (!userAfterUpdate) return null;
-
-  // SỬA LỖI: Ép kiểu userAfterUpdate thành UserDoc để TypeScript hiểu
   const achievementsResult = await achievementService.processUserAchievements(
     userAfterUpdate as UserDoc,
     newCollections,
     lang
   );
-  // Đổi cách tiếp cận: Khai báo kiểu rõ ràng cho biến thay vì ép kiểu ở cuối.
   const unlockedAchievements = (achievementsResult as any[]).filter(
     (ach) =>
       ach.unlocked &&
@@ -96,89 +94,71 @@ async function updateUserCollectionAndAchievements(
         (oldAch: UnlockedAchievement) => oldAch.key === ach.key
       )
   );
-
   return {
     isNewBreed: newCollections.length > oldCollections.length,
     totalCollected: newCollections.length,
-    // Ép kiểu trực tiếp kết quả cuối cùng để đảm bảo type-safety
     achievementsUnlocked: unlockedAchievements.map(
       (ach) => ach.key
     ) as string[],
   };
 }
-
 async function handlePredictionAndEnrichment(
   req: Request,
   predictionPromise: Promise<any>,
-  source: typeof PREDICTION_SOURCES[keyof typeof PREDICTION_SOURCES],
+  source: (typeof PREDICTION_SOURCES)[keyof typeof PREDICTION_SOURCES],
   userId?: string
 ) {
   const lang =
     req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
       ? "vi"
       : "en";
-
   const predictionResult = await predictionPromise;
   if (!predictionResult)
     throw new NotFoundError("Prediction result could not be created or found.");
-
-  // SỬA LỖI & TỐI ƯU: Sử dụng kiểu đã định nghĩa và đảm bảo predictions là một mảng.
-  // Điều này giúp TypeScript hiểu rõ cấu trúc và loại bỏ lỗi.
   const predictionsArray: PredictionItem[] = Array.isArray(
     predictionResult.predictions
   )
     ? predictionResult.predictions
     : [];
-  const breedSlugs: string[] = [
+  const allSlugs: string[] = [
     ...new Set(
       predictionsArray.map((p: PredictionItem) =>
         p.class.toLowerCase().replace(/\s+/g, "-")
       )
     ),
   ];
-
   let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
-  if (breedSlugs.length > 0) {
-    const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
+  if (allSlugs.length > 0) {
+    const breeds = await wikiService.getBreedsBySlugs(allSlugs, lang);
     breeds.forEach((breed) => wikiInfoMap.set(breed.slug, breed));
   }
-
-  const collectionStatus = userId
-    ? await updateUserCollectionAndAchievements(
-        userId,
-        breedSlugs,
-        predictionResult._id,
-        req
-      )
-    : null;
-
-  const predictionObject = predictionResult.toObject
-    ? predictionResult.toObject()
-    : predictionResult;
-  const transformedPrediction = transformMediaURLs(req, predictionObject);
-
-  // KIỂM TRA MESSAGE ĐẶC BIỆT TỪ AI SERVICE (Vẫn giữ lại để tương thích)
-  if (transformedPrediction.message) {
-    return {
-      predictionId: transformedPrediction.id,
-      processedMediaUrl: transformedPrediction.processedMediaUrl,
-      detections: [],
-      message: transformedPrediction.message,
-    };
-  }
-
-  // Nếu AI không trả về gì, cũng không cần xử lý thêm
-  if (!transformedPrediction.predictions || transformedPrediction.predictions.length === 0) {
-    return {
-      predictionId: transformedPrediction.id,
-      processedMediaUrl: transformedPrediction.processedMediaUrl,
-      detections: [],
-    };
-  }
-
-  const detections = transformedPrediction.predictions.map((p: any) => {
+  const detections = predictionsArray.map((p: any) => {
     const slug = p.class.toLowerCase().replace(/\s+/g, "-");
     const breedInfoDoc = wikiInfoMap.get(slug);
+    let finalBreedInfo;
+    if (breedInfoDoc) {
+      finalBreedInfo = createEnrichedBreedInfo(breedInfoDoc);
+    } else {
+      finalBreedInfo = {
+        breed: p.class.toUpperCase(),
+        slug: slug,
+        group: "Object / Other",
+        description:
+          lang === "vi"
+            ? `Hệ thống nhận diện đây là ${p.class}. Đây không phải là một giống chó trong cơ sở dữ liệu.`
+            : `System identified this as ${p.class}. This is not a dog breed in our database.`,
+        life_expectancy: "N/A",
+        temperament: ["Non-Dog"],
+        energy_level: null,
+        trainability: null,
+        shedding_level: null,
+        maintenance_difficulty: null,
+        height: "N/A",
+        weight: "N/A",
+        good_with_children: null,
+        suitable_for: [],
+      };
+    }
     return {
       detectedBreed: slug,
       confidence: p.confidence,
@@ -188,36 +168,45 @@ async function handlePredictionAndEnrichment(
         width: p.box[2] - p.box[0],
         height: p.box[3] - p.box[1],
       },
-      breedInfo: createEnrichedBreedInfo(breedInfoDoc),
+      breedInfo: finalBreedInfo,
     };
   });
+  let collectionStatus = null;
+  if (userId) {
+    const validDogSlugs = allSlugs.filter((slug) => wikiInfoMap.has(slug));
+    if (validDogSlugs.length > 0) {
+      // Handle both Mongoose document (_id) and plain object (predictionId)
+      const predictionId = predictionResult._id || predictionResult.predictionId;
 
-  // --- LOGIC MỚI: XỬ LÝ KHI KHÔNG PHẢI CHÓ ---
-  // Kiểm tra xem có bất kỳ phát hiện nào là chó không (có breedInfo)
-  const hasAnyDog = detections.some((d: any) => d.breedInfo !== null);
+      if (predictionId) {
+        collectionStatus = await updateUserCollectionAndAchievements(
+          userId,
+          validDogSlugs,
+          new Types.ObjectId(predictionId.toString()),
+          req
+        );
+      }
+    }
+  }
+  const predictionObject = predictionResult.toObject
+    ? predictionResult.toObject()
+    : predictionResult;
+  const transformedPrediction = transformMediaURLs(req, predictionObject);
 
-  if (!hasAnyDog && detections.length > 0) {
-    // Nếu không có con chó nào, nhưng có các vật thể khác
-    const otherObjects = detections.map((d: any) => d.detectedBreed.replace(/-/g, ' '));
-    const uniqueObjects = [...new Set(otherObjects)];
-    const message = `Đây không phải là chó, đây là: ${uniqueObjects.join(', ')}.`;
-
-    return {
-      predictionId: transformedPrediction.id,
-      processedMediaUrl: transformedPrediction.processedMediaUrl,
-      detections: [], // Trả về mảng rỗng để frontend không hiển thị thẻ thông tin
-      message: message, // Gửi thông báo đặc biệt
-    };
+  let processedMediaUrl = transformedPrediction.processedMediaUrl;
+  if (!processedMediaUrl && predictionResult.processed_base64) {
+    const isVideo = source === PREDICTION_SOURCES.VIDEO_UPLOAD;
+    const mimeType = isVideo ? 'video/mp4' : 'image/jpeg';
+    processedMediaUrl = `data:${mimeType};base64,${predictionResult.processed_base64}`;
   }
 
   return {
-    predictionId: transformedPrediction.id,
-    processedMediaUrl: transformedPrediction.processedMediaUrl,
-    detections: detections.filter((d: any) => d.breedInfo !== null), // Chỉ trả về các phát hiện là chó
+    predictionId: transformedPrediction.predictionId || transformedPrediction.id,
+    processedMediaUrl: processedMediaUrl,
+    detections: detections,
     collectionStatus: collectionStatus,
   };
 }
-
 export const bffPredictionController = {
   predictImage: async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -225,20 +214,101 @@ export const bffPredictionController = {
       const userId = user?._id as Types.ObjectId | undefined;
       const file = req.file;
       if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+      const startTime = Date.now();
+      logger.info(`[Timing] [BFF] Request received for image prediction. User: ${userId || 'Guest'}`);
 
-      const predictionPromise = predictionService.makePrediction(
+      // [BẮT ĐẦU SỬA]
+      const result = await predictionService.makePrediction(
         userId,
         file,
         "image",
         req
       );
+
+      // Thêm đoạn kiểm tra này (giống predictVideo)
+      if (result.status === 'processing') {
+        await deductTokensForRequest(
+          req,
+          res,
+          tokenConfig.costs.imagePrediction,
+          "single"
+        );
+
+        // SỬA LẠI ĐOẠN NÀY: Bỏ lồng 'data', đưa predictionId ra ngoài
+        res.status(202).json({
+          predictionId: result.predictionId,
+          status: 'processing',
+          message: "Ảnh đang được xử lý ngầm."
+        });
+        return;
+      }
+    } catch (error) {
+      next(error);
+    }
+  },
+  predictVideo: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const file = req.file;
+      if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+      const startTime = Date.now();
+      logger.info(`[Timing] [BFF] Request received for video prediction. User: ${userId || 'Guest'}`);
+
+      const result = await predictionService.makePrediction(
+        userId,
+        file,
+        "video",
+        req
+      );
+
+      // Kiểm tra nếu đang xử lý ngầm (Async)
+      if (result.status === 'processing') {
+        await deductTokensForRequest(
+          req,
+          res,
+          tokenConfig.costs.videoPrediction,
+          "single"
+        );
+
+        res.status(202).json({
+          predictionId: result.predictionId,
+          status: 'processing',
+          message: "Video đang được xử lý ngầm."
+        });
+        return;
+      }
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  predictUrl: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id as Types.ObjectId | undefined;
+      const { url } = req.body;
+      const startTime = Date.now();
+
+      if (!url) throw new BadRequestError("URL không được để trống.");
+
+      const predictionPromise = predictionService.makeUrlPrediction(
+        userId,
+        url,
+        req
+      );
+
       const data = await handlePredictionAndEnrichment(
         req,
         predictionPromise,
-        PREDICTION_SOURCES.IMAGE_UPLOAD,
+        PREDICTION_SOURCES.URL_INPUT,
         userId?.toString()
       );
 
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: url | Total: ${duration}ms`);
+
+      // Tính phí token (ví dụ: giống image prediction)
       await deductTokensForRequest(
         req,
         res,
@@ -251,40 +321,6 @@ export const bffPredictionController = {
       next(error);
     }
   },
-
-  predictVideo: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const user = (req as any).user as UserDoc | undefined;
-      const userId = user?._id as Types.ObjectId | undefined;
-      const file = req.file;
-      if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
-
-      const predictionPromise = predictionService.makePrediction(
-        userId,
-        file,
-        "video",
-        req
-      );
-      const data = await handlePredictionAndEnrichment(
-        req,
-        predictionPromise,
-        PREDICTION_SOURCES.VIDEO_UPLOAD,
-        userId?.toString()
-      );
-
-      await deductTokensForRequest(
-        req,
-        res,
-        tokenConfig.costs.videoPrediction,
-        "single"
-      );
-
-      res.status(200).json(data);
-    } catch (error) {
-      next(error);
-    }
-  },
-
   predictBatch: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const user = (req as any).user as UserDoc | undefined;
@@ -294,29 +330,26 @@ export const bffPredictionController = {
           ? "vi"
           : "en";
       const files = req.files as Express.Multer.File[];
+      const startTime = Date.now();
+
       if (!files || files.length === 0) {
         throw new BadRequestError("Không có file nào được cung cấp.");
       }
-
-      const batchPredictionResults = await predictionService.makeBatchPredictions(
-        userId,
-        files,
-        req
-      );
+      const batchPredictionResults =
+        await predictionService.makeBatchPredictions(userId, files, req);
       const allSlugs: string[] = batchPredictionResults.flatMap((result) =>
-        result.predictions.map((p) => p.class.toLowerCase().replace(/\s+/g, "-"))
+        result.predictions.map((p) =>
+          p.class.toLowerCase().replace(/\s+/g, "-")
+        )
       );
       const uniqueSlugs: string[] = [...new Set(allSlugs)];
-
       let wikiInfoMap = new Map<string, DogBreedWikiDoc>();
       let collectionStatus: any = null;
-
       const enrichmentPromises: Promise<any>[] = [
         wikiService.getBreedsBySlugs(uniqueSlugs, lang).then((breeds) => {
           breeds.forEach((breed) => wikiInfoMap.set(breed.slug, breed));
         }),
       ];
-
       if (userId && uniqueSlugs.length > 0) {
         enrichmentPromises.push(
           (async () => {
@@ -335,7 +368,6 @@ export const bffPredictionController = {
               collectionService.getUserCollection(userId),
             ]);
             if (!userAfterUpdate) return;
-
             const achievementsResult =
               await achievementService.processUserAchievements(
                 userAfterUpdate as UserDoc,
@@ -357,9 +389,7 @@ export const bffPredictionController = {
           })()
         );
       }
-
       await Promise.all(enrichmentPromises);
-
       const results = batchPredictionResults.map((predictionResult) => {
         const transformedPrediction = transformMediaURLs(
           req,
@@ -380,7 +410,6 @@ export const bffPredictionController = {
             breedInfo: createEnrichedBreedInfo(breedInfoDoc),
           };
         });
-
         return {
           predictionId: transformedPrediction.id,
           originalFilename:
@@ -391,26 +420,25 @@ export const bffPredictionController = {
         };
       });
 
+      const duration = Date.now() - startTime;
+      logger.info(`[PERF] BFF | Type: batch | Count: ${files.length} | Total: ${duration}ms`);
+
       await deductTokensForRequest(
         req,
         res,
         tokenConfig.costs.imagePrediction,
         "batch"
       );
-
       res.status(200).json(results);
     } catch (error) {
       next(error);
     }
   },
-
   submitFeedback: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const userId = (req as any).user?._id;
       const { id: prediction_id } = req.params;
       const { user_submitted_label, notes, isCorrect } = req.body;
-
-      // Fetch prediction history to get the file_path
       const predictionHistory =
         await predictionHistoryService.getHistoryByIdForUser(
           userId,
@@ -419,9 +447,7 @@ export const bffPredictionController = {
       if (!predictionHistory) {
         throw new NotFoundError("Không tìm thấy lịch sử dự đoán.");
       }
-      
       const file_path = (predictionHistory.media as any)?.path;
-
       const feedback = await feedbackService.submitFeedback(userId, {
         prediction_id,
         isCorrect,
@@ -429,17 +455,19 @@ export const bffPredictionController = {
         notes,
         file_path,
       });
-
       res.status(201).json({
         feedbackId: feedback._id,
         message: "Feedback submitted successfully",
       });
     } catch (error) {
-      next(error); // Chuyển lỗi đến middleware xử lý lỗi chung
+      next(error);
     }
   },
-
-  deletePredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
+  deletePredictionHistory: async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const userId = (req as any).user!._id;
       const { id: historyId } = req.params;
@@ -447,13 +475,16 @@ export const bffPredictionController = {
         userId,
         historyId
       );
-      res.status(200).json(result);
+      res.status(204).send();
     } catch (error) {
       next(error);
     }
   },
-
-  getPredictionHistory: async (req: Request, res: Response, next: NextFunction) => {
+  getPredictionHistory: async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const userId = (req as any).user!._id;
       const lang =
@@ -502,7 +533,7 @@ export const bffPredictionController = {
           updatedAt: item.updatedAt,
           detections: detections,
           media: {
-            name: item.media?.name || 'N/A',
+            name: item.media?.name || "N/A",
             mediaUrl: item.media?.mediaUrl,
             type: item.media?.type,
           },
@@ -520,30 +551,154 @@ export const bffPredictionController = {
       next(error);
     }
   },
-
-  getPredictionHistoryById: async (req: Request, res: Response, next: NextFunction) => {
+  getPredictionHistoryById: async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { id: historyId } = req.params;
+      const user = (req as any).user as UserDoc | undefined;
+      const userId = user?._id;
       const lang =
         req.query.lang === "vi" || req.query.lang === "en"
           ? (req.query.lang as "vi" | "en")
           : "en";
-      const historyItem = await predictionHistoryService.getHistoryById(
-        historyId
-      );
-      if (!historyItem) throw new NotFoundError("Prediction history not found.");
+
+      let historyItem: any = null;
+      // DIRECT FETCH (No Blocking Loop)
+      if (userId) {
+        // Nếu là User đăng nhập, CHỈ được xem history của chính mình
+        historyItem = await predictionHistoryService.getHistoryByIdForUser(userId, historyId);
+      } else {
+        // Nếu là Guest, lấy history
+        historyItem = await predictionHistoryService.getHistoryById(historyId);
+        // BẢO MẬT: Nếu history này thuộc về một User nào đó, Guest KHÔNG được quyền xem
+        if (historyItem?.user) {
+          throw new NotFoundError("Access denied. This prediction belongs to a registered user.");
+        }
+      }
+
+      if (!historyItem)
+        throw new NotFoundError("Prediction history not found.");
+
       const breedSlugs: string[] = [
-        ...new Set(
+        ...new Set<string>(
           historyItem.predictions.map((p: any) =>
             p.class.toLowerCase().replace(/\s+/g, "-")
           )
         ),
       ];
-      const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
-      const wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
+      // [REMOVED] Duplicate declaration
+      let wikiInfoMap = new Map();
+      try {
+        const breeds = await wikiService.getBreedsBySlugs(breedSlugs, lang);
+        wikiInfoMap = new Map(breeds.map((breed) => [breed.slug, breed]));
+      } catch (error) { }
       const transformedPrediction = transformMediaURLs(req, historyItem);
+
+      // --- FALLBACK LOGIC: Nếu đang xử lý (processing), đọc ảnh tạm từ disk ---
+      if (
+        transformedPrediction.processedMediaUrl === "processing" ||
+        (transformedPrediction.processedMediaUrl &&
+          transformedPrediction.processedMediaUrl.includes("processing"))
+      ) {
+        const os = require('os');
+        const TEMP_UPLOAD_DIR = os.tmpdir();
+        const processedMediaPathTemp = path.join(
+          TEMP_UPLOAD_DIR,
+          `processed_${historyId}.txt`
+        );
+        try {
+          if (fs.existsSync(processedMediaPathTemp)) {
+            const base64Data = await fs.promises.readFile(
+              processedMediaPathTemp,
+              "utf-8"
+            );
+            // Giả sử là ảnh JPEG, nếu video thì cần logic phức tạp hơn chút hoặc chấp nhận ảnh thumbnail
+            // Tuy nhiên, prediction.service lưu base64 của ảnh/video đã vẽ bounding box.
+            // Với video, AI service trả về base64 của video (mp4) hoặc ảnh (jpg) tùy logic.
+            // Ở đây ta cứ gán vào, frontend sẽ hiển thị.
+            // Lưu ý: AI service trả về "processed_media_base64" là chuỗi raw base64.
+            // Cần xác định mime type.
+            // Trong prediction.service, ta thấy:
+            // const dataUri = `data:${resource_type === 'video' ? 'video/mp4' : 'image/jpeg'};base64,${base64Data}`;
+            // Ta cần check source để biết là video hay ảnh.
+            const isVideo = historyItem.source.includes("video");
+            const mimeType = isVideo ? "video/mp4" : "image/jpeg";
+            transformedPrediction.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+
+            // [FIX] RE-FETCH DATA FROM DB
+            // Nếu tìm thấy file tạm, nghĩa là Worker đã xong việc.
+            // Nhưng 'historyItem' hiện tại có thể là dữ liệu cũ (lấy trước khi Worker update DB).
+            // Cần lấy lại dữ liệu mới nhất để đảm bảo có 'predictions'.
+            try {
+              const freshHistoryItem = await predictionHistoryService.getHistoryById(historyId);
+              if (freshHistoryItem && freshHistoryItem.predictions && freshHistoryItem.predictions.length > 0) {
+                logger.info(`[BFF] Re-fetched fresh history for ${historyId}. Predictions count: ${freshHistoryItem.predictions.length}`);
+                // Cập nhật lại historyItem và transformedPrediction
+                historyItem = freshHistoryItem;
+                // Merge lại URL ảnh tạm vào item mới (vì item mới trong DB vẫn đang là "processing")
+                const freshTransformed = transformMediaURLs(req, freshHistoryItem);
+                freshTransformed.processedMediaUrl = `data:${mimeType};base64,${base64Data}`;
+
+                // Gán lại để logic phía dưới dùng dữ liệu mới
+                Object.assign(transformedPrediction, freshTransformed);
+              }
+            } catch (refetchError) {
+              logger.warn(`[BFF] Failed to re-fetch fresh history for ${historyId}`, refetchError);
+            }
+
+          } else {
+            // [FIX] Nếu DB bảo đang processing mà không thấy file tạm
+            // Chỉ báo failed nếu job đã tạo quá lâu (ví dụ: > 2 phút)
+            // Để tránh trường hợp vừa tạo xong chưa kịp ghi file đã bị báo lỗi
+            const jobAge = Date.now() - new Date(historyItem.createdAt).getTime();
+            if (jobAge > 5 * 60 * 1000) { // 5 phút
+              logger.warn(`[BFF] Temp file missing for STALE processing job ${historyId} (${jobAge}ms). Marking as failed.`);
+              transformedPrediction.processedMediaUrl = "failed";
+            } else {
+              // Nếu mới tạo thì cứ để processing, chờ worker ghi file
+              // Frontend sẽ tiếp tục polling
+            }
+          }
+        } catch (e) {
+          logger.warn(
+            `[BFF] Could not read temp file for history ${historyId}:`,
+            e
+          );
+          // Không set failed ở đây để tránh lỗi đọc file tạm thời
+        }
+      }
+      // -----------------------------------------------------------------------
+
       const detections = transformedPrediction.predictions.map((p: any) => {
         const slug = p.class.toLowerCase().replace(/\s+/g, "-");
+        const breedInfoDoc = wikiInfoMap.get(slug);
+        let finalBreedInfo;
+        if (breedInfoDoc) {
+          finalBreedInfo = createEnrichedBreedInfo(breedInfoDoc);
+        } else {
+          finalBreedInfo = {
+            breed: p.class.toUpperCase(),
+            slug: slug,
+            group: "Object / Other",
+            description:
+              lang === "vi"
+                ? `Hệ thống nhận diện đây là "${p.class}". Đây không phải là một giống chó trong cơ sở dữ liệu.`
+                : `System identified this as "${p.class}". This is not a dog breed in our database.`,
+            life_expectancy: "N/A",
+            temperament: ["Non-Dog"],
+            energy_level: null,
+            trainability: null,
+            shedding_level: null,
+            maintenance_difficulty: null,
+            height: "N/A",
+            weight: "N/A",
+            good_with_children: null,
+            suitable_for: [],
+          };
+        }
         return {
           detectedBreed: slug,
           confidence: p.confidence,
@@ -553,7 +708,7 @@ export const bffPredictionController = {
             width: p.box[2] - p.box[0],
             height: p.box[3] - p.box[1],
           },
-          breedInfo: createEnrichedBreedInfo(wikiInfoMap.get(slug)),
+          breedInfo: finalBreedInfo,
         };
       });
       const finalResponse = {
@@ -561,398 +716,254 @@ export const bffPredictionController = {
         processedMediaUrl: transformedPrediction.processedMediaUrl,
         detections,
         collectionStatus: null,
-        hasFeedback: (historyItem as any).hasFeedback, 
+        hasFeedback: (historyItem as any).hasFeedback,
       };
       res.status(200).json(finalResponse);
     } catch (error) {
       next(error);
     }
   },
-
+  getPredictionStatus: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { id } = req.params;
+      const status = await predictionService.getPredictionStatus(id);
+      res.status(200).json(status);
+    } catch (error) {
+      next(error);
+    }
+  },
   handleStreamPrediction: async (ws: WebSocket, req: Request) => {
-    // BƯỚC 1: LẤY ĐỊNH DANH (giữ nguyên)
     const user = (req as any).user as UserDoc | undefined;
-    const userId = user?._id?.toString(); // Lấy userId nếu đã đăng nhập
-
-    // SỬA LỖI: Ưu tiên định danh do client cung cấp (đã được gán trong wsOptionalAuthMiddleware)
-    // Điều này đảm bảo tính nhất quán với các request HTTP khác.
-    const guestIdentifier = !user ? ((req as any).fingerprint?.hash || req.ip) : undefined;
-
-
-    // BƯỚC 2: KIỂM TRA TÍNH TOÀN VẸN SESSION (giữ nguyên)
+    const userId = user?._id?.toString();
+    const guestIdentifier = !user
+      ? (req as any).fingerprint?.hash || req.ip
+      : undefined;
     if (!userId && !guestIdentifier) {
-      logger.error("[BFF-WS] Critical: Could not determine identifier for WebSocket session. Closing connection.");
-      ws.close(1011, "Could not determine user identity.");
+      ws.close(1011, "Could not determine identity.");
       return;
     }
-
-    // ======================== THÊM MỚI TẠI ĐÂY ========================
-    // BƯỚC 2A: KIỂM TRA & KHỞI TẠO TOKEN CHO KHÁCH (NẾU LÀ KHÁCH)
     if (!user && redisClient) {
       const key = `${REDIS_KEYS.GUEST_TOKEN_PREFIX}${guestIdentifier}`;
       const streamCost = tokenConfig.costs.streamSession;
-
       try {
         let currentTokensStr = await redisClient.get(key);
-        let remainingTokens: number;
-
-        // Nếu là khách mới, khởi tạo token cho họ
-        if (currentTokensStr === null) {
-          remainingTokens = tokenConfig.guest.initialTokens;
+        let remainingTokens =
+          currentTokensStr === null
+            ? tokenConfig.guest.initialTokens
+            : parseInt(currentTokensStr, 10);
+        if (currentTokensStr === null)
           await redisClient.set(key, remainingTokens, {
             EX: tokenConfig.guest.expirationSeconds,
           });
-          logger.info(`[BFF-WS] Initialized ${remainingTokens} tokens for new guest ${guestIdentifier}.`);
-        } else {
-          remainingTokens = parseInt(currentTokensStr, 10);
-        }
-
-        // Kiểm tra xem họ có đủ token để bắt đầu stream không
         if (remainingTokens < streamCost) {
-          logger.warn(`[BFF-WS] Guest ${guestIdentifier} has insufficient tokens for stream. Required: ${streamCost}, Remaining: ${remainingTokens}. Closing connection.`);
-          ws.send(JSON.stringify({ type: 'error', message: 'Not enough tokens for streaming session.' }));
-          ws.close(1008, "Insufficient tokens");
-          return; // Dừng thực thi
+          ws.send(
+            JSON.stringify({
+              type: "error",
+              code: "INSUFFICIENT_TOKENS",
+              message: "Not enough tokens.",
+            })
+          );
+          ws.close(1008);
+          return;
         }
-      } catch (error) {
-        logger.error(`[BFF-WS] Redis error during token check for guest ${guestIdentifier}:`, error);
-        ws.close(1011, "Server error during token check.");
+      } catch (e) {
+        ws.close(1011);
         return;
       }
     }
-
-    logger.info(
-      `[BFF-WS] Session started. User: ${userId || "Guest"}, Identifier: ${
-        guestIdentifier || "N/A"
-      }`
-    );
-
-    // Khởi tạo các biến và kết nối cần thiết cho phiên làm việc
-    const lang =
-      req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
-        ? "vi"
-        : "en"; 
+    logger.info(`[BFF-WS] ✅ Session start for: ${userId || guestIdentifier}`);
     const aiServiceUrl = (
       process.env.AI_SERVICE_URL || "http://localhost:8000"
     ).replace(/^http/, "ws");
-    const aiServiceWs = new WebSocket(`${aiServiceUrl}/predict-stream`);
-    const wikiCache = new Map<string, any>();
-    let finalResultSent = false;
-    let tokensDeducted = false;
-
-    // BƯỚC 3: TẠO MỘT HÀM HELPER ĐỂ TÁI TẠO CONTEXT CỦA REQUEST
-    // Hàm này sẽ tạo một đối tượng `req` giả mạo nhưng chứa đầy đủ thông tin định danh
-    // đã được lưu trữ, đảm bảo các service khác có thể sử dụng.
-    const createMockRequest = (): Request => {
-      const protocol =
-        (req.headers["x-forwarded-proto"] as string) || req.protocol || "http";
-      const host =
-        (req.headers["x-forwarded-host"] as string) ||
-        (req.headers.host as string);
-
-      return {
-        user: user,
-        ip: req.ip, // Giữ lại IP gốc từ request ban đầu
-        // Tái tạo lại đối tượng fingerprint với hash đã lưu
-        fingerprint: { hash: guestIdentifier },
-        headers: req.headers,
-        protocol: protocol,
-        get: (header: string) =>
-          header.toLowerCase() === "host"
-            ? host
-            : req.headers[header.toLowerCase()],
-      } as unknown as Request; 
+    const aiWs = new WebSocket(`${aiServiceUrl}/predict-stream`);
+    aiWs.on("open", () => { });
+    aiWs.on("message", (data) => {
+      logger.info(`[BFF-WS] AI -> BFF: Nhận kết quả từ AI Service.`);
+      if (ws.readyState === WebSocket.OPEN) ws.send(data.toString());
+    });
+    ws.on("message", (data) => {
+      if (aiWs.readyState === WebSocket.OPEN) {
+        logger.info(
+          `[BFF-WS] Client -> BFF -> AI: Nhận frame từ client và chuyển tiếp đến AI Service.`
+        );
+        aiWs.send(data, { binary: Buffer.isBuffer(data) });
+      }
+    });
+    const cleanup = () => {
+      if (aiWs.readyState === WebSocket.OPEN) aiWs.close();
+      if (ws.readyState === WebSocket.OPEN) ws.close();
     };
-
-    // --- XỬ LÝ KẾT NỐI ĐẾN AI SERVICE (BFF <-> AI Service) ---
-
-    aiServiceWs.on("open", () => {
-      logger.info(
-        `[BFF-WS] Connection to AI Service established for user: ${
-          userId || guestIdentifier
-        }.`
-      );
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({ type: "status", message: "Connected to AI Service" })
-        );
-      }
-    });
-
-    aiServiceWs.on("message", async (data) => {
-      const message = JSON.parse(data.toString());
-      if (ws.readyState !== WebSocket.OPEN) return;
-
-      // Xử lý các frame dự đoán trung gian
-      if (message.detections && !message.status) {
-        const breedSlugs = [
-          ...new Set(
-            message.detections.map((p: any) =>
-              p.class.toLowerCase().replace(/\s+/g, "-")
-            )
-          ),
-        ];
-        const slugsToFetch = (breedSlugs as string[]).filter(
-          (slug: string) => !wikiCache.has(slug)
-        );
-
-        if (slugsToFetch.length > 0) {
-          const breeds = await wikiService.getBreedsBySlugs(
-            slugsToFetch as string[],
-            lang
-          );
-          breeds.forEach((breed) => wikiCache.set(breed.slug, breed));
-        }
-
-        const detections = message.detections.map((p: any) => ({
-          detectedBreed: p.class.toLowerCase().replace(/\s+/g, "-"),
-          confidence: p.confidence,
-          boundingBox: {
-            x: p.box[0],
-            y: p.box[1],
-            width: p.box[2] - p.box[0],
-            height: p.box[3] - p.box[1],
-          },
-          breedInfo: createEnrichedBreedInfo(
-            wikiCache.get(p.class.toLowerCase().replace(/\s+/g, "-"))
-          ),
-        }));
-        ws.send(JSON.stringify({ type: "detections", detections }));
-      }
-
-      // Xử lý khi có kết quả cuối cùng từ AI Service
-      if (message.status === "captured" && !finalResultSent) {
-        finalResultSent = true;
-        try {
-          const mockReq = createMockRequest();
-          const payloadForSaving = {
-            processed_media_base64: message.processed_media_base64,
-            detections: message.detections,
-            media_type: message.media_type,
-          };
-          const savedPrediction = await predictionService.saveStreamPrediction(
-            user?._id as Types.ObjectId | undefined,
-            payloadForSaving,
-            mockReq
-          );
-          const enrichedResult = await handlePredictionAndEnrichment(
-            mockReq,
-            Promise.resolve(savedPrediction),
-            PREDICTION_SOURCES.STREAM_CAPTURE,
-            userId
-          );
-
-          // ======================== THAY ĐỔI LOGIC TRỪ TOKEN ========================
-          // Chỉ trừ token KHI có kết quả cuối cùng và chỉ trừ MỘT LẦN.
-          if (!tokensDeducted) {
-            tokensDeducted = true;
-            deductTokensForRequest(mockReq, {} as Response, tokenConfig.costs.streamSession, 'stream')
-              .then(() => logger.info(
-                `[BFF-WS] Token deduction processed for session of ${userId || guestIdentifier} after final result.`
-              ))
-              .catch((err) => logger.error(
-                `[BFF-WS] Failed to process token deduction after stream final result:`, err
-              ));
-          }
-          // ==========================================================================
-
-
-          ws.send(JSON.stringify({ type: "final_result", ...enrichedResult }));
-          ws.send(
-            JSON.stringify({
-              type: "endOfStream",
-              message: "Stream completed successfully",
-            })
-          );
-          if (ws.readyState === WebSocket.OPEN)
-            ws.close(1000, "Stream completed successfully");
-          if (aiServiceWs.readyState === WebSocket.OPEN)
-            aiServiceWs.close(1000, "Stream completed successfully");
-        } catch (error) {
-          logger.error(
-            "[BFF-WS] Error saving or enriching stream result:",
-            error
-          );
-        }
-      }
-    });
-
-    aiServiceWs.on("error", (error) => {
-      logger.error("[BFF-WS] AI Service WebSocket error:", error);
-      if (ws.readyState === WebSocket.OPEN) ws.close(1011, "AI service error");
-    });
-
-    aiServiceWs.on("close", (code, reason) => {
-      logger.info(
-        `[BFF-WS] AI Service connection closed. Code: ${code}, Reason: ${reason.toString()}`
-      );
-      if (!finalResultSent && ws.readyState === WebSocket.OPEN) {
-        ws.close(code, reason.toString());
-      }
-    });
-
-    // --- XỬ LÝ KẾT NỐI TỪ CLIENT (Client <-> BFF) ---
-
-    ws.on("message", (message) => {
-      if (aiServiceWs.readyState === WebSocket.OPEN) {
-
-        aiServiceWs.send(message.toString());
-      } else {
-        logger.warn(
-          "[BFF-WS] Client sent a message, but AI service is not connected. Dropping frame."
-        );
-      }
-    });
-
-    ws.on("close", () => {
-      logger.info(
-        `[BFF-WS] Client connection closed for user: ${
-          userId || guestIdentifier
-        }.`
-      );
-      if (aiServiceWs.readyState === WebSocket.OPEN) {
-        aiServiceWs.close(1000, "Client closed BFF connection");
-      }
-    });
-
-    ws.on("error", (error) => {
-      logger.error("[BFF-WS] Client WebSocket error:", error);
-      if (aiServiceWs.readyState === WebSocket.OPEN) {
-        aiServiceWs.close(1011, "Client connection error");
-      }
-    });
+    ws.on("close", cleanup);
+    aiWs.on("close", cleanup);
+    ws.on("error", cleanup);
+    aiWs.on("error", cleanup);
   },
-  
-
-  chatWithGemini: async (req: Request, res: Response, next: NextFunction) => {
-    const user = (req as any).user as UserDoc | undefined;
-    const { breedSlug } = req.params;
-    const { message } = req.body;
-    if (!message) throw new BadRequestError("Message is required.");
-    const lang =
-      req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
-        ? "vi"
-        : "en";
-
-    // CẢI TIẾN: Xác định định danh người dùng hoặc khách để có lịch sử chat riêng
-    const userId = user?._id?.toString();
-    const guestIdentifier = user
-      ? undefined
-      : (req as any).fingerprint?.hash || req.ip;
-
-    if (!userId && !guestIdentifier) {
-      throw new Error("Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện.");
+  saveStreamResult: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user;
+      const userId = user?._id?.toString();
+      const { processed_media_base64, detections, media_type } = req.body;
+      if (!processed_media_base64) throw new BadRequestError("No image data");
+      const predictionPromise = predictionService.saveStreamPrediction(
+        user?._id,
+        {
+          processed_media_base64,
+          detections: detections || [],
+        },
+        req
+      );
+      const data = await handlePredictionAndEnrichment(
+        req,
+        predictionPromise,
+        PREDICTION_SOURCES.STREAM_CAPTURE,
+        userId
+      );
+      await deductTokensForRequest(req, res, tokenConfig.costs.streamSession);
+      res.json({
+        id: data.predictionId,
+        collectionStatus: data.collectionStatus,
+      });
+    } catch (e) {
+      next(e);
     }
-
-    const result = await askGemini(
-      breedSlug,
-      message,
-      lang,
-      userId,
-      guestIdentifier
-    ); // Truyền định danh vào service
-
-    await deductTokensForRequest(req, res, tokenConfig.costs.chatMessage);
-
-    res.status(200).json(result);
   },
-
-  getHealthRecommendations: async (req: Request, res: Response, next: NextFunction) => {
+  chatWithGemini: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const user = (req as any).user as UserDoc | undefined;
+      const { breedSlug } = req.params;
+      const { message } = req.body;
+      if (!message) throw new BadRequestError("Message is required.");
+      const lang =
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en";
+      const userId = user?._id?.toString();
+      const guestIdentifier = user
+        ? undefined
+        : (req as any).fingerprint?.hash || req.ip;
+      if (!userId && !guestIdentifier) {
+        throw new Error(
+          "Không thể xác định danh tính người dùng hoặc khách cho phiên trò chuyện."
+        );
+      }
+      const result = await askGemini(
+        breedSlug,
+        message,
+        lang,
+        userId,
+        guestIdentifier
+      );
+      await deductTokensForRequest(req, res, tokenConfig.costs.chatMessage);
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  },
+  getHealthRecommendations: async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { breedSlug } = req.params;
-      const lang = (req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi" ? "vi" : "en") as "vi" | "en";
+      const lang = (
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en"
+      ) as "vi" | "en";
       const cacheKey = `${REDIS_KEYS.HEALTH_RECOMMENDATIONS_PREFIX}${breedSlug}:${lang}`;
-
-      // 1. Thử lấy từ cache trước
       if (redisClient) {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-          logger.info(`[BFF Controller] 🩺 Cache HIT for health recommendations: '${breedSlug}', lang: '${lang}'`);
           return res.status(200).json({ recommendations: cachedData });
         }
-        logger.info(`[BFF Controller] 🩺 Cache MISS for health recommendations: '${breedSlug}', lang: '${lang}'`);
       }
-
-      logger.info(`[BFF Controller] 🩺 Requesting health recommendations for slug: '${breedSlug}', lang: '${lang}'`);
-
       const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
-      if (!breedInfo || !breedInfo.common_health_issues || breedInfo.common_health_issues.length === 0) {
-        logger.warn(`[BFF Controller] 🩺 No health issues found for slug '${breedSlug}'. Returning empty recommendations.`);
-        return res.status(200).json({ recommendations: "" }); // Trả về chuỗi rỗng nếu không có thông tin
+      if (
+        !breedInfo ||
+        !breedInfo.common_health_issues ||
+        breedInfo.common_health_issues.length === 0
+      ) {
+        return res.status(200).json({ recommendations: "" });
       }
-
-      logger.info(`[BFF Controller] 🩺 Found health issues: ${breedInfo.common_health_issues.join(', ')}. Calling Gemini...`);
       const recommendations = await getHealthRecommendations(
         breedInfo.breed,
         breedInfo.common_health_issues,
         lang
       );
-      logger.info(`[BFF Controller] 🩺 Gemini returned recommendations. Length: ${recommendations.length}`);
-
-      // 2. Lưu kết quả vào cache
       if (redisClient && recommendations) {
-        await redisClient.set(cacheKey, recommendations, { EX: REDIS_KEYS.CACHE_24H_SECONDS }); // Cache trong 24 giờ
+        await redisClient.set(cacheKey, recommendations, {
+          EX: REDIS_KEYS.CACHE_24H_SECONDS,
+        });
       }
-
-      logger.info(`[BFF Controller] 🩺 Sending response for '${breedSlug}'.`);
       res.status(200).json({ recommendations });
     } catch (error) {
       next(error);
     }
   },
-
-  getRecommendedProducts: async (req: Request, res: Response, next: NextFunction) => {
+  getRecommendedProducts: async (
+    req: Request,
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { breedSlug } = req.params;
-      const lang = (req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi" ? "vi" : "en") as "vi" | "en";
+      const lang = (
+        req.headers["accept-language"]?.split(",")[0].toLowerCase() === "vi"
+          ? "vi"
+          : "en"
+      ) as "vi" | "en";
       const cacheKey = `${REDIS_KEYS.RECOMMENDED_PRODUCTS_PREFIX}${breedSlug}:${lang}`;
-
-      // 1. Thử lấy từ cache trước
       if (redisClient) {
         const cachedData = await redisClient.get(cacheKey);
         if (cachedData) {
-          logger.info(`[BFF Controller] 🛍️ Cache HIT for recommended products: '${breedSlug}', lang: '${lang}'`);
           return res.status(200).json({ products: JSON.parse(cachedData) });
         }
-        logger.info(`[BFF Controller] 🛍️ Cache MISS for recommended products: '${breedSlug}', lang: '${lang}'`);
       }
-
-      logger.info(`[BFF Controller] 🛍️ Requesting recommended products for slug: '${breedSlug}', lang: '${lang}'`);
-
       const breedInfo = await wikiService.getBreedBySlug(breedSlug, lang);
       if (!breedInfo) {
-        logger.error(`[BFF Controller] 🛍️ Breed not found for slug '${breedSlug}'.`);
         throw new NotFoundError("Breed not found");
       }
-
-      logger.info(`[BFF Controller] 🛍️ Breed found: '${breedInfo.breed}'. Calling Gemini...`);
       const productsJsonString = await getRecommendedProducts(
         breedInfo.breed,
         lang
       );
-      logger.info(`[BFF Controller] 🛍️ Gemini returned products JSON string. Length: ${productsJsonString.length}`);
-      
-      // 2. Lưu kết quả vào cache trước khi parse và gửi đi
-      if (redisClient && productsJsonString && productsJsonString.length > 2) { // Chỉ cache nếu có nội dung
-        await redisClient.set(cacheKey, productsJsonString, { EX: REDIS_KEYS.CACHE_24H_SECONDS }); // Cache trong 24 giờ
+      if (redisClient && productsJsonString && productsJsonString.length > 2) {
+        await redisClient.set(cacheKey, productsJsonString, {
+          EX: REDIS_KEYS.CACHE_24H_SECONDS,
+        });
       }
-
       try {
         const products = JSON.parse(productsJsonString);
-        logger.info(`[BFF Controller] 🛍️ Successfully parsed JSON. Found ${products.length} products. Sending response for '${breedSlug}'.`);
         res.status(200).json({ products });
       } catch (e) {
-        logger.error(`[BFF Controller] Failed to parse recommended products JSON for breed '${breedSlug}':`, e);
-        logger.error(`[BFF Controller] Invalid JSON string was: ${productsJsonString}`);
-        logger.info(`[BFF Controller] 🛍️ Sending empty products array due to parse error for '${breedSlug}'.`);
-        res.status(200).json({ products: [] }); // Trả về mảng rỗng nếu parse lỗi
+        logger.error(
+          `[BFF Controller] Failed to parse recommended products JSON for breed ${breedSlug}:`,
+          e
+        );
+        logger.error(
+          `[BFF Controller] Invalid JSON string was: ${productsJsonString}`
+        );
+        res.status(200).json({ products: [] });
       }
-
     } catch (error) {
       next(error);
     }
   },
-
+  getConfig: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const aiServiceUrl = process.env.AI_SERVICE_URL || "http://localhost:8000";
+      const response = await fetch(`${aiServiceUrl}/config`);
+      if (!response.ok) {
+        throw new Error(`AI Service returned ${response.status}`);
+      }
+      const data = await response.json();
+      res.status(200).json(data);
+    } catch (error) {
+      logger.error("[BFF Controller] Failed to fetch config from AI Service:", error);
+      next(error);
+    }
+  },
   getChatHistory: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const { breedSlug } = req.params;
@@ -961,13 +972,11 @@ export const bffPredictionController = {
       const guestIdentifier = user
         ? undefined
         : (req as any).fingerprint?.hash || req.ip;
-
       const history = await getGeminiChatHistory(
         userId,
         guestIdentifier,
         breedSlug
       );
-
       res.status(200).json({ history });
     } catch (error) {
       next(error);

@@ -1,10 +1,9 @@
 "use client"
 
-import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Trophy, Lock, CheckCircle } from "lucide-react"
+import { Trophy, Lock, CheckCircle, Dog, Medal, Star, ArrowUpCircle } from "lucide-react"
 import { ProtectedRoute } from "@/components/protected-route"
 import { useEffect, useState, useMemo } from "react"
 import { apiClient } from "@/lib/api-client"
@@ -72,11 +71,18 @@ function AchievementsContent() {
   }, [data?.achievements])
 
   if (loading) {
-    return <div className="flex justify-center items-center min-h-screen">{t('common.loading')}</div>
+    return (
+      <div className="flex justify-center items-center min-h-screen">
+         <div className="flex items-center gap-2">
+            <div className="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            <span className="text-muted-foreground">{t('common.loading')}</span>
+         </div>
+      </div>
+    )
   }
 
   if (error) {
-    return <div className="flex justify-center items-center min-h-screen text-red-500">{error}</div>
+    return <div className="flex justify-center items-center min-h-screen text-destructive">{error}</div>
   }
 
   if (!data) {
@@ -86,48 +92,63 @@ function AchievementsContent() {
   const { stats, nextAchievement, achievements } = data
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        {/* Page Title */}
-        <div className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Trophy className="h-12 w-12 text-primary" />
-            <h1 className="text-5xl font-bold text-foreground">{t('achievements.title')}</h1>
+    <main className="min-h-screen relative overflow-hidden bg-background">
+      <div className="container mx-auto px-4 py-8 md:py-12 max-w-6xl relative z-10">
+        
+        {/* HEADER SECTION */}
+        <div className="text-center mb-10 md:mb-14">
+          <div className="inline-flex items-center justify-center p-3 mb-4 rounded-full bg-primary/10 text-amber-500 animate-in zoom-in duration-500">
+             <Trophy className="h-10 w-10" />
           </div>
-          <p className="text-muted-foreground text-lg">
+          <h1 className="text-4xl sm:text-5xl font-extrabold mb-4 tracking-tight text-balance">
+            {t('achievements.title')}
+          </h1>
+          <p className="text-lg text-muted-foreground text-balance max-w-2xl mx-auto">
             {t('achievements.pageDescription')}
           </p>
         </div>
 
-        {/* Stats Overview */}
-        <div className="grid md:grid-cols-3 gap-6 mb-8">
-          <Card className="border-2 border-primary bg-primary/5">
+        {/* STATS OVERVIEW - Màu sắc sống động như bản gốc */}
+        <div className="grid md:grid-cols-3 gap-6 mb-12">
+          {/* Card 1: Primary Color (Dogs Collected) */}
+          <Card className="border-2 border-primary bg-primary/10 hover:bg-primary/15 transition-colors duration-300">
             <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t('achievements.dogsCollected')}</p>
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-3 p-3 rounded-full bg-primary/20 text-primary">
+                  <Dog className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{t('achievements.dogsCollected')}</p>
                 <p className="text-4xl font-bold text-primary">
-                  {stats.totalCollected}/{stats.totalBreeds}
+                  {stats.totalCollected}<span className="text-xl opacity-70">/{stats.totalBreeds}</span>
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-2 border-chart-4 bg-chart-4/5">
+          {/* Card 2: Orange/Chart-4 Color (Achievements) */}
+          <Card className="border-2 border-orange-500 bg-orange-500/10 hover:bg-orange-500/15 transition-colors duration-300">
             <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t('achievements.achievementsUnlocked')}</p>
-                <p className="text-4xl font-bold text-chart-4">
-                  {stats.unlockedAchievements}/{stats.totalAchievements}
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-3 p-3 rounded-full bg-orange-500/20 text-orange-600 dark:text-orange-400">
+                  <Medal className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{t('achievements.achievementsUnlocked')}</p>
+                <p className="text-4xl font-bold text-orange-600 dark:text-orange-400">
+                  {stats.unlockedAchievements}<span className="text-xl opacity-70">/{stats.totalAchievements}</span>
                 </p>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-2 border-chart-1 bg-chart-1/5">
+          {/* Card 3: Red/Chart-1 Color (Completion) */}
+          <Card className="border-2 border-rose-500 bg-rose-500/10 hover:bg-rose-500/15 transition-colors duration-300">
             <CardContent className="pt-6">
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-2">{t('profile.stats.completion')}</p>
-                <p className="text-4xl font-bold text-chart-1">
+              <div className="flex flex-col items-center text-center">
+                <div className="mb-3 p-3 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                  <Star className="h-6 w-6" />
+                </div>
+                <p className="text-sm font-medium text-muted-foreground mb-1">{t('profile.stats.completion')}</p>
+                <p className="text-4xl font-bold text-rose-600 dark:text-rose-400">
                   {stats.totalBreeds > 0 ? Math.round((stats.totalCollected / stats.totalBreeds) * 100) : 0}%
                 </p>
               </div>
@@ -135,90 +156,109 @@ function AchievementsContent() {
           </Card>
         </div>
 
-        {/* Next Achievement Progress */}
+        {/* NEXT ACHIEVEMENT */}
         {nextAchievement && (
-          <Card className="border-2 border-secondary mb-8 bg-gradient-to-br from-primary/5 to-secondary/5">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="h-5 w-5 text-primary" />
-                {t('achievements.nextAchievement')}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center gap-4">
-                {/* <div className="text-5xl">{nextAchievement.icon}</div> */}
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold mb-1">{nextAchievement.name}</h3>
-                  {/* <p className="text-muted-foreground mb-3">{nextAchievement.description}</p> */}
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span className="font-medium">{t('achievements.progress')}</span>
-                      <span className="font-bold">
-                        {nextAchievement.progress}/{nextAchievement.requirement}
-                      </span>
+          <div className="mb-12 relative group">
+             {/* Glow effect */}
+             <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-violet-500 rounded-[1.2rem] blur opacity-30 group-hover:opacity-50 transition duration-500"></div>
+             
+             <Card className="relative border-2 border-primary/50 bg-gradient-to-br from-background via-background to-secondary/20 overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-chart-2">
+                    <ArrowUpCircle className="h-5 w-5" />
+                    {t('achievements.nextAchievement')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pb-6">
+                  <div className="flex flex-col md:flex-row items-center gap-6">
+                    <div className="flex-1 w-full">
+                      <h3 className="text-2xl font-bold mb-2">{nextAchievement.name}</h3>
+                      <div className="space-y-3">
+                        <div className="flex justify-between text-sm font-medium">
+                          <span>{t('achievements.progress')}</span>
+                          <span className="font-bold text-primary">{nextAchievement.progress} / {nextAchievement.requirement}</span>
+                        </div>
+                        <Progress value={(nextAchievement.progress / nextAchievement.requirement) * 100} className="h-4 border border-primary/20 bg-secondary [&>div]:bg-primary" />
+                      </div>
                     </div>
-                    <Progress value={(nextAchievement.progress / nextAchievement.requirement) * 100} className="h-3" />
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                </CardContent>
+             </Card>
+          </div>
         )}
 
-        {/* All Achievements Grid */}
+        {/* ALL ACHIEVEMENTS GRID */}
         <div>
-          <h2 className="text-2xl font-bold mb-6 flex items-center gap-2">
+          <div className="flex items-center gap-3 mb-8">
             <Trophy className="h-6 w-6 text-primary" />
-            {t('achievements.allAchievements')}
-          </h2>
+            <h2 className="text-2xl font-bold">{t('achievements.allAchievements')}</h2>
+          </div>
+
           <div className="grid md:grid-cols-2 gap-6">
             {sortedAchievements.map((achievement) => (
               <Card
                 key={achievement.id}
-                className={`border-2 transition-all ${
+                className={`border-2 transition-all duration-300 relative overflow-hidden group ${
                   achievement.unlocked
-                    ? "border-amber-500 bg-amber-500/10 shadow-lg"
-                    : "border-border bg-muted/30 opacity-60"
+                    ? "border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/5 hover:bg-amber-500/20"
+                    : "border-border bg-muted/40 opacity-70 hover:opacity-100 hover:border-primary/50"
                 }`}
               >
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
-                      <div className={`text-5xl ${achievement.unlocked ? "grayscale-0" : "grayscale opacity-40"}`}>
+                <CardContent className="p-6">
+                  <div className="flex items-start gap-5">
+                    {/* Icon Container */}
+                    <div className="relative flex-shrink-0">
+                      <div className={`
+                        w-16 h-16 text-4xl flex items-center justify-center rounded-2xl transition-all duration-300
+                        ${achievement.unlocked 
+                          ? "grayscale-0 scale-110 drop-shadow-md" 
+                          : "grayscale opacity-50 bg-background/50"}
+                      `}>
                         {achievement.icon}
                       </div>
-                      {achievement.unlocked ? (
-                        <div className="absolute -top-1 -right-1 bg-amber-500 text-white rounded-full p-1">
-                          <CheckCircle className="h-4 w-4" />
-                        </div>
-                      ) : (
-                        <div className="absolute -top-1 -right-1 bg-muted text-muted-foreground rounded-full p-1">
-                          <Lock className="h-4 w-4" />
-                        </div>
-                      )}
+                      
+                      {/* Status Icon */}
+                      <div className={`absolute -top-2 -right-2 p-1 rounded-full shadow-sm border-2 border-background ${
+                        achievement.unlocked ? "bg-amber-500 text-white" : "bg-muted text-muted-foreground"
+                      }`}>
+                        {achievement.unlocked ? <CheckCircle className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-bold text-lg">{achievement.title}</h3>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-start justify-between gap-2 mb-2">
+                        <h3 className="text-lg font-bold truncate pr-2">
+                          {achievement.title}
+                        </h3>
                         {achievement.unlocked && achievement.unlockedAt && (
                           <TooltipProvider>
-                            <Tooltip><TooltipTrigger asChild><Badge variant="outline" className="ml-2 cursor-default bg-green-500/10 text-green-600 border-green-500/20">{t('achievements.unlocked')}</Badge></TooltipTrigger>
-                              <TooltipContent><p>{format(new Date(achievement.unlockedAt), "MMM d, yyyy")}</p></TooltipContent>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Badge variant="outline" className="cursor-default bg-background/50 text-amber-600 border-amber-500/30">
+                                  {t('achievements.unlocked')}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p>{format(new Date(achievement.unlockedAt), "MMM d, yyyy")}</p>
+                              </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground mb-3">{achievement.description}</p>
-                      <div>
-                        <div className="flex items-center gap-2 text-sm">
-                          <Trophy className="h-4 w-4 text-amber-500" />
-                          <span className="font-semibold ">
-                            {achievement.unlocked ? t('achievements.completed') : t('achievements.collectCount').replace('{count}', String(achievement.requiredCount))}
-                          </span>
-                        </div>
-                        {achievement.unlocked && achievement.unlockedAt && (
-                          <p className="text-xs text-muted-foreground mt-1 pl-6">{format(new Date(achievement.unlockedAt), "MMM d, yyyy")}</p>
-                        )}
+                      
+                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
+                        {achievement.description}
+                      </p>
+                      
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Trophy className={`h-4 w-4 ${achievement.unlocked ? "text-amber-500" : "text-muted-foreground"}`} />
+                        <span className={achievement.unlocked ? "text-amber-700 dark:text-amber-400" : "text-muted-foreground"}>
+                          {achievement.unlocked 
+                            ? t('achievements.completed')
+                            : t('achievements.collectCount').replace('{count}', String(achievement.requiredCount))
+                          }
+                        </span>
                       </div>
                     </div>
                   </div>

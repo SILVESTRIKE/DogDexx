@@ -3,27 +3,39 @@ import { AdminApiClient } from "./admin-api-client";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3000";
 
-// Token management
+// Token management - Hybrid: In-Memory (preferred) + localStorage (fallback for mobile)
+let inMemoryAccessToken: string | null = null;
+
 export const TokenManager = {
   getAccessToken: (): string | null => {
     if (typeof window === "undefined") return null;
-    return localStorage.getItem("accessToken");
+    // Prefer in-memory (more secure), fallback to localStorage (for mobile app reload)
+    return inMemoryAccessToken || localStorage.getItem("accessToken");
   },
 
   getRefreshToken: (): string | null => {
     if (typeof window === "undefined") return null;
+    // RefreshToken is now in HTTP-only cookie (handled by browser/backend)
+    // This fallback is for mobile apps that still use localStorage
     return localStorage.getItem("refreshToken");
   },
 
-  setTokens: (accessToken: string, refreshToken: string) => {
+  // For web: Only set accessToken in memory. RefreshToken is in cookie.
+  // For mobile fallback: Also store in localStorage.
+  setTokens: (accessToken: string, refreshToken?: string) => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = accessToken;
+    // Fallback: Store in localStorage for mobile apps that can't use cookies well
     localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("refreshToken", refreshToken);
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
     TokenManager.clearGuestSession();
   },
 
   clearTokens: () => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = null;
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     TokenManager.setGuestSession();
@@ -31,11 +43,12 @@ export const TokenManager = {
 
   hasGuestSession: (): boolean => {
     if (typeof window === "undefined") return false;
-    return !localStorage.getItem("accessToken");
+    return !TokenManager.getAccessToken();
   },
 
   setGuestSession: () => {
     if (typeof window === "undefined") return;
+    inMemoryAccessToken = null;
     localStorage.removeItem("accessToken");
     localStorage.removeItem("refreshToken");
     localStorage.setItem("guestSession", "true");
@@ -46,7 +59,6 @@ export const TokenManager = {
     localStorage.removeItem("guestSession");
   },
 };
-
 
 export class ApiClient {
   private baseUrl: string;
@@ -59,12 +71,262 @@ export class ApiClient {
     this.baseUrl = baseUrl;
   }
 
-  // THÊM MỚI: Cung cấp một phương thức công khai để lấy baseUrl.
+  // --- Dog Management ---
+  async createDog(data: any) {
+    if (data instanceof FormData) {
+      return this.requestWithFormData<any>("/bff/dog", data, true);
+    }
+    return this.request<any>(
+      "/bff/dog",
+      {
+        method: "POST",
+        body: JSON.stringify(data),
+      },
+      true
+    );
+  }
+
+  async getMyDogs() {
+    return this.request<any>("/bff/dog/my-dogs", {}, true);
+  }
+
+  async getDog(id: string) {
+    return this.request<any>(`/bff/dog/${id}`, {}, true);
+  }
+
+  async updateDog(id: string, data: any) {
+    return this.request<any>(`/bff/dog/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async deleteDog(id: string) {
+    return this.request<any>(`/bff/dog/${id}`, {
+      method: "DELETE",
+    }, true);
+  }
+
+  async addHealthRecord(dogId: string, data: any) {
+    // If data contains files (attachments), use FormData
+    if (data.attachments && data.attachments.length > 0 && data.attachments[0] instanceof File) {
+      const formData = new FormData();
+      // Append basic fields
+      Object.keys(data).forEach(key => {
+        if (key !== 'attachments' && data[key] !== undefined && data[key] !== null) {
+          formData.append(key, String(data[key]));
+        }
+      });
+      // Append files
+      data.attachments.forEach((file: File) => {
+        formData.append('files', file);
+      });
+
+      return this.requestWithFormData<any>(`/bff/dog/${dogId}/health`, formData, true);
+    }
+
+    // JSON Fallback (if no files)
+    return this.request<any>(`/bff/dog/${dogId}/health`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async updateHealthRecord(recordId: string, data: any) {
+    if (data.newAttachments && data.newAttachments.length > 0) {
+      const formData = new FormData();
+      Object.keys(data).forEach(key => {
+        if (key !== 'newAttachments' && data[key] !== undefined && data[key] !== null) {
+          // Handle basic fields. If passing arrays/objects, strictly stringify or handle on backend.
+          // Assuming simple fields for now.
+          formData.append(key, String(data[key]));
+        }
+      });
+
+      data.newAttachments.forEach((file: File) => {
+        formData.append('files', file);
+      });
+
+      return this.requestWithFormData<any>(`/bff/dog/health/${recordId}`, formData, true, "PUT"); // Need to support PUT in requestWithFormData or just use custom
+    }
+
+    return this.request<any>(`/bff/dog/health/${recordId}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async deleteHealthRecord(recordId: string) {
+    return this.request<any>(`/bff/dog/health/${recordId}`, {
+      method: "DELETE",
+    }, true);
+  }
+
+  async getHealthRecords(dogId: string) {
+    return this.request<any>(`/bff/dog/${dogId}/health`, {}, true);
+  }
+
+  async searchLostDogs(params: any) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/dog/search/lost?${queryParams.toString()}`, {}, false);
+  }
+
+  // New methods for Dog Analysis and Public Contact
+  async analyzeDogImage(file: File) {
+    const formData = new FormData();
+    formData.append("file", file);
+    return this.requestWithFormData<any>("/bff/dog/analyze", formData, true);
+  }
+
+  async getPublicDog(id: string) {
+    return this.request<any>(`/bff/dog/public/${id}`, {}, false);
+  }
+
+  async contactOwner(data: { dogId: string; finderName: string; finderPhone: string; message: string; location?: any }) {
+    return this.request<any>("/bff/dog/public/contact-owner", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, false);
+  }
+
+  // --- Community Post (Smart Search) ---
+
+  async createCommunityPost(data: {
+    type: "LOST" | "FOUND";
+    title: string;
+    content: string;
+    photos: File[]; // Upload Files
+    dog_id?: string;
+    location: { lat: number; lng: number; address: string };
+    contact_info: { name: string; phone?: string; email?: string };
+  }) {
+    const formData = new FormData();
+    formData.append("type", data.type);
+    formData.append("title", data.title);
+    formData.append("content", data.content);
+    if (data.dog_id) formData.append("dog_id", data.dog_id);
+
+    // JSON stringify complex objects for FormData
+    formData.append("location", JSON.stringify(data.location));
+    formData.append("contact_info", JSON.stringify(data.contact_info));
+
+    if (data.photos) {
+      data.photos.forEach(file => formData.append("files", file));
+    }
+
+    return this.requestWithFormData<any>("/bff/post", formData, true);
+  }
+
+  // Create FOUND post from QR scan (no auth or photo required)
+  async createQrFoundPost(data: {
+    dog_id: string;
+    title?: string;
+    content?: string;
+    location: { lat: number; lng: number; address: string };
+    contact_info: { name: string; phone?: string; email?: string };
+  }) {
+    return this.request<any>("/bff/post/qr-found", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, false); // No auth required
+  }
+
+  async getCommunityPosts(params: {
+    type?: "LOST" | "FOUND";
+    breed?: string;
+    lat?: number;
+    lng?: number;
+    radius?: number; // km
+    page?: number;
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/post?${queryParams.toString()}`, {}, false); // Public read
+  }
+
+  async getCommunityPost(id: string) {
+    return this.request<any>(`/bff/post/${id}`, {}, false);
+  }
+
+  async resolveCommunityPost(id: string) {
+    return this.request<any>(`/bff/post/${id}/resolve`, {
+      method: "PATCH"
+    }, true);
+  }
+
+  // Alias for usage in components
+  async resolvePost(id: string) {
+    return this.resolveCommunityPost(id);
+  }
+
+  // --- Lost & Found Radar API ---
+  async reportLost(dogId: string, data: {
+    location: { lat: number; lng: number; address: string };
+    contact: { name: string; phone?: string; email?: string };
+    title?: string;
+    content?: string;
+  }) {
+    return this.request<any>(`/bff/dog/${dogId}/report-lost`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }, true);
+  }
+
+  async reportFoundWithVerification(data: any, file?: File) {
+    if (file) {
+      const formData = new FormData();
+      // Flatten data to formData
+      formData.append("dogId", data.dogId);
+      formData.append("verificationType", data.verificationType);
+      formData.append("contact", JSON.stringify(data.contact));
+      formData.append("location", JSON.stringify(data.location));
+      if (data.verificationData) formData.append("verificationData", data.verificationData);
+
+      formData.append("file", file);
+
+      return this.requestWithFormData<any>("/bff/dog/report-found-verified", formData, false);
+    } else {
+      return this.request<any>("/bff/dog/report-found-verified", {
+        method: "POST",
+        body: JSON.stringify(data)
+      }, false);
+    }
+  }
+
+  /**
+   * Get radar posts for bi-directional matching
+   * @param sourceType - The type of the source post (LOST or FOUND)
+   *                     If viewing a LOST post, will search for FOUND posts (clues)
+   *                     If viewing a FOUND post, will search for LOST posts (matching owners)
+   */
+  async getRadarPosts(params: {
+    lat: number;
+    lng: number;
+    radius?: number;
+    breed?: string;
+    sourceType?: "LOST" | "FOUND";
+  }) {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) queryParams.append(key, String(value));
+    });
+    return this.request<any>(`/bff/post/radar?${queryParams.toString()}`, {}, false);
+  }
+
+
+
+
   public getBaseUrl(): string {
     return this.baseUrl;
   }
 
-  // THÊM MỚI: Cung cấp một phương thức công khai để lấy access token.
+
   public getAccessToken(): string | null {
     return TokenManager.getAccessToken();
   }
@@ -74,8 +336,7 @@ export class ApiClient {
   ) {
     this.onTokenUpdate = callback;
   }
-  
-  // --- HÀM NÀY ĐƯỢC ĐỊNH NGHĨA Ở ĐÂY ĐỂ FIX LỖI 'this' ---
+
   private handleTokenHeaders(response: Response | XMLHttpRequest) {
     if (!this.onTokenUpdate) return;
     const getHeader = (name: string) =>
@@ -104,35 +365,38 @@ export class ApiClient {
   }
 
   private async refreshAccessToken(): Promise<boolean> {
+    // Try cookie first (web), then localStorage fallback (mobile)
     const refreshToken = TokenManager.getRefreshToken();
-    if (!refreshToken) return false;
 
     try {
       const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
+        credentials: 'include', // Send HTTP-only cookie
+        body: refreshToken ? JSON.stringify({ refreshToken }) : undefined, // Mobile fallback
       });
 
       if (response.ok) {
         const data = await response.json();
-        if (data.accessToken && data.refreshToken) {
+        // Backend returns accessToken (refreshToken is set in cookie or body for mobile)
+        if (data.accessToken) {
           TokenManager.setTokens(data.accessToken, data.refreshToken);
           return true;
         }
       }
+
+      // If server returns 401/403 at refresh endpoint -> Token truly expired
       TokenManager.clearTokens();
       return false;
     } catch (error) {
-      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.", error);
-      TokenManager.clearTokens();
+      // Network error - don't clear tokens, let user retry
+      console.error("[ApiClient] refreshAccessToken error:", error);
       return false;
     } finally {
       this.refreshTokenPromise = null;
     }
   }
 
-  // SỬA LẠI: Hàm request<T> phiên bản đơn giản, không có hàm lồng nhau
   public async request<T>(
     endpoint: string,
     options: RequestInit = {},
@@ -141,14 +405,15 @@ export class ApiClient {
     const url = new URL(endpoint, this.baseUrl).toString();
     const headers: Record<string, string> = { ...options.headers };
 
-    // KHÔNG set Content-Type nếu body là FormData, trình duyệt sẽ tự làm.
-    // Nếu không, nó sẽ bị thiếu 'boundary' và request sẽ bị treo.
-    if (!(options.body instanceof FormData)) {
+    const method = options.method ? options.method.toUpperCase() : "GET";
+    const isBodyLess = method === "GET" || method === "HEAD";
+
+    if (!(options.body instanceof FormData) && !isBodyLess) {
       headers["Content-Type"] = "application/json";
     }
 
     let token = TokenManager.getAccessToken();
-    if (token) {
+    if (token && token !== "null" && token !== "undefined") {
       headers["Authorization"] = `Bearer ${token}`;
     } else if (requiresAuth) {
       throw new Error("Token is not provided for an authenticated request.");
@@ -168,33 +433,41 @@ export class ApiClient {
           }
           response = await fetch(url, { ...options, headers }); // Thử lại
         } else {
-          throw new Error("Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại.");
+          throw new Error(
+            "Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại."
+          );
         }
       }
 
       this.handleTokenHeaders(response);
 
       if (!response.ok) {
+
+        if (response.status >= 500) {
+          throw new Error(
+            `Server Error: ${response.status}. Please try again later or contact support.`
+          );
+        }
         if (response.status !== 304) {
           const errorData = await response.json().catch(() => ({}));
           const errorMessage =
             errorData.errors?.[0]?.message ||
             errorData.message ||
-            `API Error: ${response.status} ${response.statusText}`;
+            `Request failed with status: ${response.status} ${response.statusText}`;
           throw new Error(errorMessage);
         }
       }
 
-      if (response.status === 204) {
-        return Promise.resolve(null as T);
+      const contentType = response.headers.get("content-type");
+      if (response.status === 204 || !contentType || !contentType.includes("application/json")) {
+        return Promise.resolve(undefined as T);
       }
 
       return response.json();
     } catch (error) {
       // BỎ QUA LỖI ABORT: Lỗi này xảy ra khi một request bị hủy bỏ,
-      // thường là do component unmount (ví dụ trong React Strict Mode).
-      // Đây là hành vi mong muốn, không cần log ra console.
-      if (error instanceof Error && error.name === 'AbortError') return Promise.reject(error);
+      if (error instanceof Error && error.name === "AbortError")
+        return Promise.reject(error);
 
       console.error("[ApiClient] Request failed:", error, `(URL: ${url})`);
       if (error instanceof TypeError && error.message === "Failed to fetch") {
@@ -207,97 +480,91 @@ export class ApiClient {
     }
   }
 
-  // SỬA ĐỔI: Hàm requestWithFormData<T>
   private async requestWithFormData<T>(
     endpoint: string,
     formData: FormData,
-    requiresAuth = false
+    requiresAuth = false,
+    method = "POST"
   ): Promise<T> {
-    return this.request<T>(endpoint, {
-      method: "POST",
-      body: formData,
-    }, requiresAuth);
+    return this.request<T>(
+      endpoint,
+      {
+        method: method,
+        body: formData,
+      },
+      requiresAuth
+    );
   }
 
   private async requestWithUploadProgress<T>(
     endpoint: string,
     formData: FormData,
     onProgress: (progress: number) => void,
-    requiresAuth = false
+    requiresAuth = false,
+    _isRetry = false
   ): Promise<T> {
     return new Promise(async (resolve, reject) => {
-        const url = new URL(endpoint, this.baseUrl).toString();
-        const xhr = new XMLHttpRequest();
-        xhr.open("POST", url, true);
+      const url = new URL(endpoint, this.baseUrl).toString();
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", url, true);
 
-        const token = TokenManager.getAccessToken();
-        if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+      const token = TokenManager.getAccessToken();
+      if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
 
-        xhr.upload.onprogress = (event) => {
-          if (event.lengthComputable) {
-            const percentComplete = (event.loaded / event.total) * 100;
-            onProgress(percentComplete);
-          }
-        };
-
-        xhr.onload = () => {
-          this.handleTokenHeaders(xhr); // <-- GỌI HELPER Ở ĐÂY
-          
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              resolve(JSON.parse(xhr.responseText));
-            } catch (e) {
-              reject(new Error("Failed to parse server response."));
-            }
-          } else {
-            try {
-              const errorData = JSON.parse(xhr.responseText);
-              const errorMessage = errorData.errors?.[0]?.message || errorData.message || `API Error: ${xhr.status} ${xhr.statusText}`;
-              reject(new Error(errorMessage));
-            } catch (e) {
-              reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => {
-          reject(new Error("Network error occurred during the upload."));
-        };
-
-        xhr.send(formData);
-    });
-  }
-
-  private async refreshAccessToken(): Promise<boolean> {
-    const refreshToken = TokenManager.getRefreshToken();
-    if (!refreshToken) return false;
-
-    console.log("[ApiClient] refreshAccessToken: Attempting to refresh access token.");
-    try {
-      const response = await fetch(`${this.baseUrl}/bff/user/refresh`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ refreshToken }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.accessToken && data.refreshToken) {
-          console.log("[ApiClient] refreshAccessToken: Successfully received new tokens.");
-          TokenManager.setTokens(data.accessToken, data.refreshToken);
-          return true;
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100;
+          onProgress(percentComplete);
         }
-      }
-      console.error("[ApiClient] refreshAccessToken: Failed to refresh token, server response not OK or data invalid.");
-      TokenManager.clearTokens();
-      return false;
-    } catch {
-      console.error("[ApiClient] refreshAccessToken: Network or other error during token refresh.");
-      TokenManager.clearTokens();
-      return false;
-    } finally {
-      this.refreshTokenPromise = null;
-    }
+      };
+
+      xhr.onload = async () => {
+        this.handleTokenHeaders(xhr);
+
+        if (xhr.status === 401 && TokenManager.getRefreshToken() && !_isRetry) {
+          try {
+            const refreshed = await this.handleUnauthorized();
+            if (refreshed) {
+              const result = await this.requestWithUploadProgress<T>(
+                endpoint,
+                formData,
+                onProgress,
+                requiresAuth,
+                true
+              );
+              resolve(result);
+              return;
+            }
+          } catch (e) {
+            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText));
+          } catch (e) {
+            reject(new Error("Failed to parse server response."));
+          }
+        } else {
+          try {
+            const errorData = JSON.parse(xhr.responseText);
+            const errorMessage =
+              errorData.errors?.[0]?.message ||
+              errorData.message ||
+              `API Error: ${xhr.status}`;
+            reject(new Error(errorMessage));
+          } catch (e) {
+            reject(new Error(`API Error: ${xhr.status} ${xhr.statusText}`));
+          }
+        }
+      };
+
+      xhr.onerror = () => {
+        reject(new Error("Network error occurred during the upload."));
+      };
+
+      xhr.send(formData);
+    });
   }
 
   // BFF-User endpoints
@@ -307,7 +574,9 @@ export class ApiClient {
     password: string;
     firstName: string;
     lastName: string;
+    phoneNumber?: string;
     avatar?: File;
+    captchaToken: string;
   }) {
     const formData = new FormData();
     Object.entries(data).forEach(([key, value]) => {
@@ -323,10 +592,10 @@ export class ApiClient {
     });
   }
 
-  async login(email: string, password: string) {
+  async login(email: string, password: string, captchaToken: string) {
     return this.request<any>("/bff/user/login", {
       method: "POST",
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ email, password, captchaToken }),
     });
   }
 
@@ -339,23 +608,20 @@ export class ApiClient {
     }
 
     try {
-      // Gửi yêu cầu logout đến server với refreshToken
       const response = await this.request<any>(
         "/bff/user/logout",
         {
           method: "POST",
           body: JSON.stringify({ refreshToken }),
         },
-        true // Yêu cầu xác thực để gửi accessToken nếu có
+        true
       );
       return response;
     } finally {
-      // Quan trọng: Luôn xóa token ở client sau khi gọi API, bất kể thành công hay thất bại.
       TokenManager.clearTokens();
     }
   }
 
-  // THÊM MỚI: Hàm kiểm tra trạng thái phiên làm việc
   async getSessionStatus() {
     return this.request<any>("/bff/user/session-status", {
       cache: "no-cache",
@@ -364,7 +630,6 @@ export class ApiClient {
 
   // Auth endpoints (non-BFF)
   async forgotPassword(email: string) {
-    // Use BFF endpoint for unified behavior
     return this.request<any>("/bff/user/forgot-password", {
       method: "POST",
       body: JSON.stringify({ email }),
@@ -372,7 +637,6 @@ export class ApiClient {
   }
 
   async resetPassword(email: string, otp: string, password: string) {
-    // Use BFF endpoint for unified behavior
     return this.request<any>("/bff/user/reset-password", {
       method: "POST",
       body: JSON.stringify({ email, otp, password }),
@@ -380,10 +644,15 @@ export class ApiClient {
   }
 
   // Delete current user (requires auth)
-  async deleteCurrentUser() {
-    return this.request<any>("/bff/user/profile", {
-      method: "DELETE",
-    }, true);
+  async deleteCurrentUser(password: string) {
+    return this.request<any>(
+      "/bff/user/profile",
+      {
+        method: "DELETE",
+        body: JSON.stringify({ password }),
+      },
+      true
+    );
   }
 
   async getProfile() {
@@ -395,13 +664,26 @@ export class ApiClient {
   }
 
   async updateProfile(formData: FormData) {
-    return this.requestWithFormData<any>("/bff/user/profile", formData, true);
+    return this.request<any>(
+      "/bff/user/profile",
+      {
+        method: "PUT",
+        body: formData,
+      },
+      true
+    );
   }
 
   async updateAvatar(file: File) {
     const formData = new FormData();
     formData.append("avatar", file);
     return this.requestWithFormData<any>("/bff/user/avatar", formData, true);
+  }
+
+  async cancelSubscription() {
+    return this.request('/bff/user/cancel-subscription', {
+      method: 'POST',
+    });
   }
 
   // BFF-Collection endpoints
@@ -455,6 +737,22 @@ export class ApiClient {
     );
   }
 
+  async getAchievementStats(lang: "vi" | "en") {
+    const queryParams = new URLSearchParams();
+    queryParams.append("lang", lang);
+
+    return this.request<{
+      totalAchievements: number;
+      totalBreeds: number;
+      unlockedAchievements: number;
+      totalCollected: number;
+    }>(
+      `/bff/collection/achievements/stats?${queryParams.toString()}`,
+      {},
+      true
+    );
+  }
+
   async getCollectionStats() {
     return this.request<any>("/bff/collection/stats", {}, true);
   }
@@ -489,7 +787,7 @@ export class ApiClient {
   async predictImage(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+
     const requiresAuth = !!TokenManager.getAccessToken();
     return this.requestWithUploadProgress<any>(
       "/bff/predict/image",
@@ -502,7 +800,7 @@ export class ApiClient {
   async predictVideo(file: File, onProgress: (p: number) => void) {
     const formData = new FormData();
     formData.append("file", file);
-    // SỬA LỖI: Chỉ yêu cầu xác thực khi người dùng đã đăng nhập (có token)
+
     const requiresAuth = !!TokenManager.getAccessToken();
     return this.requestWithUploadProgress<any>(
       "/bff/predict/video",
@@ -512,11 +810,25 @@ export class ApiClient {
     );
   }
 
+  async predictUrl(url: string) {
+
+    const requiresAuth = !!TokenManager.getAccessToken();
+    return this.request<any>(
+      "/bff/predict/url",
+      {
+        method: "POST",
+        body: JSON.stringify({ url }),
+      },
+      requiresAuth
+    );
+  }
+
   async predictBatch(files: File[]) {
     const formData = new FormData();
     files.forEach((file) => formData.append("files", file));
     return this.requestWithFormData<any>("/bff/predict/batch", formData, true); // Giữ lại true vì batch thường là tính năng cho user
   }
+
 
   async submitPredictionFeedback(
     predictionId: string,
@@ -553,10 +865,12 @@ export class ApiClient {
     );
   }
 
-  async getChatHistory(
-    breedSlug: string
-  ): Promise<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }> {
-    return this.request<{ history: { role: "user" | "model"; parts: { text: string }[] }[] }>(
+  async getChatHistory(breedSlug: string): Promise<{
+    history: { role: "user" | "model"; parts: { text: string }[] }[];
+  }> {
+    return this.request<{
+      history: { role: "user" | "model"; parts: { text: string }[] }[];
+    }>(
       `/bff/predict/chat/${breedSlug}/history`,
       {
         method: "GET",
@@ -565,7 +879,6 @@ export class ApiClient {
       false // Không yêu cầu xác thực, vì nó có thể được sử dụng bởi khách
     );
   }
-
 
   async getHealthRecommendations(
     breedSlug: string,
@@ -614,7 +927,6 @@ export class ApiClient {
     );
   }
 
-  // ----- MODIFIED: HÀM MỚI ĐƯỢC THÊM VÀO ĐÂY -----
   async getPredictionHistoryById(
     id: string,
     lang: "vi" | "en"
@@ -629,10 +941,18 @@ export class ApiClient {
       false // Để public, ai có link cũng xem được
     );
   }
+
+  async getPredictionStatus(id: string) {
+    return this.request<any>(
+      `/bff/predict/status/${id}`,
+      { method: "GET" },
+      false
+    );
+  }
   // --------------------------------------------------
 
-  async deletePredictionHistory(id: string): Promise<{ message: string }> {
-    return this.request<{ message: string }>(
+  async deletePredictionHistory(id: string): Promise<void> {
+    return this.request<void>(
       `/bff/predict/history/${id}`,
       {
         method: "DELETE",
@@ -644,7 +964,7 @@ export class ApiClient {
   // Analytics endpoint
   async trackVisit(page: string) {
     return this.request<void>(
-      "/api/analytics/track-visit",
+      "/bff/analytics/track-visit",
       {
         method: "POST",
         body: JSON.stringify({ page }),
@@ -660,7 +980,7 @@ export class ApiClient {
    */
   async trackEvent(eventName: string, eventData?: Record<string, any>) {
     return this.request<void>(
-      "/api/analytics/track-event",
+      "/bff/analytics/track-event",
       {
         method: "POST",
         body: JSON.stringify({ eventName, eventData }),
@@ -669,27 +989,35 @@ export class ApiClient {
     );
   }
 
-  // WebSocket connection methods for real-time detection
-  createWebSocketConnection(endpoint: string): WebSocket {
+  private _createWebSocketConnection(
+    token: string | null,
+    endpoint: string
+  ): WebSocket {
     const wsUrl = API_BASE_URL.replace(/^http/, "ws");
-    const token = TokenManager.getAccessToken();
-
-    // Add token as query parameter for WebSocket authentication
     const url = token
       ? `${wsUrl}${endpoint}?token=${token}`
       : `${wsUrl}${endpoint}`;
-
     return new WebSocket(url);
   }
 
-  // Convenience method for live detection WebSocket
-  connectLiveDetection(): WebSocket {
-    return this.createWebSocketConnection("/bff/live");
+  // Convenience method for stream prediction WebSocket
+  async connectStreamPrediction(): Promise<WebSocket> {
+    if (TokenManager.getRefreshToken()) {
+      await this.refreshAccessToken();
+    }
+    const token = TokenManager.getAccessToken();
+    return this._createWebSocketConnection(token, "/bff/predict/stream");
   }
 
-  // Convenience method for stream prediction WebSocket
-  connectStreamPrediction(): WebSocket {
-    return this.createWebSocketConnection("/bff/predict/stream");
+  async saveStreamPrediction(payload: { processed_media_base64: string; detections: any[]; media_type: string }): Promise<{ id: string }> {
+    return this.request<{ id: string }>(
+      "/bff/predict/stream/save",
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      false
+    );
   }
 
   // Subscription endpoints
@@ -707,7 +1035,7 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy danh sách các gói cước công khai
+
   async getPublicPlans() {
     return this.request<any>(
       "/bff/public/plans",
@@ -716,7 +1044,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy chi tiết một gói cước công khai bằng slug
   async getPublicPlanBySlug(slug: string) {
     return this.request<any>(
       `/bff/public/plans/${slug}`,
@@ -725,7 +1052,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Các hàm quản lý Plan cho Admin
   async getAdminPlans(params?: {
     page?: number;
     limit?: number;
@@ -790,7 +1116,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Lấy danh sách GIAO DỊCH cho Admin
   async getAdminTransactions(params?: {
     page?: number;
     limit?: number;
@@ -807,7 +1132,11 @@ export class ApiClient {
     }
     const query = queryParams.toString();
     // Giả sử route là /bff/admin/transactions
-    return this.request<any>(`/bff/admin/transactions${query ? `?${query}` : ""}`, {}, true);
+    return this.request<any>(
+      `/bff/admin/transactions${query ? `?${query}` : ""}`,
+      {},
+      true
+    );
   }
 
   async approveUserSubscription(subscriptionId: string) {
@@ -851,7 +1180,6 @@ export class ApiClient {
     );
   }
 
-  // THÊM MỚI: Gửi form liên hệ
   async submitContactForm(payload: {
     email: string;
     message: string;
@@ -860,6 +1188,30 @@ export class ApiClient {
     return this.request<{ message: string }>(
       "/bff/public/contact",
       { method: "POST", body: JSON.stringify(payload) },
+      false
+    );
+  }
+  async getLeaderboard(params?: {
+    type?: string;
+    value?: string;
+    limit?: number;
+  }) {
+    const q = new URLSearchParams();
+    if (params?.type) q.append("type", params.type);
+    if (params?.value) q.append("value", params.value);
+    if (params?.limit) q.append("limit", String(params.limit));
+
+    return this.request<import("./types").LeaderboardResponse>(
+      `/bff/public/leaderboard?${q.toString()}`,
+      { cache: "no-cache" },
+      false
+    );
+  }
+
+  async getLeaderboardLocations(type: "country" | "city") {
+    return this.request<{ data: string[] }>(
+      `/bff/public/leaderboard/locations?type=${type}`,
+      {},
       false
     );
   }

@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { predictionHistoryController } from '../controllers/prediction_history.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
 import { checkAllowedRoles } from '../middlewares/role.middleware';
-import { validateData } from '../middlewares/validateBody.middleware';
+import { validate } from '../middlewares/validation.middleware';
 import {
   HistoryIdParamsSchema,
   GetAdminHistoriesQuerySchema,
@@ -63,7 +63,7 @@ router.get(
   '/api/admin/histories',
   authMiddleware,
   checkAllowedRoles(['admin']),
-  validateData(GetAdminHistoriesQuerySchema, 'query'),
+  validate(GetAdminHistoriesQuerySchema, 'query'),
   predictionHistoryController.getAllHistory
 );
 
@@ -119,7 +119,7 @@ router.get(
   '/api/admin/histories/:id',
   authMiddleware,
   checkAllowedRoles(['admin']),
-  validateData(HistoryIdParamsSchema, 'params'),
+  validate(HistoryIdParamsSchema, 'params'),
   predictionHistoryController.getHistoryById
 );
 
@@ -185,8 +185,8 @@ router.delete(
   '/api/admin/histories/:id',
   authMiddleware,
   checkAllowedRoles(['admin']),
-  validateData(HistoryIdParamsSchema, 'params'),
-  validateData(DeleteHistoryQuerySchema, 'query'),
+  validate(HistoryIdParamsSchema, 'params'),
+  validate(DeleteHistoryQuerySchema, 'query'),
   predictionHistoryController.deleteHistory
 );
 

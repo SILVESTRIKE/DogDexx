@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction} from "express";
+import { Request, Response, NextFunction } from "express";
 import { MediaService, FindMediasOptions } from "../services/media.service";
 import { BadRequestError, ConflictError } from "../errors";
 import { DirectoryService } from "../services/directory.service";
@@ -171,8 +171,8 @@ export class MediaController {
       .status(200)
       .json({ data: transformedData, pagination: result.pagination });
   }
-  
-  
+
+
 }
 export class DirectoryController {
   static async create(req: Request, res: Response) {

@@ -14,9 +14,9 @@ import { DirectoryModel } from "../models/directory.model";
 import { MediaModel } from "../models/medias.model";
 import { PredictionHistoryModel } from "../models/prediction_history.model";
 import { FeedbackModel } from "../models/feedback.model";
-import { RefreshTokenModel } from "../models/refreshToken.model";
 import { PlanModel } from "../models/plan.model";
-
+import { logger } from "../utils/logger.util"
+import { uploadToCloudinary } from "../utils/media.util";
 // Định nghĩa kiểu dữ liệu cho user đã được làm giàu
 export type EnrichedUser = UserDoc & { tokenAllotment: number };
 
@@ -98,23 +98,83 @@ export const userService = {
   },
 
   async createUser(data: RegisterType, avatarFile?: Express.Multer.File): Promise<EnrichedUser> {
-    console.log('[DEBUG] BƯỚC 0: Bắt đầu createUser.');
-    console.log('[DEBUG] BƯỚC 1: Bắt đầu createUser cho email:', data.email);
-    
-    const [existedEmail, existedUsername, freePlan] = await Promise.all([
-      UserModel.findOne({ email: data.email }),
-      UserModel.findOne({ username: data.username }),
-      PlanModel.findOne({ slug: 'free' }).lean(),
-    ]);
-    console.log('[DEBUG] BƯỚC 2: Đã kiểm tra email, username và plan.');
+    logger.info('[USER_SERVICE] Bắt đầu tạo user mới.');
 
-    if (existedEmail) throw new BadRequestError("Email đã tồn tại.");
-    if (existedUsername) throw new BadRequestError("Tên người dùng đã tồn tại.");
-    if (!freePlan) throw new Error("Không tìm thấy gói 'free' mặc định trong hệ thống.");
+    // 1. Kiểm tra Email và Username trong DB
+    const existingUserByEmail = await UserModel.findOne({ email: data.email });
+    const existingUserByUsername = await UserModel.findOne({ username: data.username });
 
-    console.log('[DEBUG] BƯỚC 3: Kiểm tra hợp lệ. Bắt đầu hash mật khẩu.');
+    // 2. Lấy Free Plan để gán mặc định
+    const freePlan = await PlanModel.findOne({ slug: 'free' }).lean();
+    if (!freePlan) throw new Error("Lỗi hệ thống: Không tìm thấy gói cước mặc định.");
+
+    // === TRƯỜNG HỢP 1: EMAIL ĐÃ TỒN TẠI ===
+    if (existingUserByEmail) {
+      // A. Nếu đã xác thực -> Báo lỗi chuẩn
+      if (existingUserByEmail.verify) {
+        throw new BadRequestError("Email này đã được đăng ký.");
+      }
+
+      // B. Nếu CHƯA xác thực -> Đây là "Zombie Account" -> GHI ĐÈ
+      logger.info(`[USER_SERVICE] Phát hiện tài khoản chưa xác thực: ${data.email}. Tiến hành ghi đè.`);
+
+      // Kiểm tra Username mới có trùng với người KHÁC không
+      if (existingUserByUsername && existingUserByUsername._id.toString() !== existingUserByEmail._id.toString()) {
+        throw new BadRequestError("Tên người dùng này đã được sử dụng bởi người khác.");
+      }
+
+      // Hash mật khẩu mới
+      const hashedPassword = await bcrypt.hash(data.password, 10);
+
+      // Cập nhật thông tin mới vào document cũ
+      existingUserByEmail.username = data.username;
+      existingUserByEmail.password = hashedPassword;
+      existingUserByEmail.firstName = data.firstName;
+      existingUserByEmail.lastName = data.lastName;
+
+      if ((data as any).country) existingUserByEmail.country = (data as any).country;
+      if ((data as any).city) existingUserByEmail.city = (data as any).city;
+      if ((data as any).phoneNumber) existingUserByEmail.phoneNumber = (data as any).phoneNumber;
+
+      if (avatarFile) {
+        if (existingUserByEmail.avatarPath) {
+          await MediaModel.updateOne({ mediaPath: existingUserByEmail.avatarPath }, { isDeleted: true });
+        }
+
+        let mediaPath = '';
+        if (avatarFile.buffer) {
+          const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+          mediaPath = `${result.public_id}.${result.format}`;
+        } else {
+          mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+        }
+
+        const avatarMedia = new MediaModel({
+          name: `avatar-${existingUserByEmail.username}-${Date.now()}`,
+          mediaPath: mediaPath,
+          creator_id: existingUserByEmail._id,
+          type: 'image/avatar',
+        });
+        await avatarMedia.save();
+        existingUserByEmail.avatarPath = avatarMedia.mediaPath;
+      }
+
+      await existingUserByEmail.save();
+
+      // Gửi lại OTP mới
+      await this.sendOtp(existingUserByEmail.email);
+
+      const enriched = await _enrich(existingUserByEmail);
+      delete (enriched as any).password;
+      return enriched!;
+    }
+
+    // === TRƯỜNG HỢP 2: TẠO MỚI HOÀN TOÀN ===
+    if (existingUserByUsername) {
+      throw new BadRequestError("Tên người dùng đã tồn tại.");
+    }
+
     const hashedPassword = await bcrypt.hash(data.password, 10);
-    console.log('[DEBUG] BƯỚC 4: Đã hash mật khẩu.');
 
     const user = new UserModel({
       ...data,
@@ -122,41 +182,46 @@ export const userService = {
       plan: 'free',
       remainingTokens: freePlan.tokenAllotment,
     });
-    console.log('[DEBUG] BƯỚC 5: Đã tạo instance cho UserModel.');
 
     if (avatarFile) {
-        console.log('[DEBUG] BƯỚC 5.1: Đang xử lý file avatar...');
-        const avatarMedia = new MediaModel({
-          name: `avatar-${user.username}`,
-          // Sửa lại: Dùng req.file.path thay vì avatarFile.path nếu bạn dùng cloudinary
-          // Vì file object sau khi qua multer-cloudinary sẽ có path là URL
-          mediaPath: (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/'),
-          creator_id: user._id,
-          type: 'image/avatar',
-        });
-        console.log('[DEBUG] BƯỚC 5.2: Đã tạo instance MediaModel. Chuẩn bị save media...');
-        await avatarMedia.save(); // <--- NGHI PHẠM
-        console.log('[DEBUG] BƯỚC 5.3: ĐÃ SAVE MEDIA THÀNH CÔNG. Path:', avatarMedia.mediaPath);
-        user.avatarPath = avatarMedia.mediaPath;
-    }
-    
-    console.log('[DEBUG] BƯỚC 6: Chuẩn bị lưu document người dùng...');
-    await user.save(); // <--- NGHI PHẠM
-    console.log('[DEBUG] BƯỚC 7: ĐÃ LƯU USER THÀNH CÔNG với ID:', user._id);
-    
-    const directory = new DirectoryModel({ name: user.username, creator_id: user._id });
-    console.log('[DEBUG] BƯỚC 8: Đã tạo instance Directory. Chuẩn bị save directory...');
-    await directory.save(); // <--- NGHI PHẠM
-    console.log('[DEBUG] BƯỚC 9: ĐÃ TẠO THƯ MỤC THÀNH CÔNG.');
+      let mediaPath = '';
+      if (avatarFile.buffer) {
+        const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+        mediaPath = `${result.public_id}.${result.format}`;
+      } else {
+        mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+      }
 
-    await this.sendOtp(user.email); 
-    console.log('[DEBUG] BƯỚC 10: ĐÃ GỬI OTP THÀNH CÔNG.');
-    
+      const avatarMedia = new MediaModel({
+        name: `avatar-${user.username}`,
+        mediaPath: mediaPath,
+        creator_id: user._id,
+        type: 'image/avatar',
+      });
+      await avatarMedia.save();
+      user.avatarPath = avatarMedia.mediaPath;
+    }
+
+    await user.save();
+
+    const directory = new DirectoryModel({ name: user.username, creator_id: user._id });
+    await directory.save();
+    user.directory_id = directory._id as any;
+    await user.save();
+
+    try {
+      await this.sendOtp(user.email);
+    } catch (error) {
+      logger.error(`[USER_SERVICE] Failed to send OTP during registration for ${user.email}:`, error);
+      // Không throw error để tránh rollback user đã tạo. 
+      // User sẽ nhận được thông báo thành công nhưng cần resend OTP khi login.
+    }
+
     const enrichedUser = await _enrich(user);
     delete (enrichedUser as any).password;
-    console.log('[DEBUG] BƯỚC 11: Hoàn tất createUser.');
     return enrichedUser!;
   },
+
 
   async updateUser(
     id: string,
@@ -172,10 +237,16 @@ export const userService = {
           { isDeleted: true }
         );
       }
-      (data as Partial<UserDoc>).avatarPath = avatarFile.path.replace(
-        /\\/g,
-        "/"
-      );
+
+      let mediaPath = '';
+      if (avatarFile.buffer) {
+        const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+        mediaPath = `${result.public_id}.${result.format}`;
+      } else {
+        mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+      }
+
+      (data as Partial<UserDoc>).avatarPath = mediaPath;
     }
 
     if ((data as Partial<UserDoc>).password) {
@@ -205,22 +276,36 @@ export const userService = {
   ): Promise<EnrichedUser> {
     const user = await UserModel.findById(userId);
     if (!user) throw new NotFoundError("Không tìm thấy người dùng.");
+
     if (user.avatarPath) {
       await MediaModel.findOneAndUpdate(
         { mediaPath: user.avatarPath },
         { isDeleted: true }
       );
     }
+
+    let mediaPath = '';
+    if (avatarFile.buffer) {
+      const result = await uploadToCloudinary(avatarFile.buffer, 'public/uploads/avatars');
+      mediaPath = `${result.public_id}.${result.format}`;
+    } else {
+      mediaPath = (avatarFile as any).path || avatarFile.path.replace(/\\/g, '/');
+    }
+
     const newAvatarMedia = new MediaModel({
       name: `avatar-${user.username}-${Date.now()}`,
-      mediaPath: avatarFile.path.replace(/\\/g, "/"),
+      mediaPath: mediaPath,
       creator_id: user._id,
       type: "image/avatar",
     });
     await newAvatarMedia.save();
-    user.avatarPath = newAvatarMedia.mediaPath;
-    await user.save();
-    const updatedUser = await UserModel.findById(userId).select("-password");
+
+    const updatedUser = await UserModel.findByIdAndUpdate(
+      userId,
+      { avatarPath: newAvatarMedia.mediaPath },
+      { new: true }
+    ).select("-password");
+
     if (!updatedUser)
       throw new NotFoundError(
         "Lỗi khi lấy thông tin người dùng sau khi cập nhật avatar."
@@ -228,29 +313,27 @@ export const userService = {
     return (await _enrich(updatedUser))!;
   },
 
-  async sendOtp(email: string): Promise<{ message: string }> {
-    console.log(`[USER_SERVICE] Bắt đầu sendOtp cho email: ${email}`);
+  async sendOtp(email: string, language: 'vi' | 'en' = 'vi'): Promise<{ message: string }> {
+    logger.info(`[USER_SERVICE] Bắt đầu sendOtp cho email: ${email}`);
 
     const user = await UserModel.findOne({ email });
     if (!user) {
-      // Dù khó xảy ra ở luồng đăng ký, vẫn nên có để an toàn
       throw new NotFoundError("Không tìm thấy người dùng để gửi OTP");
     }
     if (user.verify) {
       throw new BadRequestError("Tài khoản này đã được xác thực rồi.");
     }
 
-    console.log(
+    logger.info(
       `[USER_SERVICE] sendOtp: Người dùng hợp lệ. Bắt đầu tạo và lưu OTP.`
     );
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-    // Xóa OTP cũ và tạo OTP mới
     await OtpModel.deleteMany({
       email: email,
       type: OtpType.EMAIL_VERIFICATION,
     });
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 phút
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     const otpPayload = {
       email,
       otp: otpCode,
@@ -259,23 +342,19 @@ export const userService = {
     };
     await new OtpModel(otpPayload).save();
 
-    console.log(`[USER_SERVICE] sendOtp: Đã lưu OTP. Chuẩn bị gửi email...`);
+    logger.info(`[USER_SERVICE] sendOtp: Đã lưu OTP. Chuẩn bị gửi email...`);
 
-    // === PHẦN SỬA LỖI QUAN TRỌNG NHẤT ===
     try {
-      await emailService.sendEmail(
-        user.email,
-        "OTP Verification",
-        `Your OTP code is: ${otpCode}`
-      );
-      console.log(`[USER_SERVICE] sendOtp: Gửi email thành công đến ${email}.`);
+      await emailService.sendVerificationOtp({
+        to: user.email,
+        otp: otpCode,
+        userName: user.firstName || user.username || (language === 'vi' ? 'bạn' : 'there'),
+        language,
+      });
+      logger.info(`[USER_SERVICE] sendOtp: Gửi email thành công đến ${email}.`);
       return { message: "OTP đã được gửi đến email của bạn" };
     } catch (error) {
-      // GHI LẠI LỖI CHI TIẾT ĐỂ BIẾT NGUYÊN NHÂN
-      console.error("[FATAL] Lỗi không thể gửi email xác thực:", error);
-
-      // NÉM LỖI RA NGOÀI ĐỂ CONTROLLER BẮT ĐƯỢC
-      // ĐIỀU NÀY SẼ NGĂN REQUEST BỊ TREO
+      logger.error("[FATAL] Lỗi không thể gửi email xác thực:", error);
       throw new Error(
         "Hệ thống không thể gửi email xác thực tại thời điểm này. Vui lòng thử lại sau."
       );
@@ -286,10 +365,8 @@ export const userService = {
     const user = await UserModel.findOne({ _id: id, isDeleted: false });
     if (!user) throw new ConflictError("Không tìm thấy người dùng để xóa.");
 
-    // Soft-delete the user
     await UserModel.updateOne({ _id: id }, { $set: { isDeleted: true } });
 
-    // Soft-delete related resources to avoid orphaned documents
     await Promise.all([
       MediaModel.updateMany(
         { creator_id: user._id },
@@ -307,13 +384,8 @@ export const userService = {
         { user_id: user._id },
         { $set: { isDeleted: true } }
       ),
-      RefreshTokenModel.updateMany(
-        { user: user._id },
-        { $set: { isDeleted: true } }
-      ),
     ]);
 
-    // Delete OTP records for this user's email (cleanup)
     if (user.email) {
       await OtpModel.deleteMany({ email: user.email });
     }
@@ -337,7 +409,6 @@ export const userService = {
     updateData: Partial<Pick<UserDoc, "username" | "email" | "role" | "verify">>
   ): Promise<EnrichedUser> {
     const user = await UserModel.findById(userId);
-    // Sửa lỗi: Dùng NotFoundError và kiểm tra isDeleted
     if (!user || user.isDeleted)
       throw new NotFoundError("Không tìm thấy người dùng.");
     return this.updateUser(userId, updateData);
@@ -354,8 +425,7 @@ export const userService = {
     const existingUser = await UserModel.findOne({ email });
     if (existingUser) throw new ConflictError("Email đã được sử dụng.");
 
-    // Tương tự createUser, lấy thông tin gói cước để gán token
-    const userPlan = await PlanModel.findOne({ slug: "free" }).lean(); // Giả sử admin tạo user cũng mặc định là free
+    const userPlan = await PlanModel.findOne({ slug: "free" }).lean();
 
     const newDirectory = await DirectoryModel.create({
       name: `${username}'s Directory`,
@@ -369,7 +439,7 @@ export const userService = {
       directory_id: newDirectory._id,
       verify: verify,
       plan: "free",
-      remainingTokens: userPlan?.tokenAllotment || 10, // Gán token, fallback về 10 nếu không tìm thấy plan
+      remainingTokens: userPlan?.tokenAllotment || 10,
     });
     await user.save();
     newDirectory.creator_id = user._id as mongoose.Types.ObjectId;

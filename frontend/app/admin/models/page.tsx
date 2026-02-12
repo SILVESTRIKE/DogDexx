@@ -202,7 +202,14 @@ export default function ModelsPage() {
                     {model.status}
                   </Badge>
                 </div>
-                <CardDescription>Version {model.version}</CardDescription>
+                <CardDescription>
+                  Version {model.version}
+                  {model.averageProcessingTime !== undefined && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      • Avg Time: {model.averageProcessingTime}ms
+                    </span>
+                  )}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 

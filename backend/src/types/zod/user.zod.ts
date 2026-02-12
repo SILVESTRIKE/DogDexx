@@ -1,10 +1,6 @@
 import { z } from "zod";
 import { Types } from "mongoose";
 
-/**
- * Schema để validate một chuỗi có phải là MongoDB ObjectId hợp lệ không.
- * Đây là schema quan trọng nhất, sẽ được dùng trong toàn bộ dự án.
- */
 export const objectIdSchema = z.string().refine(
   (val) => {
     return Types.ObjectId.isValid(val);
@@ -20,7 +16,13 @@ const email = z
   .min(1, "Email không được để trống.")
   .email("Định dạng email không hợp lệ.");
 
-const password = z.string().min(6, "Mật khẩu phải có ít nhất 6 ký tự.");
+const password = z
+  .string()
+  .min(8, "Mật khẩu phải có ít nhất 8 ký tự.")
+  .regex(/[A-Z]/, "Mật khẩu phải chứa ít nhất một chữ hoa.")
+  .regex(/[a-z]/, "Mật khẩu phải chứa ít nhất một chữ thường.")
+  .regex(/[0-9]/, "Mật khẩu phải chứa ít nhất một số.")
+  .regex(/[^A-Za-z0-9]/, "Mật khẩu phải chứa ít nhất một ký tự đặc biệt.");
 
 const username = z
   .string()
@@ -45,13 +47,17 @@ export const RegisterSchema = z.object({
       password,
       firstName: z.string().optional(),
       lastName: z.string().optional(),
+      country: z.string().optional(),
+      city: z.string().optional(),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional().or(z.literal("")),
+      captchaToken: z.string().optional(),
     })
     .strict(),
 });
 export type RegisterType = z.infer<typeof RegisterSchema.shape.body>;
 
 export const LoginSchema = z.object({
-  body: z.object({ email, password }).strict(),
+  body: z.object({ email, password, captchaToken: z.string().optional() }).strict(),
 });
 export type LoginType = z.infer<typeof LoginSchema.shape.body>;
 
@@ -85,21 +91,23 @@ export const UpdateProfileSchema = z.object({
     .object({
       firstName: z.string().optional(),
       lastName: z.string().optional(),
+      country: z.string().optional(),
+      city: z.string().optional(),
+      phoneNumber: z.string().regex(/^[0-9]{10,15}$/, "Số điện thoại không hợp lệ").optional(),
+      address: z.string().optional(),
+      notification_settings: z.object({
+        email_alert: z.boolean().optional(),
+      }).optional(),
     })
     .strict(),
 });
 export type UpdateProfileType = z.infer<typeof UpdateProfileSchema.shape.body>;
 
-// --- PARAMS & QUERY SCHEMAS ---
 export const IdParamsSchema = z.object({
   params: z.object({ id: objectIdSchema }),
 });
 export type IdParamsType = z.infer<typeof IdParamsSchema.shape.params>;
 
-/**
- * Dùng để validate query string khi lấy danh sách người dùng, ví dụ:
- * GET /api/users?page=1&limit=10&role=admin&search=john
- */
 export const GetUsersQuerySchema = z
   .object({
     page: z.coerce.number().int().positive().optional().default(1),

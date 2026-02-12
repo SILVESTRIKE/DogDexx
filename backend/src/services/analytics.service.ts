@@ -3,16 +3,17 @@ import { AnalyticsEventModel } from '../models/analytics_event.model';
 import { Types } from 'mongoose';
 import { AnalyticsEventName } from '../constants/analytics.constants';
 import { logger } from '../utils/logger.util';
+
 interface TrackEventArgs {
   eventName: AnalyticsEventName;
-  req: Request; 
-  eventData?: Record<string, any>; 
+  req: Request;
+  eventData?: Record<string, any>;
 }
 
 class AnalyticsService {
-  
-  public async trackEvent(args: TrackEventArgs): Promise<void> {
-    const { eventName, req, eventData } = args;
+
+  public async trackEvent(args: TrackEventArgs & { processingTime?: number }): Promise<void> {
+    const { eventName, req, eventData, processingTime } = args;
     try {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -30,7 +31,10 @@ class AnalyticsService {
         return;
       }
       const update = {
-        $inc: { count: 1 },
+        $inc: {
+          count: 1,
+          totalProcessingTime: processingTime || 0
+        },
         $setOnInsert: {
           ip: req.ip,
           userAgent: req.headers["user-agent"],

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { userController } from "../controllers/user.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { checkAllowedRoles } from "../middlewares/role.middleware";
-import validate from "../middlewares/validateRequest.middleware";
+import { validate } from "../middlewares/validation.middleware";
 import { UpdateProfileSchema, IdParamsSchema } from "../types/zod/user.zod";
 
 const router = Router();

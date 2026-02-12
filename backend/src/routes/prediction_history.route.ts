@@ -2,7 +2,7 @@ import { Router } from "express";
 import { predictionHistoryController } from "../controllers/prediction_history.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { checkAllowedRoles } from "../middlewares/role.middleware";
-import { validateData } from "../middlewares/validateBody.middleware";
+import { validate } from "../middlewares/validation.middleware";
 import {
   HistoryIdParamsSchema,
   GetHistoriesQuerySchema,
@@ -84,7 +84,7 @@ const router = Router();
 router.get(
   "/api/histories",
   authMiddleware,
-  validateData(GetHistoriesQuerySchema, "query"),
+  validate(GetHistoriesQuerySchema, "query"),
   predictionHistoryController.getHistoryForCurrentUser
 );
 
@@ -133,7 +133,7 @@ router.get(
 router.get(
   '/api/histories/:id',
   authMiddleware,
-  validateData(HistoryIdParamsSchema, 'params'),
+  validate(HistoryIdParamsSchema, 'params'),
   predictionHistoryController.getHistoryByIdForCurrentUser
 );
 
@@ -211,7 +211,7 @@ router.get(
 router.delete(
   "/api/histories/:id",
   authMiddleware,
-  validateData(HistoryIdParamsSchema, "params"),
+  validate(HistoryIdParamsSchema, "params"),
   predictionHistoryController.deleteHistoryForCurrentUser
 );
 

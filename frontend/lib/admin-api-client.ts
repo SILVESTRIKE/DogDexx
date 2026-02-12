@@ -42,7 +42,7 @@ export class AdminApiClient {
       `/bff/admin/feedback/${feedbackId}/approve`,
       {
         method: "POST",
-        body: JSON.stringify(payload), 
+        body: JSON.stringify(payload),
       },
       true
     );
@@ -172,6 +172,21 @@ export class AdminApiClient {
     );
   }
 
+  async getAdminReportPreview(payload: {
+    startDate: string;
+    endDate: string;
+  }): Promise<any> {
+    const queryParams = new URLSearchParams({
+      startDate: payload.startDate,
+      endDate: payload.endDate,
+    });
+    return this.client.request<any>(
+      `/bff/admin/reports/preview?${queryParams.toString()}`,
+      {},
+      true
+    );
+  }
+
   // --- Report Management ---
   async exportAdminReport(params: {
     startDate: string;
@@ -263,13 +278,41 @@ export class AdminApiClient {
     );
   }
 
-  // THÊM: Method để lấy dữ liệu thống kê sử dụng
   async getAdminUsageStats() {
     return this.client.request<any>("/bff/admin/usage", {}, true);
   }
+
+  async backupDatabase(): Promise<Blob> {
+    const url = `${this.client.getBaseUrl()}/bff/admin/database/backup`;
+    const token = this.client.getAccessToken();
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: "Failed to create backup" }));
+      throw new Error(errorData.message || "Unknown error during backup");
+    }
+
+    return response.blob();
+  }
+
+  async restoreDatabase(file: File): Promise<{ message: string; filename: string }> {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    return this.client.requestWithFormData<{ message: string; filename: string }>(
+      "/bff/admin/database/restore",
+      formData,
+      true
+    );
+  }
 }
 
-// Thêm một phương thức để lấy base URL từ ApiClient
 declare module "./api-client" {
   interface ApiClient {
     getBaseUrl(): string;

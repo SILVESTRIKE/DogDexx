@@ -1,6 +1,6 @@
 import mongoose, { Document, Schema, Types } from "mongoose";
 
-export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'unpaid' | 'trialing' | 'pending_approval';
+export type SubscriptionStatus = 'active' | 'canceled' | 'past_due' | 'unpaid' | 'trialing' | 'pending_approval' | 'expired';
 export type BillingPeriod = 'monthly' | 'yearly';
 
 export type SubscriptionDoc = Document & {
@@ -15,6 +15,7 @@ export type SubscriptionDoc = Document & {
   currentPeriodStart: Date;
   currentPeriodEnd: Date;
   canceledAt?: Date;
+  cancelAtPeriodEnd: boolean;
   isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -27,11 +28,12 @@ const subscriptionSchema = new Schema<SubscriptionDoc>(
     planSlug: { type: String, required: true },
     provider: { type: String, enum: ['momo', 'stripe', 'napas'], required: true },
     providerSubscriptionId: { type: String, required: true, unique: true },
-    status: { type: String, enum: ['active', 'canceled', 'past_due', 'unpaid', 'trialing', 'pending_approval'], required: true },
+    status: { type: String, enum: ['active', 'canceled', 'past_due', 'unpaid', 'trialing', 'pending_approval', 'expired'], required: true },
     billingPeriod: { type: String, enum: ['monthly', 'yearly'], required: true },
     currentPeriodStart: { type: Date, required: true },
     currentPeriodEnd: { type: Date, required: true },
     canceledAt: { type: Date },
+    cancelAtPeriodEnd: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, select: false },
   },
   {

@@ -1,4 +1,4 @@
-import { apiClient, adminApiClient } from "./api-client"
+import { adminApiClient } from "./api-client"
 
 export interface DashboardStats {
   totalUsers: number
@@ -134,10 +134,10 @@ export interface AdminFeedbackResponse {
   }
 }
 
-export const getAdminFeedback = async (params: { 
-  page: number; 
-  limit: number; 
-  status?: string; 
+export const getAdminFeedback = async (params: {
+  page: number;
+  limit: number;
+  status?: string;
   search?: string;
   startDate?: string;
   endDate?: string;
@@ -192,6 +192,7 @@ export interface AIModel {
   creator_id: string;
   createdAt: string;
   updatedAt: string;
+  averageProcessingTime?: number;
 }
 
 export const getAIModels = async (): Promise<AIModel[]> => {
@@ -280,8 +281,6 @@ export const browseAdminMedia = async (path: string, options: RequestInit = {}):
 export const deleteAdminMedia = async (mediaId: string): Promise<{ message: string }> => {
   return adminApiClient.adminDeleteMedia(mediaId);
 }
-
-// --- Usage Tracking ---
 export interface UserUsageData {
   userId: string;
   userName: string;
@@ -292,17 +291,47 @@ export interface UserUsageData {
   lastActive: string;
 }
 
+
+export interface CloudinaryResourceUsage {
+  used_bytes: number;
+  limit_bytes: number;
+  usage_percent: number;
+}
+
+export interface CloudinaryObjectUsage {
+  total_files: number;
+  limit: number;
+}
+
+export interface CloudinaryUsageItem {
+  usage: number;
+  limit: number;
+  usage_percent: number;
+}
+
+export interface CloudinaryStats {
+  credits: CloudinaryUsageItem;         // MỚI
+  transformations: CloudinaryUsageItem; // MỚI
+  storage: CloudinaryResourceUsage;
+  bandwidth: CloudinaryResourceUsage;
+  objects: CloudinaryObjectUsage;
+  plan: string;
+  last_updated: string;
+}
+
+
 export interface AdminUsageResponse {
   usageData: UserUsageData[];
   tokensChartData: any[];
   plansChartData: any[];
+  storageStats?: CloudinaryStats;
 }
 
 export const getAdminUsageStats = async (): Promise<AdminUsageResponse> => {
   return adminApiClient.getAdminUsageStats();
 };
 
-// --- THÊM MỚI: Interface cho Dataset Management ---
+
 export interface AdminFileItem {
   id: string;
   name: string;
@@ -324,11 +353,49 @@ export const downloadAdminDataset = async (): Promise<{ downloadUrl: string }> =
   return adminApiClient.downloadAdminDataset();
 }
 
-// --- THÊM MỚI: Report Management ---
+export interface ReportPreviewData {
+  overview: {
+    totalRevenue: number;
+    arpu: number;
+    newUsers: number;
+    totalUsers: number;
+    totalPredictions: number;
+    activeUsers: number;
+    accuracy: number;
+  };
+  charts: {
+    dailyActivity: { _id: string; count: number }[];
+    topBreeds: { breed: string; count: number }[];
+    usersByPlan: { planName: string; count: number }[];
+  };
+  infra: {
+    plan: string;
+    credits: { used: number; limit: number; percent: number };
+    storage: { used: string; raw: number };
+    bandwidth: { used: string; raw: number };
+    objects: number;
+  } | null;
+}
+
+export const getAdminReportPreview = async (payload: {
+  startDate: string;
+  endDate: string;
+}): Promise<ReportPreviewData> => {
+  return adminApiClient.getAdminReportPreview(payload);
+};
 export const exportAdminReport = async (params: {
   startDate: string;
   endDate: string;
   format: "excel" | "word";
 }): Promise<Blob> => {
   return adminApiClient.exportAdminReport(params);
+};
+
+// --- Database Backup & Restore ---
+export const backupDatabase = async (): Promise<Blob> => {
+  return adminApiClient.backupDatabase();
+};
+
+export const restoreDatabase = async (file: File): Promise<{ message: string; filename: string }> => {
+  return adminApiClient.restoreDatabase(file);
 };

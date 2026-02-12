@@ -62,7 +62,6 @@ export function AddUserDialog({ onUserAdded }: AddUserDialogProps) {
       toast.error("Please fill in all fields.")
       return
     }
-    // Thêm validation cơ bản cho email
     if (!/\S+@\S+\.\S+/.test(email)) {
       toast.error("Please enter a valid email address.")
       return
@@ -72,8 +71,8 @@ export function AddUserDialog({ onUserAdded }: AddUserDialogProps) {
     try {
       await adminCreateUser({ username, email, password, role, verify })
       toast.success(`User "${username}" created successfully.`)
-      onUserAdded() // Gọi callback để tải lại danh sách
-      setIsOpen(false) // Đóng dialog
+      onUserAdded() 
+      setIsOpen(false) 
     } catch (error) {
       toast.error("Failed to create user.", { description: (error as Error).message })
     } finally {

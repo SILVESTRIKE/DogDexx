@@ -8,13 +8,15 @@ export const errorHandlerMiddleware = (
   res: Response,
   next: NextFunction
 ) => {
-  logger.error(err); // Sử dụng logger để ghi lại lỗi với đầy đủ stack trace
   if (err instanceof CustomError) {
+    logger.warn(`[${err.statusCode}] ${err.message}`);
     return res.status(err.statusCode).send({
       success: false,
       errors: err.serializeErrors(),
     });
   }
+
+  logger.error(err); // Sử dụng logger để ghi lại lỗi với đầy đủ stack trace
   // In development, include the original error message and stack to help debugging.
   const isProd = process.env.NODE_ENV === 'production';
   const defaultMessage = 'Something went wrong';

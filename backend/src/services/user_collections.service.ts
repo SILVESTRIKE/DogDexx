@@ -3,12 +3,11 @@ import { getDogBreedWikiModel } from '../models/dogs_wiki.model';
 import { PredictionHistoryDoc } from '../models/prediction_history.model';
 import { Types } from 'mongoose';
 
-// Giữ lại type này để service và controller có thể giao tiếp
 export interface DogDexBreed {
   slug: string;
   breed: string;
   group?: string;
-  dogdexNumber?: number;
+  pokedexNumber?: number;
   origin?: string;
   mediaUrl?: string;
   rarity_level?: number;
@@ -23,32 +22,44 @@ export const collectionService = {
    */
   async addOrUpdateManyCollections(userId: Types.ObjectId, breedSlugs: string[], predictionId: Types.ObjectId, lang: 'vi' | 'en' = 'en') {
     const uniqueSlugs = [...new Set(breedSlugs)];
+    if (uniqueSlugs.length === 0) return;
     const WikiModel = getDogBreedWikiModel(lang);
     const breeds = await WikiModel.find({ slug: { $in: uniqueSlugs } }).select('_id').lean();
     if (breeds.length === 0) return;
 
-    const breedIds = breeds.map(b => b._id);
+    // 1. Ensure document exists (Atomic Upsert)
+    await UserCollectionModel.updateOne(
+      { user_id: userId },
+      { $setOnInsert: { collectedBreeds: [] } },
+      { upsert: true }
+    );
 
-    let userCollection = await UserCollectionModel.findOne({ user_id: userId });
-    if (!userCollection) {
-      userCollection = new UserCollectionModel({ user_id: userId, collectedBreeds: [] });
-    }
+    // 2. Process each breed atomically (Parallel)
+    await Promise.all(breeds.map(async (breed) => {
+      const breedId = breed._id;
 
-    breedIds.forEach(breedId => {
-      const existingBreedIndex = userCollection!.collectedBreeds.findIndex(cb => cb.breed_id.toString() === breedId.toString());
+      // Try to increment existing
+      const updateResult = await UserCollectionModel.updateOne(
+        { user_id: userId, "collectedBreeds.breed_id": breedId },
+        { $inc: { "collectedBreeds.$.collection_count": 1 } }
+      );
 
-      if (existingBreedIndex > -1) {
-        userCollection!.collectedBreeds[existingBreedIndex].collection_count++;
-      } else {
-        userCollection!.collectedBreeds.push({
-          breed_id: breedId as Types.ObjectId,
-          first_prediction_id: predictionId as Types.ObjectId,
-          collection_count: 1,
-        });
+      // If not found, push new (Atomic Push if not exists)
+      if (updateResult.modifiedCount === 0) {
+        await UserCollectionModel.updateOne(
+          { user_id: userId, "collectedBreeds.breed_id": { $ne: breedId } },
+          {
+            $push: {
+              collectedBreeds: {
+                breed_id: breedId,
+                first_prediction_id: predictionId,
+                collection_count: 1,
+              }
+            }
+          }
+        );
       }
-    });
-
-    await userCollection.save();
+    }));
   },
 
   /**
@@ -57,15 +68,18 @@ export const collectionService = {
   async addOrUpdateFromPredictionResults(userId: Types.ObjectId, predictionResults: PredictionHistoryDoc[], lang: 'vi' | 'en' = 'en') {
     if (!predictionResults || predictionResults.length === 0) return;
 
-    let userCollection = await UserCollectionModel.findOne({ user_id: userId });
-    if (!userCollection) {
-      userCollection = new UserCollectionModel({ user_id: userId, collectedBreeds: [] });
-    }
-    
+    // 1. Ensure document exists
+    await UserCollectionModel.updateOne(
+      { user_id: userId },
+      { $setOnInsert: { collectedBreeds: [] } },
+      { upsert: true }
+    );
+
     const allBreedSlugs = [...new Set(predictionResults.flatMap(p => p.predictions.map(pred => pred.class.toLowerCase().replace(/\s+/g, '-'))))];
     const WikiModel = getDogBreedWikiModel(lang);
     const breedsInDb = await WikiModel.find({ slug: { $in: allBreedSlugs } }).select('_id slug').lean();
     const slugToIdMap = new Map(breedsInDb.map(b => [b.slug, b._id]));
+    const operations: { breedId: Types.ObjectId, predictionId: Types.ObjectId }[] = [];
 
     predictionResults.forEach(prediction => {
       const predictionId = prediction._id;
@@ -74,21 +88,35 @@ export const collectionService = {
       breedSlugs.forEach(slug => {
         const breedId = slugToIdMap.get(slug);
         if (breedId) {
-          const existingBreedIndex = userCollection!.collectedBreeds.findIndex(cb => cb.breed_id.toString() === breedId.toString());
-          if (existingBreedIndex > -1) {
-            userCollection!.collectedBreeds[existingBreedIndex].collection_count++;
-          } else {
-            userCollection!.collectedBreeds.push({
-              breed_id: breedId as Types.ObjectId,
-              first_prediction_id: predictionId as Types.ObjectId,
-              collection_count: 1,
-            });
-          }
+          operations.push({ breedId: breedId as Types.ObjectId, predictionId: predictionId as Types.ObjectId });
         }
       });
     });
 
-    await userCollection.save();
+    // Execute atomic updates in parallel
+    await Promise.all(operations.map(async (op) => {
+      const { breedId, predictionId } = op;
+
+      const updateResult = await UserCollectionModel.updateOne(
+        { user_id: userId, "collectedBreeds.breed_id": breedId },
+        { $inc: { "collectedBreeds.$.collection_count": 1 } }
+      );
+
+      if (updateResult.modifiedCount === 0) {
+        await UserCollectionModel.updateOne(
+          { user_id: userId, "collectedBreeds.breed_id": { $ne: breedId } },
+          {
+            $push: {
+              collectedBreeds: {
+                breed_id: breedId,
+                first_prediction_id: predictionId,
+                collection_count: 1,
+              }
+            }
+          }
+        );
+      }
+    }));
   },
 
   /**

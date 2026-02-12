@@ -3,7 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { exec as _exec } from 'child_process';
 import { promisify } from 'util';
-import { MediaModel } from '../models/medias.model'; 
+import { MediaModel } from '../models/medias.model';
 import { logger } from './logger.util';
 import { cloudinary } from '../config/cloudinary.config';
 const exec = promisify(_exec);
@@ -100,4 +100,9 @@ export const startCleanupJob = () => {
     } else {
         logger.info('[Clean up] Cleanup DISABLED via config');
     }
+};
+
+export const stopCleanupJob = () => {
+    cleanupTask.stop();
+    logger.info('[Clean up] Stopped');
 };

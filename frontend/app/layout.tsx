@@ -1,36 +1,25 @@
 import type React from "react";
 import type { Metadata } from "next";
+import { Analytics } from "@vercel/analytics/react";
 
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppProviders } from "@/lib/app-providers";
 import { AppLayout } from "@/components/app-layout";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
+import { DogClickEffect } from "@/components/paw-click";
+import { BackgroundEffects } from "@/components/background-effects";
+import WalkingDog from "@/components/walking-dog";
+import RecaptchaProvider from "@/components/providers/recaptcha-provider"; 
 
 import {
-  Geist,
   Geist_Mono,
-  Plus_Jakarta_Sans as V0_Font_Plus_Jakarta_Sans,
-  IBM_Plex_Mono as V0_Font_IBM_Plex_Mono,
-  Lora as V0_Font_Lora,
+  Plus_Jakarta_Sans,
 } from "next/font/google";
 
-// Initialize fonts
-const _plusJakartaSans = V0_Font_Plus_Jakarta_Sans({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   weight: ["200", "300", "400", "500", "600", "700", "800"],
-});
-const _ibmPlexMono = V0_Font_IBM_Plex_Mono({
-  subsets: ["latin"],
-  weight: ["100", "200", "300", "400", "500", "600", "700"],
-});
-const _lora = V0_Font_Lora({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+  variable: "--font-geist-sans",
 });
 
 const geistMono = Geist_Mono({
@@ -40,17 +29,13 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   icons: {
-    // Cung cấp các icon khác nhau cho theme sáng và tối
     icon: [
-      // Icon cho theme sáng (nền trắng)
       { url: "/LogoWebBlack.png", media: "(prefers-color-scheme: light)" },
-      // Icon cho theme tối (nền đen)
       { url: "/LogoWebWhite.png", media: "(prefers-color-scheme: dark)" },
     ],
   },
   title: "DogDex - Dog Breed Encyclopedia",
   description: "Discover and explore dog breeds from around the world",
-  generator: "v0.app",
 };
 
 export default function RootLayout({
@@ -61,12 +46,11 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable}`}
+      className={`${plusJakartaSans.variable} ${geistMono.variable}`}
       suppressHydrationWarning
     >
       <body
-        className="antialiased"
-        // className="antialiased select-none"
+        className="antialiased min-h-screen relative select-none"
         suppressHydrationWarning={true}
         style={{ "--navbar-height": "69px" } as React.CSSProperties}
       >
@@ -76,9 +60,24 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppProviders>
-            <AppLayout>{children}</AppLayout>
-          </AppProviders>
+          <RecaptchaProvider>
+            <AppProviders>
+              {/* BACKGROUND */}
+              <BackgroundEffects />
+              
+              {/* EFFECTS */}
+              <DogClickEffect />
+              
+              {/* LAYOUT & CONTENT */}
+              <AppLayout>
+                {children}
+              </AppLayout>
+              
+              {/* DECORATION */}
+              <WalkingDog />
+              <Analytics />
+            </AppProviders>
+          </RecaptchaProvider>
         </ThemeProvider>
       </body>
     </html>

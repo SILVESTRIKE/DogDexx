@@ -66,7 +66,6 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
       {/* Phần nội dung của thẻ không thay đổi */}
       <div className="aspect-square bg-gradient-to-br from-muted to-secondary flex items-center justify-center relative overflow-hidden">
           <img
-            // SỬA LỖI: Ưu tiên dùng dog.imageUrl. Nếu không có, mới fallback sang Unsplash.
             src={dog.mediaUrl || `https://source.unsplash.com/300x300/?${encodeURIComponent(dog.breed + " dog")}`}
             alt={dog.breed}
             width={300}
@@ -87,7 +86,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
               collected ? `${rarityClassSet.bg} text-primary-foreground` : "bg-muted text-muted-foreground"
             }`}
           >
-            #{dog.dogdexNumber ? String(dog.dogdexNumber).padStart(3, "0") : '???'}
+            #{dog.pokedexNumber ? String(dog.pokedexNumber).padStart(3, "0") : '???'}
           </div>
           {collected && (
             <div className={`absolute top-3 right-3 ${rarityClassSet.bg} text-primary-foreground rounded-full p-2 shadow-lg animate-in zoom-in duration-300`}>
@@ -110,11 +109,11 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
           </div>
           {collected ? (
             <>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary" className={`text-xs ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
+              <div className="flex flex-nowrap gap-1.5 overflow-hidden">
+                <Badge variant="secondary" className={`text-xs whitespace-nowrap shrink-0 ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
                   <Dog className="h-3 w-3 mr-1" /> {dog.group}
                 </Badge>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs whitespace-nowrap truncate">
                   {dog.origin}
                 </Badge>
               </div>
@@ -143,11 +142,11 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
             </>
           ) : (
             <>
-              <div className="flex flex-wrap gap-1.5">
-                <Badge variant="secondary" className="text-xs">
+              <div className="flex flex-nowrap gap-1.5 overflow-hidden">
+                <Badge variant="secondary" className={`text-xs whitespace-nowrap shrink-0 ${rarityClassSet.badgeBg} ${rarityClassSet.text} ${rarityClassSet.badgeBorder}`}>
                   <Dog className="h-3 w-3 mr-1" /> {dog.group}
                 </Badge>
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className="text-xs whitespace-nowrap truncate">
                   {dog.origin}
                 </Badge>
               </div>
@@ -164,7 +163,7 @@ export function DogCard({ dog, index, isHighlighted = false, id }: DogCardProps)
   // Trả về thẻ có thể nhấp để điều hướng nếu đã sưu tầm,
   // ngược lại trả về thẻ hiển thị thông báo khi nhấp.
   return collected ? (
-    <Link href={`/dog/${dog.slug}`} className="block h-full">{cardContent}</Link>
+    <Link href={`/breed/${dog.slug}`} className="block h-full">{cardContent}</Link>
   ) : (
     <TooltipProvider>
       <Tooltip>

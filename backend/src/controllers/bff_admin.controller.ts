@@ -6,6 +6,8 @@ import { AppError } from '../errors';
 import { sendFileToClient } from '../utils/file.util';
 import * as ExcelJS from 'exceljs';
 import { userController } from './user.controller';
+import { DatabaseService } from '../services/database.service';
+
 
 /**
  * Hàm transform để định dạng lại dữ liệu feedback cho admin.
@@ -31,8 +33,8 @@ function transformFeedbackForAdmin(req: Request, feedbackDoc: any) {
       notes: feedbackDoc.notes,
       filePath: feedbackDoc.file_path,
     },
-    aiPrediction: prediction?.predictions?.[0] 
-      ? { class: prediction.predictions[0].class, confidence: prediction.predictions[0].confidence } 
+    aiPrediction: prediction?.predictions?.[0]
+      ? { class: prediction.predictions[0].class, confidence: prediction.predictions[0].confidence }
       : null,
     originalMediaUrl: transformedPrediction?.mediaUrl,
     processedMediaUrl: transformedPrediction?.processedMediaUrl,
@@ -78,8 +80,8 @@ function transformMediaForAdmin(req: Request, mediaDoc: any) {
   if (!mediaDoc) return null;
   const transformedMedia = transformMediaURLs(req, mediaDoc.toObject ? mediaDoc.toObject() : mediaDoc);
   return {
-    id: transformedMedia.id, // Sửa: Lấy id đã được transform
-    name: transformedMedia.name, // Sửa: Lấy tên trực tiếp từ document
+    id: transformedMedia.id,
+    name: transformedMedia.name,
     type: transformedMedia.type.startsWith('image') ? 'image' : 'video',
     url: transformedMedia.mediaUrl,
     size: transformedMedia.size,
@@ -269,7 +271,7 @@ export const getAlerts = async (req: Request, res: Response, next: NextFunction)
 
 export const uploadModel = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const file = req.file; // SỬA: Lấy file từ req.file (do dùng multer.single)
+    const file = req.file;
     if (!file) {
       throw new AppError("Model file is required.");
     }
@@ -282,10 +284,9 @@ export const uploadModel = async (req: Request, res: Response, next: NextFunctio
 
 function transformDatasetFileForAdmin(req: Request, file: any) {
   if (!file) return null;
-  const baseUrl = `${req.protocol}://${req.get('host')}`;
   return {
     ...file,
-    url: file.url ? `${baseUrl}${file.url}` : null,
+    url: file.url ? `${file.url}` : null,
   };
 }
 
@@ -306,7 +307,7 @@ export const downloadDataset = async (req: Request, res: Response, next: NextFun
   try {
     // Lấy URL tải về có chữ ký từ service
     const downloadUrl = await adminBffService.downloadDataset();
-    
+
     res.status(200).json({ downloadUrl });
     logger.info('[Admin Controller] Sent dataset download URL to client.');
   } catch (error) {
@@ -327,7 +328,7 @@ export const getPlans = async (req: Request, res: Response, next: NextFunction) 
   }
 };
 
-// THÊM: Hàm controller để tạo Plan mới
+
 export const createPlan = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await adminBffService.createPlan(req.body);
@@ -337,7 +338,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-// THÊM: Hàm controller để cập nhật Plan
+
 export const updatePlan = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -348,7 +349,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-// THÊM: Hàm controller để xóa Plan
+
 export const deletePlan = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -359,7 +360,7 @@ export const deletePlan = async (req: Request, res: Response, next: NextFunction
   }
 };
 
-// --- THÊM MỚI: CÁC CONTROLLER CHO WIKI ---
+
 
 export const getWikiBreeds = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -370,7 +371,6 @@ export const getWikiBreeds = async (req: Request, res: Response, next: NextFunct
       search,
       lang
     });
-    // SỬA: Transform media URLs để đảm bảo frontend nhận được URL đầy đủ
     const transformedData = transformMediaURLs(req, breedsResult.data);
 
     res.status(200).json({ ...breedsResult, data: transformedData });
@@ -425,12 +425,12 @@ export const deleteUser = async (req: Request, res: Response, next: NextFunction
  */
 export const getTransactions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search, 
-      status, 
-      planId 
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      planId
     } = req.query as any;
 
     const options = { page: Number(page), limit: Number(limit), search, status, planId };
@@ -447,12 +447,12 @@ export const getTransactions = async (req: Request, res: Response, next: NextFun
  */
 export const getSubscriptions = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { 
-      page = 1, 
-      limit = 10, 
-      search, 
-      status, 
-      planId 
+    const {
+      page = 1,
+      limit = 10,
+      search,
+      status,
+      planId
     } = req.query as any;
 
     const options = { page: Number(page), limit: Number(limit), search, status, planId };
@@ -464,7 +464,7 @@ export const getSubscriptions = async (req: Request, res: Response, next: NextFu
   }
 };
 
-// --- THÊM MỚI: CÁC CONTROLLER CHO AI MODEL MANAGEMENT ---
+
 
 export const getAIModels = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -484,7 +484,23 @@ export const activateAIModel = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+export const getReportPreview = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { startDate, endDate } = req.query as { startDate: string, endDate: string };
 
+    if (!startDate || !endDate) {
+      throw new AppError("Missing required query parameters: startDate, endDate");
+    }
+
+    const range = { startDate: new Date(startDate), endDate: new Date(endDate) };
+
+    const data = await adminBffService.getReportPreview(range);
+
+    res.status(200).json(data);
+  } catch (error) {
+    next(error);
+  }
+};
 export const exportReport = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { startDate, endDate, format } = req.query as { startDate: string, endDate: string, format: 'excel' | 'word' };
@@ -510,10 +526,75 @@ export const exportReport = async (req: Request, res: Response, next: NextFuncti
       throw new AppError("Invalid format specified. Must be 'excel' or 'word'.");
     }
 
-    // Đảm bảo dữ liệu luôn là Buffer trước khi gửi
     const dataToSend = reportBuffer instanceof Buffer ? reportBuffer : Buffer.from(reportBuffer as ExcelJS.Buffer);
     sendFileToClient({ res, fileName, contentType, data: dataToSend });
   } catch (error) {
     next(error);
   }
 };
+
+
+
+const databaseService = new DatabaseService();
+
+/**
+ * [Admin] Tạo backup database và gửi file về client
+ */
+export const backupDatabase = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    logger.info('[Admin] Starting database backup...');
+
+    const backupPath = await databaseService.createBackup();
+    const fileName = backupPath.split(/[/\\]/).pop() || 'backup.archive';
+
+    // Đọc file backup và gửi về client
+    const fs = require('fs');
+    const fileBuffer = fs.readFileSync(backupPath);
+
+    sendFileToClient({
+      res,
+      fileName,
+      contentType: 'application/gzip',
+      data: fileBuffer,
+    });
+
+    logger.info(`[Admin] Database backup sent to client: ${fileName}`);
+
+    // Cleanup old backups (keep last 10)
+    databaseService.cleanOldBackups(10).catch(err => {
+      logger.warn('Failed to clean old backups:', err);
+    });
+  } catch (error) {
+    logger.error('[Admin] Database backup failed:', error);
+    next(error);
+  }
+};
+
+/**
+ * [Admin] Khôi phục database từ file upload
+ */
+export const restoreDatabase = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const file = req.file;
+
+    if (!file) {
+      throw new AppError('Backup file is required');
+    }
+
+    logger.info(`[Admin] Starting database restore from: ${file.originalname}`);
+
+    // Restore từ file đã upload
+    await databaseService.restoreFromBackup(file.path);
+
+    logger.info('[Admin] Database restore completed successfully');
+
+    res.status(200).json({
+      message: 'Database restored successfully',
+      filename: file.originalname,
+    });
+  } catch (error) {
+    logger.error('[Admin] Database restore failed:', error);
+    next(error);
+  }
+};
+

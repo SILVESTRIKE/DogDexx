@@ -11,7 +11,7 @@ export const wikiController = {
     const data = await wikiService.getBreedBySlug(req.params.slug, lang);
     res.status(200).json({ data: transformMediaURLs(req, data) });
   },
-  
+
   async getAll(req: Request, res: Response) {
     const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
     logger.info(`[Wiki] GetAll with lang='${lang}'.`);
@@ -19,7 +19,6 @@ export const wikiController = {
       page: parseInt(req.query.page as string, 10) || 1,
       limit: parseInt(req.query.limit as string, 10) || 20,
       search: req.query.search as string,
-      // Thêm các bộ lọc mới
       group: req.query.group as string | undefined,
       energy_level: req.query.energy_level ? parseInt(req.query.energy_level as string, 10) : undefined,
       trainability: req.query.trainability ? parseInt(req.query.trainability as string, 10) : undefined,
@@ -27,15 +26,12 @@ export const wikiController = {
       suitable_for: req.query.suitable_for as string | undefined,
       lang: lang,
     };
-    // Xóa các key có giá trị undefined để không gửi chúng đến service
     Object.keys(options).forEach(key => options[key as keyof typeof options] === undefined && delete options[key as keyof typeof options]);
     const paginatedResult = await wikiService.getAllBreeds(options);
-    // Chuyển đổi URL cho mảng data
     paginatedResult.data = transformMediaURLs(req, paginatedResult.data);
     res.status(200).json(paginatedResult);
   },
 
-  // === ADMIN ROUTES ===
   async create(req: Request, res: Response) {
     const lang = (req.query.lang === 'vi' || req.query.lang === 'en') ? req.query.lang as 'vi' | 'en' : 'en';
     logger.info(`[Wiki Admin] Create breed with lang='${lang}'.`);

@@ -12,15 +12,12 @@ export default function DogDexPage() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  // collectionStats từ đây đã được ổn định nhờ tối ưu trong CollectionProvider
   const { collectionStats, refreshCollection } = useCollection();
 
-  // SỬA LỖI: Khởi tạo state từ URL params
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || "");
-  const [sortBy, setSortBy] = useState(searchParams.get('sort') || "name-asc");
+  const [sortBy, setSortBy] = useState(searchParams.get('sort') || (searchParams.get('highlight') ? "collectedAt-desc" : "name-asc"));
   const [filterBy, setFilterBy] = useState(searchParams.get('filter') || "all");
 
-  // State đã được debounce để truyền xuống component con
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
 
   useEffect(() => {
@@ -41,14 +38,12 @@ export default function DogDexPage() {
       if (filterBy !== 'all') params.set('filter', filterBy); else params.delete('filter');
       // Không xóa highlight ở đây, để DogGrid tự xử lý
       router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    }, 300); // Giảm thời gian debounce để phản hồi nhanh hơn
+    }, 300);
 
     return () => clearTimeout(handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery, sortBy, filterBy]);
 
-  // MODIFIED: Bọc các hàm handlers trong useCallback để chúng không được tạo lại
-  // trên mỗi lần render, giúp memo của DogDexHeader hoạt động đúng.
   const handleSearchChange = useCallback((value: string) => {
     setSearchQuery(value);
   }, []);
@@ -89,7 +84,7 @@ export default function DogDexPage() {
           sort={sortBy}
           filter={filterBy}
           locale={locale}
-          onTotalCountChange={() => {}} // Không cần làm gì ở đây nữa
+          onTotalCountChange={() => { }}
         />
       </div>
     </main>

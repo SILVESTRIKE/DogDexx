@@ -1,30 +1,35 @@
 export interface User {
   id: string;
-  plan: 'free' | 'starter' | 'professional' | 'enterprise' | 'guest';
+  plan: "free" | "starter" | "professional" | "enterprise" | "guest";
   username: string;
-  email?: string; // Optional vì guest không có email
-  role?: "user" | "de" | "admin"; // Optional vì guest không có role
+  email?: string;
+  role?: "user" | "de" | "admin";
   verify?: boolean;
   createdAt?: string;
   firstName?: string;
   lastName?: string;
   avatarUrl?: string;
-  
+  country?: string;
+  city?: string;
+  phoneNumber?: string;
   remainingTokens: number;
   tokenAllotment: number;
 }
 
-
 export interface AuthTokens {
-  accessToken: string
-  refreshToken: string
+  accessToken: string;
+  refreshToken: string;
 }
-export type CollectionSource = 'image_upload' | 'video_upload' | 'stream_capture';
+export type CollectionSource =
+  | "image_upload"
+  | "video_upload"
+  | "stream_capture"
+  | "url_input";
 
 export interface UserCollectionItem {
   _id: string;
   user_id: string;
-  breed_id: { _id: string; breed: string; slug: string; group: string; };
+  breed_id: { _id: string; breed: string; slug: string; group: string };
   first_collected_at: string;
   collection_count: number;
   source: CollectionSource;
@@ -48,7 +53,7 @@ export interface ProfileResponse {
       limit: number;
       totalPages: number;
     };
-  }
+  };
 }
 
 export interface RegisterResponse {
@@ -62,7 +67,7 @@ export interface RegisterResponse {
 export interface DogBreed {
   slug: string;
   breed: string;
-  dogdexNumber?: number;
+  pokedexNumber?: number;
   group?: string;
   origin?: string;
   mediaUrl?: string;
@@ -95,19 +100,19 @@ export interface DogBreed {
 }
 
 export interface PaginatedDogBreedResponse {
-  data: DogBreed[]
-  total: number
-  page: number
-  limit: number
-  totalPages: number
+  data: DogBreed[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
 }
 
 export interface YoloPrediction {
-  track_id?: number
-  box: number[]
-  class: string
-  confidence: number
-  class_id?: number
+  track_id?: number;
+  box: number[];
+  class: string;
+  confidence: number;
+  class_id?: number;
 }
 interface BoundingBox {
   x: number;
@@ -134,51 +139,60 @@ export interface PredictionHistoryItem {
 }
 
 export interface PredictionResponse {
-  success: boolean
-  predictions: YoloPrediction[]
-  processedImageUrl?: string
-  history?: PredictionHistoryItem
+  success: boolean;
+  predictions: YoloPrediction[];
+  processedImageUrl?: string;
+  history?: PredictionHistoryItem;
 }
 
 export interface FeedbackPayload {
-  isCorrect: boolean
-  submittedLabel?: string
-  notes?: string
+  isCorrect: boolean;
+  submittedLabel?: string;
+  notes?: string;
 }
 
 export interface Achievement {
-  title: string // Đổi từ name
-  description: string
-  icon: string
-  unlocked: boolean
-  unlockedAt?: string | null // Thêm trường này
-  requiredCount: number // Thêm trường này
+  id: string;
+  title: string;
+  description: string;
+  icon: string;
+  unlocked: boolean;
+  unlockedAt?: string | null;
+  requiredCount: number;
 }
 
 export interface CollectionStats {
   totalBreeds: number;
   collectedBreeds: number;
   progress: number;
-  recentlyAdded?: DogBreed[]
+  recentlyAdded?: DogBreed[];
 }
 
 export interface MediaUploadResponse {
-  success: boolean
-  mediaPath: string
-  mediaId: string
+  success: boolean;
+  mediaPath: string;
+  mediaId: string;
 }
 
 export interface ApiError {
-  message: string
-  error?: any
+  message: string;
+  error?: any;
+}
+
+
+export interface WebSocketError {
+  type: "error";
+  code?: "INSUFFICIENT_TOKENS" | string; // Mã lỗi để xác định nguyên nhân
+  message: string;
 }
 
 // Cấu trúc cho một con chó được phát hiện trong mảng 'detections'
 export interface Detection {
+  track_id?: number;
   detectedBreed: string; // slug
   confidence: number;
   boundingBox: BoundingBox;
-  breedInfo: EnrichedDogBreed | null; // Cập nhật để khớp với dữ liệu được làm giàu từ BFF
+  breedInfo: EnrichedDogBreed | null;
 }
 
 // Cấu trúc response hoàn chỉnh từ BFF
@@ -193,10 +207,11 @@ export interface BffPredictionResponse {
   } | null;
   hasFeedback?: boolean;
   message?: string;
+  processed_base64?: string;
 }
 
 // Cấu trúc cho một sản phẩm được gợi ý
-// CẬP NHẬT: Cấu trúc này giờ đây khớp với dữ liệu trả về từ BFF
+
 export interface RecommendedProduct {
   category: string;
   reason: string;
@@ -204,10 +219,9 @@ export interface RecommendedProduct {
 }
 
 // Cấu trúc dữ liệu chi tiết của giống chó được làm giàu bởi BFF
-// Nó chứa các trường được chọn lọc từ DogBreedWiki
 export interface EnrichedDogBreed {
   slug: string;
-  breed: string; // Thêm trường này
+  breed: string;
   group?: string;
   description: string;
   life_expectancy?: string;
@@ -220,19 +234,20 @@ export interface EnrichedDogBreed {
   weight?: string;
   good_with_children?: boolean;
   suitable_for?: string[];
+  pokedexNumber?: number;
 }
 
-// THÊM MỚI: Các kiểu dữ liệu cho Gói cước (Plan)
+
 export interface Plan {
   name: string;
-  slug: 'free' | 'starter' | 'professional' | 'enterprise' | 'guest';
+  slug: "free" | "starter" | "professional" | "enterprise" | "guest";
   priceMonthly: number;
   priceYearly: number;
-  tokenAllotment: number; // Số token được cấp mỗi chu kỳ
+  tokenAllotment: number;
   apiAccess: boolean;
-  description?: string; // Mô tả ngắn cho gói
-  isFeatured?: boolean; // Gói nổi bật
-  features?: { // Danh sách các tính năng nổi bật
+  description?: string;
+  isFeatured?: boolean;
+  features?: {
     name: string;
     included: boolean;
   }[];
@@ -243,9 +258,9 @@ export interface PaginatedPlansResponse {
   total: number;
 }
 
-// THÊM MỚI: Kiểu dữ liệu cho một Đăng ký (Subscription)
+
 export interface Subscription {
-  _id: string; // Thêm _id để dùng làm key
+  _id: string;
   userId: {
     _id: string;
     name: string;
@@ -255,8 +270,99 @@ export interface Subscription {
     _id: string;
     name: string;
   };
-  status: 'active' | 'pending_approval' | 'canceled' | 'expired' | 'past_due' | 'unpaid';
+  status:
+  | "active"
+  | "pending_approval"
+  | "canceled"
+  | "expired"
+  | "past_due"
+  | "unpaid";
   startDate: string;
   endDate: string | null;
   createdAt: string;
+}
+export interface LeaderboardEntry {
+  userId: string;
+  username: string;
+  displayName: string;
+  avatarUrl?: string | null;
+  country?: string;
+  city?: string;
+  totalCollected: number;
+  rank: number;
+  role?: string;
+}
+
+export interface LeaderboardResponse {
+  success: boolean;
+  scope: "global" | "country" | "city";
+  filterValue: string;
+  data: LeaderboardEntry[];
+}
+
+export interface DogProfile {
+  id: string;
+  owner_id: string;
+  name: string;
+  breed: string;
+  birthday?: string;
+  gender: "male" | "female";
+  avatarPath?: string;
+  avatarUrl?: string;
+  photos: string[];
+  isLost: boolean;
+  lastSeenLocation?: {
+    lat: number;
+    lng: number;
+    address?: string;
+  };
+  attributes: {
+    color?: string;
+    pattern?: string;
+    size?: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HealthRecord {
+  id: string;
+  dog_id: string;
+  type: "vaccine" | "checkup" | "medicine" | "surgery" | "hygiene" | "other";
+  title: string;
+  date: string;
+  nextDueDate?: string;
+  notes?: string;
+  vetName?: string;
+  cost?: number;
+  weight?: number;
+  symptoms?: string;
+  diagnosis?: string;
+  attachments?: string[];
+  createdAt: string;
+}
+
+export interface Post {
+  id: string;
+  author_id: string;
+  author_name: string;
+  author_avatar?: string;
+  type: "discussion" | "image" | "review" | "lost_found" | "sale" | "adoption";
+  title?: string;
+  content: string;
+  mediaUrls: string[];
+  likes: number;
+  comments_count: number;
+  tags?: string[];
+  related_dog_id?: string;
+  sale_info?: {
+    price: number;
+    currency: string;
+    location: string;
+    is_verified_breeder: boolean;
+    vaccination_status: boolean;
+    age_months: number;
+  };
+  createdAt: string;
+  isLiked?: boolean;
 }

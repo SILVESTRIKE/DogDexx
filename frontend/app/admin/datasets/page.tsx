@@ -9,7 +9,6 @@ import { useI18n } from "@/lib/i18n-context"
 import { browseAdminDatasets, downloadAdminDataset } from "@/lib/admin-api"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Skeleton } from "@/components/ui/skeleton"
-import { toast } from "sonner"
 
 interface FileSystemItem {
   id: string
@@ -71,7 +70,6 @@ export default function DatasetsPage() {
         console.log('Fetch aborted');
       } else {
         console.error("Error loading dataset file system:", error);
-        toast.error("Tải dữ liệu thất bại", { description: (error as Error).message });
       }
     } finally {
       if (!signal.aborted) {
@@ -97,7 +95,7 @@ export default function DatasetsPage() {
     setSearchQuery("");
     setBreadcrumbs(prev => [...prev, { name: folder.name, path: folder.id }]);
   }
-  
+
   const handleBreadcrumbClick = (index: number) => {
     if (index === breadcrumbs.length - 1) return;
     setIsLoading(true);
@@ -108,7 +106,6 @@ export default function DatasetsPage() {
 
   const handleDownload = async () => {
     setIsDownloading(true);
-    toast.info("Đang lấy link tải xuống từ Cloudinary...");
     try {
       // 1. Gọi API để lấy URL tải về
       const response = await downloadAdminDataset();
@@ -116,15 +113,14 @@ export default function DatasetsPage() {
 
       // 2. Mở URL trong một tab mới, trình duyệt sẽ tự động tải file
       window.open(downloadUrl, '_blank');
-      
-      toast.success("Đã mở link tải về. Quá trình tải xuống sẽ sớm bắt đầu.");
+
     } catch (error) {
-      toast.error("Tải xuống thất bại", { description: (error as Error).message });
+      console.log("Tải xuống thất bại", { description: (error as Error).message });
     } finally {
       setIsDownloading(false);
     }
   };
-  
+
   const filteredItems = useMemo(() =>
     items.filter((item) =>
       item && item.name && item.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -132,7 +128,7 @@ export default function DatasetsPage() {
 
   const renderItemIcon = (item: FileSystemItem) => {
     const commonClass = "h-12 w-12 text-muted-foreground";
-    switch(item.type) {
+    switch (item.type) {
       case "folder":
         return <Folder className={`${commonClass} text-blue-500`} />;
       case "image":
@@ -206,15 +202,15 @@ export default function DatasetsPage() {
                   key={item.id}
                   className="border rounded-lg hover:shadow-md hover:border-primary cursor-pointer transition-all group relative flex flex-col"
                   onClick={() => item.type === "folder" ? handleFolderClick(item) : (setSelectedItem(item), setShowPreview(true))}>
-                  <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <div className="aspect-square bg-muted rounded-t-lg flex items-center justify-center overflow-hidden shrink-0">
                     {item.type === 'image' && item.url ? (
                       <img src={item.url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" crossOrigin="anonymous" />
                     ) : (
                       renderItemIcon(item)
                     )}
                   </div>
-                  
-                  <CardContent className="p-3 flex-grow flex flex-col items-start w-full">
+
+                  <CardContent className="p-3 grow flex flex-col items-start w-full">
                     <p className="text-sm font-medium truncate w-full" title={item.name}>{item.name}</p>
                     {item.createdAt && <p className="text-xs text-muted-foreground">{new Date(item.createdAt).toLocaleDateString()}</p>}
                     {item.size && <p className="text-xs text-muted-foreground">{(item.size / 1024 / 1024).toFixed(2)} MB</p>}
@@ -227,14 +223,14 @@ export default function DatasetsPage() {
       </Card>
 
       <Dialog open={showPreview} onOpenChange={setShowPreview}>
-         <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
+        <DialogContent className="max-w-4xl h-[90vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="truncate pr-8" title={selectedItem?.name}>{selectedItem?.name}</DialogTitle>
             <DialogDescription>{selectedItem?.createdAt ? new Date(selectedItem.createdAt).toLocaleString() : ''}</DialogDescription>
           </DialogHeader>
-          <div className="bg-black/90 rounded-lg flex-grow flex items-center justify-center overflow-hidden">
+          <div className="bg-black/90 rounded-lg grow flex items-center justify-center overflow-hidden">
             {selectedItem?.type === "image" ? (
-              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain"/>
+              <img src={selectedItem.url} alt={selectedItem.name} className="max-w-full max-h-full object-contain" />
             ) : selectedItem?.type === "video" ? (
               <video src={selectedItem?.url} controls autoPlay className="max-w-full max-h-full" />
             ) : (

@@ -1,420 +1,804 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/lib/auth-context";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useI18n } from "@/lib/i18n-context";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Camera, CameraOff, Loader2, Wifi, WifiOff } from "lucide-react";
-import { useCollection } from "@/lib/collection-context"; // THAY ĐỔI
+import {
+  Camera,
+  Loader2,
+  Wifi,
+  Clock,
+  Trash2,
+  Maximize2,
+  Lightbulb,
+  Video,
+  Target,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  RefreshCcw, // Thay icon lật camera cho đúng nghĩa
+} from "lucide-react";
 import { apiClient } from "@/lib/api-client";
-import { useAuth } from "@/lib/auth-context";
-import { useI18n } from "@/lib/i18n-context";
-import { Detection } from "@/lib/types";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { ResultModal } from "@/components/result-modal";
+import { Slider } from "@/components/ui/slider";
+
+// --- CẤU HÌNH ---
+const SEND_WIDTH = 640;
+const COMPRESSION_QUALITY = 0.6;
+const STREAM_TOKEN_COST = 5;
+
+// --- TYPES ---
+interface DetectionBox {
+  track_id: number;
+  class: string;
+  confidence: number;
+  box: number[]; // [x1, y1, x2, y2]
+}
+
+interface SnapshotItem {
+  id: string;
+  track_id: number;
+  breedLabel: string;
+  imageBase64: string;
+  fullImageBase64: string;
+  confidence: number;
+  detectionData: any;
+}
+
+interface SnapshotRow {
+  rowId: string;
+  timestamp: number;
+  items: SnapshotItem[];
+}
+
+// --- SUB-COMPONENTS (Moved outside to prevent re-creation) ---
+const TipsContent = () => {
+  const { t } = useI18n();
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start gap-3 text-sm text-muted-foreground">
+        <Sparkles className="w-4 h-4 mt-1 text-primary shrink-0" />
+        <span>{t("live.tips.tip1")}</span>
+      </div>
+      <div className="flex items-start gap-3 text-sm text-muted-foreground">
+        <Video className="w-4 h-4 mt-1 text-primary shrink-0" />
+        <span>{t("live.tips.tip2")}</span>
+      </div>
+      <div className="flex items-start gap-3 text-sm text-muted-foreground">
+        <Target className="w-4 h-4 mt-1 text-primary shrink-0" />
+        <span>{t("live.tips.tip3")}</span>
+      </div>
+      <div className="flex items-start gap-3 text-sm text-muted-foreground">
+        <Camera className="w-4 h-4 mt-1 text-primary shrink-0" />
+        <span>{t("live.tips.tip4")}</span>
+      </div>
+    </div>
+  );
+};
 
 export default function LiveDetectionPage() {
-  const router = useRouter();
   const { t } = useI18n();
-  const { isAuthenticated, refetchUser } = useAuth();
+  const { user, setAuthModalOpen } = useAuth();
+
+  // --- REFS ---
   const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
-  const streamRef = useRef<MediaStream | null>(null); // SỬ DỤNG REF THAY CHO STATE
-  const [isStreaming, setIsStreaming] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  // Optimization: Reusable canvas for streaming to avoid GC thrashing
+  const sendCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Logic Control Refs
+  const isWaitingResponseRef = useRef(false);
+  const isStreamingRef = useRef(false);
+  const snapshotThresholdRef = useRef<number>(0.7);
+  const capturedTrackIdsRef = useRef<Set<number>>(new Set());
+  const isIntentionalCloseRef = useRef(false);
+  const facingModeRef = useRef<"user" | "environment">("environment");
+
+  // --- STATE ---
+  const [isStreamingState, setIsStreamingState] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
-  const [detections, setDetections] = useState<Detection[]>([]);
-  const { refreshCollection, isCollected } = useCollection();
-  const frameIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const [isConnecting, setIsConnecting] = useState(false); // State mới để quản lý trạng thái kết nối
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [snapshotRows, setSnapshotRows] = useState<SnapshotRow[]>([]);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<any | null>(null);
+  // facingMode state chỉ dùng để trigger UI update, logic chính dùng facingModeRef
+  const [, setFacingModeState] = useState<"user" | "environment">("environment");
 
-  // THAY ĐỔI: Xác định chiều rộng mục tiêu cho khung hình stream
-  const STREAM_FRAME_WIDTH = 640;
+  // State UI
+  const [detections, setDetections] = useState<DetectionBox[]>([]);
+  const [videoSize, setVideoSize] = useState({ width: 0, height: 0 });
+  const [isTipsOpen, setIsTipsOpen] = useState(false);
 
-  const initializeWebSocket = async () => {
-    try {
-      const ws = await apiClient.connectStreamPrediction(); // SỬ DỤNG HÀM MỚI
+  // --- ZOOM STATE ---
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [zoomCapabilities, setZoomCapabilities] = useState<{ min: number; max: number; step: number } | null>(null);
 
-      ws.onopen = () => {
-        console.log("[BFF-WS] WebSocket connected");
-        setIsConnected(true);
-      };
+  // ==========================================================
+  // LOGIC
+  // ==========================================================
 
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-
-          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "final_result"
-          if (data.type === "final_result") {
-            console.log(
-              "[BFF-WS] Captured final result, redirecting...",
-              data // Toàn bộ object data chính là payload của bạn
-            );
-            
-            // Dữ liệu bây giờ nằm trực tiếp trong 'data', không có 'payload' lồng vào nữa
-            if (data.predictionId) {
-              // Chuyển hướng trước, hàm stopCamera sẽ được gọi trong useEffect cleanup
-              router.push(`/results?id=${data.predictionId}`);
-            } else {
-              console.error("[BFF-WS] Final result missing predictionId:", data);
-              toast.error(t("live.redirectError") || "Failed to get prediction ID for redirect.");
-              router.push("/"); // Fallback to home
-            }
-          // THAY ĐỔI QUAN TRỌNG: Lắng nghe "type" === "endOfStream" để dừng camera
-          } else if (data.type === "endOfStream") {
-            console.log("[BFF-WS] Stream ended by server:", data.message);
-            // Dừng camera và đóng kết nối một cách an toàn
-            stopCamera("Stream Completed");
-          } else if (data && Array.isArray(data.detections)) {
-            // Xử lý các frame có bounding box trung gian
-            setDetections(data.detections);
-            drawBoundingBoxes(data.detections);
-          } else if (data.error) {
-            const errorMessage = data.error || "An unknown error occurred.";
-            console.error("[BFF-WS] Error from server:", errorMessage);
-            toast.error(t("live.serverError") || "Server error", {
-              description: errorMessage,
-            });
-          }
-        } catch (error) {
-          console.error("[v0] Error parsing WebSocket message:", error);
-        }
-      };
-
-      ws.onerror = () => {
-        console.error(
-          "[BFF-WS] A WebSocket error occurred. See the 'onclose' event for details."
-        );
-        setIsConnected(false);
-      };
-
-      ws.onclose = (event) => {
-        console.log(
-          `[BFF-WS] WebSocket disconnected: Code=${event.code}, Reason=${event.reason}`
-        );
-        // Luôn dừng camera khi kết nối bị đóng, bất kể lý do gì
-        setIsConnected(false);
-        stopCamera("Connection Closed");
-        if (event.code !== 1000 && event.code !== 1005) { // 1000 = Normal Closure, 1005 = No Status Rcvd
-          toast.info(t("live.disconnectedError") || "Connection to server closed.", {
-            description: "Please check your internet connection and try again.",
-          });
-        }
-      };
-
-      wsRef.current = ws;
-    } catch (error) {
-      console.error("[v0] Error connecting WebSocket:", error);
-      toast.error(t("live.connectError") || "Failed to connect", {
-        description: "Could not connect to the detection service. Please try again later.",
-      });
-    }
-  };
-
-  const sendFrameToWebSocket = () => {
-    const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-
+  const sendNextFrame = useCallback(() => {
     if (
-      !video ||
       !wsRef.current ||
-      wsRef.current.readyState !== WebSocket.OPEN
-    ) {
+      wsRef.current.readyState !== WebSocket.OPEN ||
+      !videoRef.current ||
+      videoRef.current.paused ||
+      !isStreamingRef.current ||
+      isWaitingResponseRef.current
+    )
       return;
-    }
 
-    // Prevent sending empty frames
-    if (video.videoWidth === 0 || video.videoHeight === 0) {
-      console.warn("[v0] Video frame has zero dimensions, skipping send.");
-      return;
-    }
-
-    // THAY ĐỔI: Resize khung hình tại trình duyệt trước khi gửi đi
-    // Tính toán kích thước mới dựa trên chiều rộng mục tiêu và giữ nguyên tỷ lệ
-    const aspectRatio = video.videoHeight / video.videoWidth;
-    const targetWidth = STREAM_FRAME_WIDTH;
-    const targetHeight = Math.round(targetWidth * aspectRatio);
-
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
-    const ctx = canvas.getContext("2d");
-
-    if (!ctx) return;
-
-    // Vẽ lại video vào canvas với kích thước đã được resize
-    ctx.drawImage(video, 0, 0, targetWidth, targetHeight);
-
-    // Giảm chất lượng (0.6) để tăng tốc độ truyền tải
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.6);
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(dataUrl);
-    }
-  };
-
-  const startCamera = async () => {
-    if (isStreaming) stopCamera();
-
-    try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({
-        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-      });
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = mediaStream;
-        streamRef.current = mediaStream; // Cập nhật ref
-        setIsStreaming(true);
-        setDetections([]);
-
-        // Kết nối WebSocket
-        setIsConnecting(true);
-        initializeWebSocket().finally(() => setIsConnecting(false));
-
-        // Gửi khung hình mỗi 200ms (5 FPS)
-        frameIntervalRef.current = setInterval(() => {
-          sendFrameToWebSocket();
-        }, 200);
-      }
-    } catch (err) {
-      console.error("[v0] Error accessing camera:", err);
-      toast.error(t("live.cameraError") || "Cannot access camera", {
-        description: "Please check your browser permissions and try again.",
-      });
-    }
-  };
-
-  // FIX: Đảm bảo stopCamera dừng tất cả các track
-  const stopCamera = (reason: string = "Client initiated close") => {
-    // Luôn truy cập phiên bản mới nhất của stream qua ref
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop()); // ĐÂY LÀ PHẦN QUAN TRỌNG NHẤT
-      streamRef.current = null;
-      setIsStreaming(false);
-      setDetections([]);
-
-      if (frameIntervalRef.current) {
-        clearInterval(frameIntervalRef.current);
-        frameIntervalRef.current = null;
-      }
-
-      if (wsRef.current) {
-        if (wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.close(1000, reason);
-        }
-        wsRef.current = null;
-      }
-
-      clearCanvas();
-
-      // CẬP NHẬT: Nếu người dùng đã đăng nhập, làm mới thông tin để cập nhật token
-      if (isAuthenticated) {
-        refetchUser();
-      }
-    }
-  };
-
-  // FIX: Hàm vẽ Bounding Box
-  const drawBoundingBoxes = (results: Detection[]) => {
-    const canvas = canvasRef.current;
     const video = videoRef.current;
-    if (!canvas || !video) return;
 
-    const canvasWidth = video.videoWidth || canvas.width;
-    const canvasHeight = video.videoHeight || canvas.height;
+    // Init canvas once
+    if (!sendCanvasRef.current) {
+      sendCanvasRef.current = document.createElement("canvas");
+    }
+    const off = sendCanvasRef.current;
+    const ratio = video.videoHeight / video.videoWidth;
 
-    if (canvasWidth === 0 || canvasHeight === 0) return;
-
-    if (canvas.width !== canvasWidth || canvas.height !== canvasHeight) {
-      canvas.width = canvasWidth;
-      canvas.height = canvasHeight;
+    // Update dimensions if needed (handling rotation/resize)
+    const targetHeight = SEND_WIDTH * ratio;
+    if (off.width !== SEND_WIDTH || off.height !== targetHeight) {
+      off.width = SEND_WIDTH;
+      off.height = targetHeight;
     }
 
-    const ctx = canvas.getContext("2d");
+    const ctx = off.getContext("2d", { willReadFrequently: true }); // Opt: willReadFrequently
     if (!ctx) return;
 
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, off.width, off.height);
 
-    results.forEach((result) => {
-      if (!result.boundingBox) return;
+    off.toBlob(
+      (blob) => {
+        if (blob && wsRef.current?.readyState === WebSocket.OPEN) {
+          isWaitingResponseRef.current = true;
+          wsRef.current.send(blob);
+        }
+      },
+      "image/webp",
+      COMPRESSION_QUALITY
+    );
+  }, []);
 
-      const boxX = result.boundingBox.x;
-      const boxY = result.boundingBox.y;
-      const boxWidth = result.boundingBox.width;
-      const boxHeight = result.boundingBox.height;
+  const createSnapshotItem = useCallback((
+    detection: DetectionBox,
+    video: HTMLVideoElement
+  ): SnapshotItem | null => {
+    const scale = video.videoWidth / SEND_WIDTH;
+    const [x1, y1, x2, y2] = detection.box;
 
-      ctx.strokeStyle = "#3b82f6";
-      ctx.lineWidth = 3;
-      ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+    const realX = Math.floor(x1 * scale);
+    const realY = Math.floor(y1 * scale);
+    const realW = Math.floor((x2 - x1) * scale);
+    const realH = Math.floor((y2 - y1) * scale);
 
-      const breedName = result.detectedBreed.replace(/-/g, " ");
-      const confidenceText = (result.confidence * 100).toFixed(0);
-      const labelText = `${breedName} (${confidenceText}%)`;
-      ctx.font = "bold 16px sans-serif";
+    // Canvas crop
+    const cropCv = document.createElement("canvas");
+    cropCv.width = realW;
+    cropCv.height = realH;
+    cropCv.getContext("2d")?.drawImage(video, realX, realY, realW, realH, 0, 0, realW, realH);
 
-      const textMetrics = ctx.measureText(labelText);
-      const labelPadding = 8;
-      const labelHeight = 24;
+    // Canvas full
+    const fullCv = document.createElement("canvas");
+    fullCv.width = video.videoWidth;
+    fullCv.height = video.videoHeight;
+    fullCv.getContext("2d")?.drawImage(video, 0, 0);
 
-      const labelY = Math.max(boxY - labelHeight, 0);
-
-      ctx.fillStyle = "#3b82f6";
-      ctx.fillRect(
-        boxX,
-        labelY,
-        textMetrics.width + labelPadding * 2,
-        labelHeight
-      );
-
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(labelText, boxX + labelPadding, labelY + labelHeight - 6);
-    });
-  };
-
-  const clearCanvas = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-  };
-
-  useEffect(() => {
-    return () => {
-      stopCamera("Component Unmount");
+    return {
+      id: crypto.randomUUID(),
+      track_id: detection.track_id,
+      breedLabel: detection.class,
+      imageBase64: cropCv.toDataURL("image/jpeg", 0.7),
+      fullImageBase64: fullCv.toDataURL("image/jpeg", 0.7),
+      confidence: detection.confidence,
+      detectionData: {
+        ...detection,
+        box: [realX, realY, realX + realW, realY + realH],
+      },
     };
   }, []);
 
-  return (
-    <main className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">
-            {t("live.title") || "Live Detection"}
-          </h1>
-          <p className="text-muted-foreground">
-            {t("live.subtitle") ||
-              "Use camera for real-time dog breed detection"}
-          </p>
-        </div>
+  const processAutoSnapshot = useCallback((currentDetections: DetectionBox[]) => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Video Feed */}
-          <div className="lg:col-span-2">
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    {t("nav.live") || "Camera"}
-                    {isStreaming &&
-                      (isConnected ? (
-                        <Badge variant="default" className="gap-1">
-                          <Wifi className="h-3 w-3" />
-                          {t('live.connected') || 'Connected'}
-                        </Badge>
-                      ) : isConnecting ? (
-                        <Badge variant="secondary" className="gap-1">
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                          {t('live.connecting') || 'Connecting...'}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="gap-1">
-                          <WifiOff className="h-3 w-3" />
-                          Connecting...
-                        </Badge>
-                      ))}
-                  </span>
-                  {isStreaming ? (
-                    <Button
-                      onClick={() => stopCamera()}
-                      variant="destructive"
-                      size="sm"
-                      className="gap-2"
-                    >
-                      <CameraOff className="h-4 w-4" />
-                      {t("live.stopCamera") || "Stop Camera"}
-                    </Button>
-                  ) : (
-                    <Button onClick={startCamera} size="sm" className="gap-2">
-                      <Camera className="h-4 w-4" />
-                      {t("live.startCamera") || "Start Camera"}
-                    </Button>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="relative bg-black rounded-lg overflow-hidden aspect-video">
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className="w-full h-full object-cover"
-                    width={1280}
-                    height={720}
-                  />
-                  <canvas
-                    ref={canvasRef}
-                    className="absolute inset-0 w-full h-full"
-                  />
-                  {!isStreaming && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <div className="text-center">
-                        <Camera className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                        <p className="text-muted-foreground">
-                          {t("live.clickToStart") ||
-                            'Click "Start Camera" to begin'}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+    const validDetections = currentDetections.filter(
+      (d) => d.confidence > snapshotThresholdRef.current && d.track_id !== null
+    );
+
+    const hasNewId = validDetections.some(
+      (d) => !capturedTrackIdsRef.current.has(d.track_id)
+    );
+
+    if (hasNewId) {
+      const rowItems: SnapshotItem[] = [];
+      validDetections.forEach((d) => {
+        if (!capturedTrackIdsRef.current.has(d.track_id)) {
+          const item = createSnapshotItem(d, video);
+          if (item) {
+            rowItems.push(item);
+            capturedTrackIdsRef.current.add(d.track_id);
+          }
+        }
+      });
+
+      if (rowItems.length > 0) {
+        setSnapshotRows((prev) =>
+          [
+            {
+              rowId: crypto.randomUUID(),
+              timestamp: Date.now(),
+              items: rowItems,
+            },
+            ...prev,
+          ].slice(0, 10)
+        );
+      }
+    }
+  }, [createSnapshotItem]);
+
+  const cleanupResources = useCallback(() => {
+    isIntentionalCloseRef.current = true;
+    isStreamingRef.current = false;
+    setIsStreamingState(false);
+    setIsConnected(false);
+    setIsConnecting(false);
+    setDetections([]); // Clear boxes UI
+    isWaitingResponseRef.current = false;
+    setZoomCapabilities(null); // Reset zoom capabilities
+
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
+  }, []);
+
+  const startCamera = async () => {
+    if (isStreamingRef.current) return;
+    setIsConnecting(true);
+    isIntentionalCloseRef.current = false;
+
+    // Check token
+    if (user && user.remainingTokens < STREAM_TOKEN_COST) {
+      toast.error(t("errors.insufficientTokensStream"), {
+        description: t("errors.insufficientTokensStreamDesc", {
+          required: STREAM_TOKEN_COST,
+          remaining: user.remainingTokens,
+        }),
+        action: {
+          label: t("common.upgrade"),
+          onClick: () => setAuthModalOpen(true),
+        },
+      });
+      setIsConnecting(false);
+      return;
+    }
+
+    try {
+      const ws = await apiClient.connectStreamPrediction();
+      wsRef.current = ws;
+
+      ws.onopen = async () => {
+        setIsConnected(true);
+        setIsConnecting(false);
+
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: facingModeRef.current,
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+              // @ts-ignore: zoom might not be in standard types yet
+              zoom: true,
+            },
+          });
+          streamRef.current = stream;
+
+          // CHECK ZOOM CAPABILITIES
+          const track = stream.getVideoTracks()[0];
+          const capabilities = track.getCapabilities() as any;
+
+          if (capabilities.zoom) {
+            setZoomCapabilities({
+              min: capabilities.zoom.min,
+              max: capabilities.zoom.max,
+              step: capabilities.zoom.step,
+            });
+            setZoomLevel(capabilities.zoom.min);
+          } else {
+            setZoomCapabilities(null);
+          }
+
+          if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+            // Chờ video load metadata để có kích thước chuẩn
+            videoRef.current.onloadedmetadata = () => {
+              videoRef.current?.play().catch(e => console.error("Play error:", e));
+              isStreamingRef.current = true;
+              setIsStreamingState(true);
+              setVideoSize({
+                width: videoRef.current?.offsetWidth || 0,
+                height: videoRef.current?.offsetHeight || 0,
+              });
+              requestAnimationFrame(sendNextFrame);
+            };
+          }
+        } catch (camError) {
+          console.error(camError);
+          toast.error("Không thể bật Camera", {
+            description: "Vui lòng kiểm tra quyền truy cập camera.",
+          });
+          cleanupResources();
+        }
+      };
+
+      ws.onmessage = (e) => {
+        if (!isStreamingRef.current) return;
+        try {
+          const data = JSON.parse(e.data);
+          const dets = data.detections || (Array.isArray(data) ? data : []);
+          setDetections(dets);
+          processAutoSnapshot(dets);
+        } catch (err) {
+          console.error("Parse error", err);
+        } finally {
+          isWaitingResponseRef.current = false;
+          // Sử dụng setTimeout 0 để đẩy xuống cuối event loop, tránh block UI
+          requestAnimationFrame(sendNextFrame);
+        }
+      };
+
+      ws.onclose = (event) => {
+        if (isIntentionalCloseRef.current) return;
+
+        if (event.code === 4001) {
+          toast.error(t("errors.insufficientTokensStream"));
+        } else if (event.code !== 1000 && event.code !== 1005) {
+          // Chỉ báo lỗi nếu mất kết nối bất thường khi đang live
+          if (isConnected) {
+            toast.error("Mất kết nối máy chủ AI");
+          }
+        }
+        cleanupResources();
+      };
+
+      ws.onerror = (err) => {
+        console.error("WS Error:", err);
+      };
+    } catch (e) {
+      toast.error("Lỗi kết nối máy chủ");
+      cleanupResources();
+    }
+  };
+
+  const handleFlipCameraClick = async () => {
+    // 1. Dừng stream hiện tại
+    cleanupResources();
+
+    // 2. Đổi chế độ
+    const newMode = facingModeRef.current === "user" ? "environment" : "user";
+    facingModeRef.current = newMode;
+    setFacingModeState(newMode);
+
+    // 3. Khởi động lại (nhanh nhất có thể)
+    // Dùng timeout nhỏ để đảm bảo resource cũ đã release xong
+    setTimeout(() => {
+      startCamera();
+    }, 200);
+  };
+
+  const handleZoom = async (value: number[]) => {
+    const newZoom = value[0];
+    setZoomLevel(newZoom);
+
+    if (streamRef.current) {
+      const track = streamRef.current.getVideoTracks()[0];
+      try {
+        await track.applyConstraints({
+          advanced: [{ zoom: newZoom } as any],
+        });
+      } catch (err) {
+        console.error("Zoom error:", err);
+      }
+    }
+  };
+
+  const handleOpenModal = (item: SnapshotItem) => {
+    setSelectedSnapshot({
+      predictionId: "temp",
+      processedMediaUrl: item.imageBase64,
+      rawBase64: item.fullImageBase64.split(",")[1],
+      detections: [
+        {
+          ...item.detectionData,
+          detectedBreed: item.breedLabel,
+          breedInfo: { breed: item.breedLabel, slug: "loading" },
+        },
+      ],
+    });
+  };
+
+  // Resize handler
+  useEffect(() => {
+    const handleResize = () => {
+      if (videoRef.current) {
+        setVideoSize({
+          width: videoRef.current.offsetWidth,
+          height: videoRef.current.offsetHeight,
+        });
+      }
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Load config
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const res = await fetch(`${apiClient.getBaseUrl()}/bff/predict/config`);
+        const data = await res.json();
+        if (data.config?.stream_high_conf) {
+          snapshotThresholdRef.current = Math.max(0.6, data.config.stream_high_conf - 0.1);
+        }
+      } catch { }
+    };
+    loadConfig();
+  }, []);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isIntentionalCloseRef.current = true;
+      cleanupResources();
+    };
+  }, [cleanupResources]);
+
+  // --- RENDER BOXES LOGIC ---
+  // --- RENDER BOXES LOGIC ---
+  const renderBoxes = useMemo(() => {
+    if (!videoSize.width || !videoSize.height || !videoRef.current) return null;
+
+    const video = videoRef.current;
+    if (!video.videoWidth || !video.videoHeight) return null;
+
+    // Calculate actual displayed video dimensions (handling object-fit: contain)
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const elementRatio = videoSize.width / videoSize.height;
+
+    let displayWidth = videoSize.width;
+    let displayHeight = videoSize.height;
+    let offsetX = 0;
+    let offsetY = 0;
+
+    if (elementRatio > videoRatio) {
+      // Element is wider -> Pillarbox (bars on sides)
+      displayWidth = videoSize.height * videoRatio;
+      offsetX = (videoSize.width - displayWidth) / 2;
+    } else {
+      // Element is taller -> Letterbox (bars on top/bottom)
+      displayHeight = videoSize.width / videoRatio;
+      offsetY = (videoSize.height - displayHeight) / 2;
+    }
+
+    // Scale from SEND_WIDTH (backend coords) to Display Size
+    const scale = displayWidth / SEND_WIDTH;
+
+    return detections.map((det, idx) => {
+      const [x1, y1, x2, y2] = det.box;
+
+      // Calculate style with offsets
+      const style: React.CSSProperties = {
+        left: x1 * scale + offsetX,
+        top: y1 * scale + offsetY,
+        width: (x2 - x1) * scale,
+        height: (y2 - y1) * scale,
+        transition: "all 0.1s linear",
+      };
+
+      const isConfident = det.confidence > 0.8;
+
+      return (
+        <div
+          key={det.track_id ?? idx}
+          className="absolute border-2 rounded-lg cursor-pointer group z-20 hover:border-white hover:z-30"
+          style={{
+            ...style,
+            borderColor: isConfident ? "#22c55e" : "#eab308"
+          }}
+          onClick={() => {
+            if (videoRef.current) {
+              const snap = createSnapshotItem(det, videoRef.current);
+              if (snap) handleOpenModal(snap);
+            }
+          }}
+        >
+          <div
+            className={cn(
+              "absolute -top-7 left-0 px-2 py-0.5 rounded-t-md text-xs font-bold text-black transition-colors whitespace-nowrap shadow-sm",
+              isConfident ? "bg-green-500" : "bg-yellow-500"
+            )}
+          >
+            {det.class} {Math.round(det.confidence * 100)}%
           </div>
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 bg-black/20 transition-opacity rounded-lg">
+            <Maximize2 className="text-white w-8 h-8 drop-shadow-md" />
+          </div>
+        </div>
+      );
+    });
+  }, [detections, videoSize, createSnapshotItem]);
 
-          <div>
-            <Card className="border-2 bg-muted/50">
-              <CardHeader>
-                <CardTitle className="text-base">
-                  {t("live.instructions") || "Instructions"}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-2">
-                <p>• {t("live.instruction1") || "Ensure good lighting"}</p>
-                <p>• {t("live.instruction2") || "Keep camera steady"}</p>
-                <p>• {t("live.instruction3") || "Center the dog in frame"}</p>
-                <p>• {t("live.instruction4") || "System will auto-detect"}</p>
-              </CardContent>
-            </Card>
+  return (
+    <div className="container mx-auto p-0 md:p-4 min-h-[90vh] flex flex-col">
+      <ResultModal
+        isOpen={!!selectedSnapshot}
+        onClose={() => setSelectedSnapshot(null)}
+        resultData={selectedSnapshot}
+        onCleanup={cleanupResources}
+      />
 
-            <Card className="border-2 mt-6">
-              <CardHeader>
-                <CardTitle className="text-lg">
-                  Real-time Detections ({detections.length})
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 max-h-64 overflow-y-auto">
-                {detections.length === 0 && isStreaming ? (
-                  <p className="text-muted-foreground">Looking for a dog...</p>
-                ) : (
-                  detections.map((det, index) => (
-                    <div
-                      key={index}
-                      className="flex justify-between items-center text-sm border-b pb-1 last:border-b-0"
-                    >
-                      <span className="font-medium capitalize">
-                        {det.detectedBreed.replace(/-/g, " ")}
-                      </span>
-                      <Badge variant="outline" className="text-xs">
-                        {(det.confidence * 100).toFixed(1)}%
-                      </Badge>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+      {/* --- MOBILE: TIPS ACCORDION --- */}
+      <div className="lg:hidden mb-3 mx-2 mt-2">
+        <div className="bg-card border rounded-lg shadow-sm overflow-hidden">
+          <button
+            onClick={() => setIsTipsOpen(!isTipsOpen)}
+            className="w-full flex items-center justify-between p-3 bg-muted/30 active:bg-muted/50 transition-colors"
+          >
+            <span className="flex items-center gap-2 font-semibold text-sm">
+              <Lightbulb className="w-4 h-4 text-yellow-500" />
+              {t("live.tips.title")}
+            </span>
+            {isTipsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+          <div
+            className={cn(
+              "transition-all duration-200 ease-in-out overflow-hidden",
+              isTipsOpen ? "max-h-[500px] opacity-100 border-t" : "max-h-0 opacity-0"
+            )}
+          >
+            <div className="p-4 bg-card"><TipsContent /></div>
           </div>
         </div>
       </div>
-    </main>
+
+      {/* --- DESKTOP HEADER --- */}
+      <div className="hidden lg:flex justify-between items-center mb-4 p-4 bg-card rounded-xl shadow-sm border">
+        <div>
+          <h1 className="text-xl md:text-2xl font-bold">Realtime AI</h1>
+          <span
+            className={cn(
+              "text-xs font-medium flex items-center gap-1",
+              isConnected ? "text-green-600" : "text-yellow-500"
+            )}
+          >
+            <Wifi size={12} /> {isConnected ? "Connected" : "Ready"}
+          </span>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleFlipCameraClick}
+            disabled={!isStreamingState}
+          >
+            <RefreshCcw className="mr-2 h-4 w-4" /> Flip Cam
+          </Button>
+          <Button
+            onClick={isStreamingState ? cleanupResources : startCamera}
+            variant={isStreamingState ? "destructive" : "default"}
+            disabled={isConnecting}
+          >
+            {isConnecting ? (
+              <Loader2 className="animate-spin mr-2 h-4 w-4" />
+            ) : isStreamingState ? (
+              "Stop Stream"
+            ) : (
+              "Start Camera"
+            )}
+          </Button>
+        </div>
+      </div>
+
+      {/* --- MAIN LAYOUT --- */}
+      <div className="flex flex-col lg:flex-row gap-4 h-full">
+        {/* LEFT: TIPS SIDEBAR (DESKTOP) */}
+        <div className="hidden lg:flex flex-col w-72 shrink-0 lg:h-[70vh]">
+          <Card className="h-full border-dashed bg-muted/10 shadow-sm flex flex-col">
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Lightbulb className="w-5 h-5 text-yellow-500" />
+                {t("live.tips.title")}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="flex-1 overflow-y-auto scrollbar-thin">
+              <TipsContent />
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* CENTER: VIEWPORT CAMERA */}
+        <div className="flex-1 bg-black lg:rounded-xl relative overflow-hidden border-y lg:border-2 border-gray-800 shadow-xl group min-h-[calc(100vh-140px)] lg:min-h-0 lg:h-[70vh]">
+          {/* FIX: object-contain để bounding box khớp với hình ảnh */}
+          <video
+            ref={videoRef}
+            muted playsInline
+            className="w-full h-full object-contain pointer-events-none"
+          />
+
+          {/* OVERLAY BOXES */}
+          {isStreamingState && (
+            <div className="absolute inset-0 w-full h-full flex items-center justify-center pointer-events-none">
+              <div
+                className="relative pointer-events-auto"
+                style={{ width: videoSize.width, height: videoSize.height }}
+              >
+                {renderBoxes}
+              </div>
+            </div>
+          )}
+
+          {/* ZOOM SLIDER (MOBILE & DESKTOP) */}
+          {isStreamingState && zoomCapabilities && (
+            <div className="absolute right-4 top-1/2 -translate-y-1/2 h-48 z-40 flex flex-col items-center gap-2 bg-black/20 backdrop-blur-sm p-2 rounded-full border border-white/10">
+              <span className="text-[10px] font-bold text-white drop-shadow-md">{zoomCapabilities.max}x</span>
+              <Slider
+                orientation="vertical"
+                min={zoomCapabilities.min}
+                max={zoomCapabilities.max}
+                step={zoomCapabilities.step}
+                value={[zoomLevel]}
+                onValueChange={handleZoom}
+                className="h-full"
+              />
+              <span className="text-[10px] font-bold text-white drop-shadow-md">{zoomCapabilities.min}x</span>
+            </div>
+          )}
+          {/* MOBILE SNAPSHOTS OVERLAY (RIGHT COLUMN) */}
+          <div className="lg:hidden absolute right-2 top-20 bottom-32 w-14 flex flex-col gap-3 overflow-y-auto py-2 z-40 scrollbar-none pointer-events-auto items-center">
+            {snapshotRows.flatMap(row => row.items).map((item) => (
+              <div
+                key={item.id}
+                onClick={() => handleOpenModal(item)}
+                className="shrink-0 w-10 h-10 relative cursor-pointer group animate-in slide-in-from-right-4 fade-in duration-300"
+              >
+                <img
+                  src={item.imageBase64}
+                  className="w-full h-full rounded-md object-cover border-2 border-white bg-black/20 shadow-lg"
+                  alt=""
+                />
+              </div>
+            ))}
+          </div>
+          {/* MOBILE CONTROLS OVERLAY */}
+          <div className="lg:hidden absolute inset-0 z-50 pointer-events-none flex flex-col justify-between p-4">
+            {/* Top Bar */}
+            <div className="flex justify-between items-start pointer-events-auto mt-2">
+              <div className="bg-black/40 backdrop-blur-md px-3 py-1.5 rounded-full flex items-center gap-2 border border-white/10">
+                <div className={cn("w-2 h-2 rounded-full animate-pulse", isConnected ? "bg-green-500" : "bg-yellow-500")} />
+                <span className="text-xs font-medium text-white">
+                  {isConnecting ? "Connecting..." : isConnected ? "Live" : "Ready"}
+                </span>
+              </div>
+
+              <button
+                onClick={handleFlipCameraClick}
+                className="w-10 h-10 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center border border-white/10 active:scale-95 transition-transform"
+              >
+                <RefreshCcw className="w-5 h-5 text-white" />
+              </button>
+            </div>
+
+            {/* Bottom Bar - Shutter Button */}
+            <div className="flex justify-center items-center mb-8 pointer-events-auto">
+              <button
+                onClick={isStreamingState ? cleanupResources : startCamera}
+                disabled={isConnecting}
+                className={cn(
+                  "w-20 h-20 rounded-full border-4 flex items-center justify-center transition-all duration-300 shadow-lg backdrop-blur-sm",
+                  isStreamingState
+                    ? "border-red-500 bg-red-500/20 hover:bg-red-500/30"
+                    : "border-white bg-white/20 hover:bg-white/30"
+                )}
+              >
+                {isConnecting ? (
+                  <Loader2 className="w-8 h-8 text-white animate-spin" />
+                ) : (
+                  <div className={cn(
+                    "rounded-full transition-all duration-300",
+                    isStreamingState ? "w-8 h-8 bg-red-500 rounded-md" : "w-16 h-16 bg-white"
+                  )} />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {!isStreamingState && !isConnecting && (
+            <div className="absolute inset-0 hidden lg:flex flex-col items-center justify-center text-gray-500 bg-gray-900/90 pointer-events-none">
+              <Camera className="w-16 h-16 opacity-30 mb-4" />
+              <p className="hidden lg:block">Tap "Start Camera" to detect</p>
+            </div>
+          )}
+        </div>
+
+        {/* RIGHT: SNAPSHOTS SIDEBAR */}
+        <div className="hidden lg:flex w-full lg:w-72 bg-muted/20 rounded-xl border flex flex-col h-auto lg:h-[70vh] shadow-inner shrink-0 mb-4 lg:mb-0">
+          <div className="p-3 border-b flex justify-between items-center bg-card rounded-t-xl h-14">
+            <h3 className="text-xs font-bold uppercase text-muted-foreground flex items-center gap-2">
+              <Clock size={14} className="text-primary" /> Captured ({snapshotRows.length})
+            </h3>
+            {snapshotRows.length > 0 && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  setSnapshotRows([]);
+                  capturedTrackIdsRef.current.clear();
+                }}
+                className="h-6 w-6 text-destructive hover:bg-destructive/10"
+              >
+                <Trash2 size={12} />
+              </Button>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-2 space-y-3 scrollbar-thin min-h-[150px] max-h-[30vh] lg:max-h-none">
+            {snapshotRows.length === 0 && (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-xs text-center p-4">
+                <Info className="w-8 h-8 mb-2 opacity-20" />
+                <span>Waiting for detections...</span>
+              </div>
+            )}
+            {snapshotRows.map((row) => (
+              <div
+                key={row.rowId}
+                className="bg-card border rounded-lg p-2 shadow-sm animate-in slide-in-from-right-4"
+              >
+                <div className="text-[10px] text-muted-foreground mb-2 flex justify-between px-1">
+                  <span>{new Date(row.timestamp).toLocaleTimeString()}</span>
+                  <span className="font-mono text-primary">
+                    {row.items.length} obj
+                  </span>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+                  {row.items.map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleOpenModal(item)}
+                      className="shrink-0 w-16 cursor-pointer group relative"
+                    >
+                      <img
+                        src={item.imageBase64}
+                        className="w-16 h-16 rounded-md object-cover border bg-black/10 group-hover:ring-2 ring-primary transition-all"
+                        alt=""
+                      />
+                      <div className="text-[9px] font-bold text-center truncate mt-1 text-foreground/80">
+                        {item.breedLabel}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

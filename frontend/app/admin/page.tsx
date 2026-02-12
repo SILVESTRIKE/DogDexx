@@ -8,9 +8,11 @@ import { Area, AreaChart, CartesianGrid, XAxis, YAxis } from "recharts"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { getAdminDashboardData, getSystemAlerts, DashboardData, SystemAlert } from "@/lib/admin-api"
+import { getAdminDashboardData, getSystemAlerts, DashboardData, SystemAlert, backupDatabase, restoreDatabase } from "@/lib/admin-api"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useI18n } from "@/lib/i18n-context"
+import { Database, Download, Upload, Loader2 } from "lucide-react"
+import { toast } from "sonner"
 
 const initialDashboardData: DashboardData = {
   stats: {
@@ -33,6 +35,8 @@ export default function AdminDashboard() {
   const [dashboardData, setDashboardData] = useState<DashboardData>(initialDashboardData)
   const [alerts, setAlerts] = useState<SystemAlert[]>([])
   const [loading, setLoading] = useState(true)
+  const [isBackingUp, setIsBackingUp] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
 
   useEffect(() => {
     async function fetchData() {
@@ -68,6 +72,52 @@ export default function AdminDashboard() {
       label: "Visits",
       color: "hsl(var(--chart-2))",
     },
+  }
+
+
+  const handleBackup = async () => {
+    try {
+      setIsBackingUp(true)
+      const blob = await backupDatabase()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `backup-${new Date().toISOString()}.archive`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+      toast.success("Backup created successfully")
+    } catch (error) {
+      console.error("Backup failed:", error)
+      toast.error("Failed to create backup")
+    } finally {
+      setIsBackingUp(false)
+    }
+  }
+
+  const handleRestore = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (!confirm("Are you sure you want to restore the database? This will overwrite current data.")) {
+      e.target.value = ""
+      return
+    }
+
+    try {
+      setIsRestoring(true)
+      await restoreDatabase(file)
+      toast.success("Database restored successfully")
+      // Refresh data after restore
+      window.location.reload()
+    } catch (error) {
+      console.error("Restore failed:", error)
+      toast.error("Failed to restore database")
+    } finally {
+      setIsRestoring(false)
+      e.target.value = ""
+    }
   }
 
   return (
@@ -226,6 +276,58 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Database Management Card */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <Database className="h-5 w-5 text-primary" />
+            <CardTitle>Database Management</CardTitle>
+          </div>
+          <CardDescription>Backup and restore system data</CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col sm:flex-row gap-4">
+          <Button onClick={handleBackup} disabled={isBackingUp}>
+            {isBackingUp ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Creating Backup...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Backup Database
+              </>
+            )}
+          </Button>
+          
+          <div className="relative">
+            <input
+              type="file"
+              id="restore-file"
+              className="hidden"
+              accept=".archive"
+              onChange={handleRestore}
+              disabled={isRestoring}
+            />
+            <Button variant="outline" disabled={isRestoring} asChild>
+              <label htmlFor="restore-file" className="cursor-pointer">
+                {isRestoring ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Restoring...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Restore Database
+                  </>
+                )}
+              </label>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }

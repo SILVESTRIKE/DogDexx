@@ -1,16 +1,17 @@
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { logger } from '../utils/logger.util';
 
 dotenv.config();
 
-// Khởi tạo danh sách các origin được phép
 const allowedOrigins: string[] = [
-  'http://localhost:3001', // Frontend dev
-  'http://localhost:3000', // Backend dev
+  'http://localhost:3001',
+  'http://localhost:3000',
+  'http://localhost',
   "https://dogdexai.vercel.app",
+  "https://dogdexx.vercel.app",
 ];
 
-// Chỉ thêm các URL từ biến môi trường nếu chúng tồn tại
 if (process.env.FRONTEND_URL) allowedOrigins.push(process.env.FRONTEND_URL);
 if (process.env.BACKEND_URL) allowedOrigins.push(process.env.BACKEND_URL);
 if (process.env.RENDER_EXTERNAL_URL) allowedOrigins.push(process.env.RENDER_EXTERNAL_URL);
@@ -24,7 +25,6 @@ const exposedHeaders = [
 
 export const corsMiddleware = cors({
   origin: (origin, callback) => {
-    // Luôn cho phép các yêu cầu không có origin (ví dụ: Postman, mobile apps)
     if (!origin) {
       callback(null, true);
       return;

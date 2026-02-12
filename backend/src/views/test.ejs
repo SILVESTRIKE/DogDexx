@@ -388,9 +388,9 @@
         let trialToken = getTrialToken();
         if (!trialToken) {
           try {
-            console.log("Pinging server to ensure trial session cookie exists...");
+            logger("Pinging server to ensure trial session cookie exists...");
             await fetch(window.location.href); // This re-triggers middleware on the server
-            console.log("Trial session check complete. Cookie should be set if it was needed.");
+            logger("Trial session check complete. Cookie should be set if it was needed.");
             localStorage.setItem('trialToken', 'exists'); // Use a placeholder
           } catch (err) {
             console.error("Error during trial session check:", err);
@@ -426,7 +426,7 @@
 
         if (response.status === 401 && refreshToken && !url.includes('/api/auth/refresh-token')) {
           try {
-            console.log("Access token expired. Refreshing...");
+            logger("Access token expired. Refreshing...");
             const refreshResponse = await fetch("/api/auth/refresh-token", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -437,7 +437,7 @@
 
             const newTokens = await refreshResponse.json();
             setTokens(newTokens);
-            console.log("Token refreshed successfully.");
+            logger("Token refreshed successfully.");
 
             options.headers["Authorization"] = `Bearer ${getAccessToken()}`;
             response = await fetch(url, options); // Retry the original request
@@ -580,7 +580,7 @@
 
       // Nếu người dùng là khách (chưa đăng nhập), chủ động lấy trial token
       if (!api.getAccessToken()) {
-        console.log("Phát hiện người dùng Guest, tiến hành lấy trial token...");
+        logger("Phát hiện người dùng Guest, tiến hành lấy trial token...");
         await api.ensureTrialToken();
         api.updateTokenDisplay(); // Cập nhật lại hiển thị để hiển thị trial token mới
       }
@@ -843,7 +843,7 @@
       };
 
       realtimeSocket.onclose = () => {
-        console.log("WebSocket connection closed.");
+        logger("WebSocket connection closed.");
         if (frameInterval) clearInterval(frameInterval);
         if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
         ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);

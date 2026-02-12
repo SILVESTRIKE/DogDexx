@@ -3,7 +3,7 @@ import mongoose, { Schema, Document, Types } from "mongoose";
 export interface FeedbackDoc extends Document {
   prediction_id: Types.ObjectId;
   user_id: Types.ObjectId;
-  isCorrect: boolean; // THÊM MỚI: Lưu trữ phản hồi của người dùng
+  isCorrect: boolean;
   user_submitted_label?: string;
   notes?: string;
   file_path: string;
@@ -22,9 +22,9 @@ const feedbackSchema = new Schema<FeedbackDoc>(
       ref: "PredictionHistory",
       required: true,
       unique: true,
-    }, // Cho phép guest gửi feedback
+    },
     user_id: { type: Schema.Types.ObjectId, ref: "User", required: true },
-    isCorrect: { type: Boolean, required: true }, // THÊM MỚI
+    isCorrect: { type: Boolean, required: true },
     user_submitted_label: { type: String, trim: true },
     notes: { type: String, trim: true },
     status: {

@@ -1,24 +1,23 @@
-// src/routes/bff/user.routes.ts
-
 import { Router } from 'express';
-import { 
-    register, 
-    login, 
-    getProfile, 
-    updateProfile, 
-    logout, 
-    verifyOtp, 
-    refreshToken, 
-    updateAvatar, 
-    createCheckoutSession, 
-    getSessionStatus, 
+import {
+    register,
+    login,
+    getProfile,
+    updateProfile,
+    logout,
+    verifyOtp,
+    refreshToken,
+    updateAvatar,
+    createCheckoutSession,
+    getSessionStatus,
     handleMomoIpn,
-    forgotPassword, 
-    resetPassword, 
-    deleteCurrentUser 
+    forgotPassword,
+    resetPassword,
+    deleteCurrentUser,
+    cancelSubscription
 } from '../controllers/bff_user.controller';
 import { authMiddleware } from '../middlewares/auth.middleware';
-import { validateData } from '../middlewares/validateBody.middleware';
+import { validate } from '../middlewares/validation.middleware';
 import { LoginPayloadSchema } from '../types/zod/auth.zod';
 import { uploadAvatar } from '../middlewares/upload.middleware';
 import { ForgotPasswordSchema, ResetPasswordSchema } from '../types/zod/user.zod';
@@ -87,7 +86,7 @@ router.post('/register', uploadAvatar, register);
  *       200:
  *         description: Đăng nhập thành công, trả về dữ liệu tổng hợp.
  */
-router.post('/login', validateData(LoginPayloadSchema,'body'), login);
+router.post('/login', validate(LoginPayloadSchema, 'body'), login);
 
 /**
  * @swagger
@@ -134,7 +133,7 @@ router.post('/verify-otp', verifyOtp);
  *       200:
  *         description: Mã đã được gửi.
  */
-router.post('/forgot-password', validateData(ForgotPasswordSchema.shape.body, 'body'), forgotPassword);
+router.post('/forgot-password', validate(ForgotPasswordSchema.shape.body, 'body'), forgotPassword);
 
 /**
  * @swagger
@@ -162,7 +161,7 @@ router.post('/forgot-password', validateData(ForgotPasswordSchema.shape.body, 'b
  *       200:
  *         description: Mật khẩu đã được reset.
  */
-router.post('/reset-password', validateData(ResetPasswordSchema.shape.body, 'body'), resetPassword);
+router.post('/reset-password', validate(ResetPasswordSchema.shape.body, 'body'), resetPassword);
 
 /**
  * @swagger
@@ -216,6 +215,7 @@ router.get('/profile', authMiddleware, getProfile);
  *       401:
  *         description: Chưa xác thực.
  */
+// Force restart
 router.put('/profile', authMiddleware, uploadAvatar, updateProfile);
 
 /**
@@ -230,6 +230,8 @@ router.put('/profile', authMiddleware, uploadAvatar, updateProfile);
  *     responses:
  *       200:
  *         description: Tài khoản đã được xóa thành công.
+ *       400:
+ *         description: Mật khẩu không chính xác.
  */
 router.delete('/profile', authMiddleware, deleteCurrentUser);
 
@@ -317,6 +319,8 @@ router.post('/refresh', refreshToken);
  *         description: Trả về URL của phiên thanh toán để redirect người dùng.
  */
 router.post('/create-checkout-session', authMiddleware, createCheckoutSession);
+
+router.post('/cancel-subscription', authMiddleware, cancelSubscription);
 
 /**
  * @route GET /bff/user/session-status

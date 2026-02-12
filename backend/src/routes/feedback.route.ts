@@ -2,7 +2,7 @@ import { Router } from "express";
 import { feedbackController } from "../controllers/feedback.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
 import { checkAllowedRoles } from "../middlewares/role.middleware";
-import { validateData } from "../middlewares/validateBody.middleware";
+import { validate } from "../middlewares/validation.middleware";
 import {
   GetFeedbacksQuerySchema,
   UpdateFeedbackBodySchema,
@@ -52,7 +52,7 @@ const router = Router();
 router.post(
   "/api/feedback",
   authMiddleware,
-  validateData(SubmitFeedbackBodySchema, "body"),
+  validate(SubmitFeedbackBodySchema, "body"),
   feedbackController.submit
 );
 
@@ -115,7 +115,7 @@ router.get(
   "/api/feedback",
   authMiddleware,
   checkAllowedRoles(["admin"]),
-  validateData(GetFeedbacksQuerySchema, "query"),
+  validate(GetFeedbacksQuerySchema, "query"),
   feedbackController.getFeedbacks
 );
 
@@ -172,7 +172,7 @@ router.get(
   "/api/feedback/:id",
   authMiddleware,
   checkAllowedRoles(["admin"]),
-  validateData(FeedbackIdParamsSchema, "params"),
+  validate(FeedbackIdParamsSchema, "params"),
   feedbackController.getFeedbackById
 );
 
@@ -235,8 +235,8 @@ router.patch(
   "/api/feedback/:id",
   authMiddleware,
   checkAllowedRoles(["admin"]),
-  validateData(FeedbackIdParamsSchema, "params"),
-  validateData(UpdateFeedbackBodySchema, "body"),
+  validate(FeedbackIdParamsSchema, "params"),
+  validate(UpdateFeedbackBodySchema, "body"),
   feedbackController.updateFeedback
 );
 
@@ -303,8 +303,8 @@ router.delete(
   "/api/feedback/:id",
   authMiddleware,
   checkAllowedRoles(["admin"]),
-  validateData(FeedbackIdParamsSchema, "params"),
-  validateData(DeleteFeedbackQuerySchema, "query"),
+  validate(FeedbackIdParamsSchema, "params"),
+  validate(DeleteFeedbackQuerySchema, "query"),
   feedbackController.deleteFeedback
 );
 

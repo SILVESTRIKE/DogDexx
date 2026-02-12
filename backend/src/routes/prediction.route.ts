@@ -193,17 +193,13 @@ const proxyOptions: Options = {
   ws: true,
   changeOrigin: true,
   pathRewrite: (path, req) => {
-    console.log(`[HPM] pathRewrite original path: ${path}`);
     const newPath = path.replace('/api/predict/stream', '/predict-stream');
-    console.log(`[HPM] pathRewrite new path: ${newPath}`);
     return newPath;
   },
   on: {
     close: (res, socket, head) => {
-      console.log('[HPM] WebSocket connection closed.');
     },
     error: (err, req, res) => {
-      console.error('[HPM] Proxy Error:', err);
       if ('writeHead' in res) {
         if (!res.headersSent) {
           res.writeHead(502, { 'Content-Type': 'application/json' });
@@ -222,9 +218,7 @@ const proxyOptions: Options = {
       if (token) {
         try {
           jwt.verify(token, process.env.JWT_SECRET!);
-          console.log(`[HPM-Auth] Valid token found for user. Proxying WebSocket request to: ${options.target?.toString()}`);
         } catch (error: any) {
-          console.warn(`[HPM-Auth] Invalid token for WebSocket: ${error.message}. Closing connection.`);
           // Gửi mã lỗi 4001 (custom) và đóng socket
           socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
           socket.destroy();
@@ -232,7 +226,6 @@ const proxyOptions: Options = {
         }
       } else {
         // Đây là người dùng khách (guest), vẫn cho phép kết nối
-        console.log(`[HPM-Auth] No token found (guest user). Proxying WebSocket request to: ${options.target?.toString()}`);
       }
     },
   }

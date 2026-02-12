@@ -4,7 +4,7 @@ import { logger } from '../utils/logger.util';
 export interface DogBreedWikiDoc extends Document {
   slug: string; // Key chính, ví dụ: "boxer"  
   breed: string; // Tên hiển thị theo ngôn ngữ, ví dụ: "Affenpinscher" hoặc "Chó Affenpinscher"
-  dogdexNumber?: number; // Số thứ tự trong DogDex
+  pokedexNumber?: number; // Số thứ tự trong DogDex
   group?: string; // Nhóm chó, ví dụ: "Working"
   origin?: string; // Nguồn gốc, ví dụ: "Germany"
   mediaPath?: string; // Đường dẫn ảnh đại diện
@@ -35,11 +35,11 @@ export interface DogBreedWikiDoc extends Document {
 }
 
 const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
-  slug: { type: String, required: true, unique: true},
-  breed: { type: String, required: true, text: true, index: true }, // Đây sẽ là tên hiển thị
-  dogdexNumber: { type: Number, unique: true, sparse: true },
+  slug: { type: String, required: true, unique: true },
+  breed: { type: String, required: true, text: true, index: true },
+  pokedexNumber: { type: Number, unique: true, sparse: true },
   origin: { type: String },
-  mediaPath: { type: String }, // Thêm trường mediaPath
+  mediaPath: { type: String },
   group: { type: String },
   coat_type: { type: String },
   coat_colors: { type: [String] },
@@ -62,8 +62,8 @@ const dogBreedWikiSchema = new Schema<DogBreedWikiDoc>({
   trainable_skills: { type: [String] },
   fun_fact: { type: String },
   isDeleted: { type: Boolean, default: false, select: false },
-}, { 
-  timestamps: true, // Tự động thêm createdAt và updatedAt
+}, {
+  timestamps: true,
   collection: 'dog_breed_wikis',
   toJSON: {
     virtuals: true,

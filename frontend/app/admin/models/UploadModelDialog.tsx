@@ -56,7 +56,7 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
     fileName: "",
     path: "",
     labelsFileName: "labels.json",
-    tags: "", // Sẽ được xử lý thành array khi submit
+    tags: "",
   })
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -64,11 +64,10 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
       const selectedFile = e.target.files[0]
       setFile(selectedFile)
       
-      // SỬA ĐỔI: Tự động điền filename và path tương đối
       setFormData((prev) => ({
         ...prev,
         fileName: selectedFile.name,
-        path: selectedFile.name, // <-- Chỉ điền tên file. Người dùng có thể sửa để thêm thư mục con.
+        path: 'models/' + selectedFile.name,
       }))
     }
   }
@@ -78,7 +77,6 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
 
-  // Handler riêng cho các component Select
   const handleSelectChange = (name: string, value: string) => {
     setFormData((prev) => ({ ...prev, [name]: value }))
   }
@@ -94,20 +92,14 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
     try {
       const apiFormData = new FormData()
       
-      // Đính kèm file
       apiFormData.append("modelFile", file)
 
-      // Xử lý và đính kèm các trường dữ liệu khác
       const tagsArray = formData.tags.split(',').map(tag => tag.trim()).filter(Boolean);
 
       Object.entries(formData).forEach(([key, value]) => {
-        // Bỏ qua trường tags dạng string, vì ta sẽ gửi dạng array
         if (key === 'tags') return;
         apiFormData.append(key, value);
       });
-
-      // Đính kèm mảng tags. Backend cần xử lý trường này.
-      // Một cách phổ biến là gửi dưới dạng JSON string
       if (tagsArray.length > 0) {
         apiFormData.append('tags', JSON.stringify(tagsArray));
       }
@@ -136,7 +128,6 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="grid gap-4 py-4 max-h-[70vh] overflow-y-auto pr-4">
-          {/* --- Các trường đã có --- */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="name" className="text-right">Name</Label>
             <Input id="name" name="name" value={formData.name} onChange={handleInputChange} className="col-span-3" required />
@@ -146,7 +137,6 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
             <Input id="version" name="version" value={formData.version} onChange={handleInputChange} className="col-span-3" required />
           </div>
 
-          {/* --- CÁC TRƯỜNG ENUM MỚI (DẠNG SELECT) --- */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="taskType" className="text-right">Task Type</Label>
             <Select name="taskType" value={formData.taskType} onValueChange={(value) => handleSelectChange('taskType', value)}>
@@ -171,8 +161,6 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
             </Select>
           </div>
 
-          {/* --- CÁC TRƯỜNG TEXT MỚI --- */}
-          
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="fileName" className="text-right">File Name</Label>
             <Input id="fileName" name="fileName" placeholder="Auto-filled from file" value={formData.fileName} onChange={handleInputChange} className="col-span-3" required />
@@ -195,7 +183,6 @@ export function UploadModelDialog({ isOpen, onClose, onUploadSuccess }: UploadMo
             <Textarea id="description" name="description" value={formData.description} onChange={handleInputChange} className="col-span-3" />
           </div>
 
-          {/* --- TRƯỜNG UPLOAD FILE --- */}
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="modelFile" className="text-right">Model File</Label>
             <Input id="modelFile" name="modelFile" type="file" accept=".pt,.onnx" onChange={handleFileChange} className="col-span-3" required />

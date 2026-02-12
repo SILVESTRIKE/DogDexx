@@ -1,7 +1,7 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { getMessages} from './i18n-config';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo, type ReactNode } from "react"
+import { getMessages } from './i18n-config';
 
 type Locale = "en" | "vi"
 
@@ -38,18 +38,13 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setIsMounted(true);
   }, [])
 
-  // Trì hoãn việc render children cho đến khi client đã xác định được locale từ cookie.
-  // Điều này đảm bảo không có sự không khớp hydration.
-  // Server sẽ luôn render null, và client cũng sẽ render null ở lần đầu tiên.
-  if (!isMounted) return null;
-
-  const setLocale = (newLocale: Locale) => {
+  const setLocale = useCallback(function (newLocale: Locale) {
     setLocaleState(newLocale)
     // Save to cookie
     document.cookie = `NEXT_LOCALE=${newLocale}; path=/; max-age=31536000`
-  }
+  }, []);
 
-  const t = (key: string, replacements?: Record<string, string | number>): string => {
+  const t = useCallback(function (key: string, replacements?: Record<string, string | number>): string {
     const keys = key.split(".")
     let value: any = messages[locale]
 
@@ -60,17 +55,30 @@ export function I18nProvider({ children }: { children: ReactNode }) {
         return key
       }
     }
-    
+
     let result = String(value || key);
     if (replacements) {
-      Object.keys(replacements).forEach(placeholder => {
+      Object.keys(replacements).forEach(function (placeholder) {
         result = result.replace(`{${placeholder}}`, String(replacements[placeholder]));
       });
     }
     return result;
-  }
+  }, [locale]);
 
-  return <I18nContext.Provider value={{ locale, setLocale, t }}>{children}</I18nContext.Provider>
+  const value = useMemo(function () {
+    return {
+      locale,
+      setLocale,
+      t
+    };
+  }, [locale, setLocale, t]);
+
+  // Delay rendering children until the client has determined the locale from the cookie.
+  // This ensures there is no hydration mismatch.
+  // Server will always render null, and client will also render null on the first render.
+  if (!isMounted) return null;
+
+  return <I18nContext.Provider value={value}>{children}</I18nContext.Provider>
 }
 
 export function useI18n() {

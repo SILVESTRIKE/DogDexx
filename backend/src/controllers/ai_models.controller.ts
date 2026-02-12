@@ -40,7 +40,7 @@ export class AIModelController {
     const modelId = req.params.id;
     const activatedModel = await AIModelService.activateModel(modelId);
     if (!activatedModel) throw new NotFoundError("Model not found");
-    
+
     // Trigger AI service to reload
     await configService.reloadAiService();
 
@@ -50,9 +50,9 @@ export class AIModelController {
   /**
    * (Admin) Nhận file model và metadata, sau đó gọi service để upload và tạo bản ghi.
    */
-  
+
   static async uploadModel(req: Request, res: Response, next: NextFunction) {
-    const file = req.file; // SỬA: Lấy file từ req.file (do dùng multer.single)
+    const file = req.file;
     if (!file) {
       throw new AppError("Model file is required.");
     }

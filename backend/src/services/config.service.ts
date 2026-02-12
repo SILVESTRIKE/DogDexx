@@ -5,6 +5,7 @@ import Configuration, {
 import { AIModelService } from './ai_models.service';
 import { CONFIG_KEYS } from '../constants/config.constants';
 import { AppError } from '../errors';
+import { logger } from '../utils/logger.util';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:8000';
 
@@ -16,8 +17,7 @@ export class ConfigService {
     const configDoc = await Configuration.findOne({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
 
     if (!configDoc) {
-      // Nếu không có config, tạo một cái mặc định và trả về
-      console.warn("Configuration not found, creating a default one.");
+      logger.warn("Configuration not found, creating a default one.");
       return Configuration.create({ key: CONFIG_KEYS.MODEL_THRESHOLDS });
     }
     return configDoc;
@@ -34,7 +34,6 @@ export class ConfigService {
 
     const configObject = configDoc.toObject();
 
-    // Gộp thông tin model đang active vào config
     if (activeModel) {
       configObject.model_path = activeModel.path;
     }
@@ -61,16 +60,13 @@ export class ConfigService {
   public async updateAiConfig(
     updateData: Partial<IConfiguration>
   ): Promise<IConfiguration> {
-    // Không cho phép thay đổi 'key'
     const { key, ...dataToUpdate } = updateData;
 
-    // Việc thay đổi model_path và huggingface_repo giờ được quản lý bởi AIModelService.activateModel
-    // Hàm này chỉ cập nhật các ngưỡng và device.
     if (Object.keys(dataToUpdate).length === 0) {
       const currentConfig = await this.getAiConfig();
       return currentConfig;
     }
-    
+
     const updatedConfig = await Configuration.findOneAndUpdate(
       { key: CONFIG_KEYS.MODEL_THRESHOLDS },
       { $set: dataToUpdate },
@@ -78,7 +74,6 @@ export class ConfigService {
     );
 
     if (!updatedConfig) {
-      // Trường hợp này hiếm khi xảy ra với upsert: true, nhưng vẫn cần để đảm bảo an toàn
       throw new AppError('Could not update or create configuration.');
     }
 
@@ -89,7 +84,6 @@ export class ConfigService {
    * Gửi yêu cầu đến AI service để tải lại cấu hình mới.
    */
   public async reloadAiService(): Promise<{ message: string; details?: any }> {
-    // Lấy cấu hình đầy đủ, bao gồm cả model đang active
     const fullConfig = await this.getFullConfigForAIService();
     const { activeModel, ...config } = fullConfig;
 
@@ -97,7 +91,7 @@ export class ConfigService {
       ...config,
       model_path: activeModel?.fileName,
       huggingface_repo: activeModel?.huggingFaceRepo,
-      labels_path: activeModel?.labelsFileName, // Thêm labels_path
+      labels_path: activeModel?.labelsFileName,
     };
 
     try {
@@ -107,7 +101,7 @@ export class ConfigService {
       }
       throw new AppError(`AI service returned an error: ${response.data.message}`);
     } catch (error: any) {
-      console.error('Error reloading AI service:', error.message);
+      logger.error('Error reloading AI service:', error.message);
       const errorMessage = error.response?.data?.message || error.message;
       throw new AppError(`Failed to trigger AI service reload: ${errorMessage}`); // 502 Bad Gateway
     }

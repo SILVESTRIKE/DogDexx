@@ -18,7 +18,15 @@ export type UserDoc = Document & {
   // Thông tin cá nhân
   firstName?: string;
   lastName?: string;
+  country?: string;
+  city?: string;
+  phoneNumber?: string;
   avatarPath?: string;
+  address?: string;
+
+  notification_settings: {
+    email_alert: boolean;
+  };
 
   // bao Mat
   verify: boolean;
@@ -27,7 +35,6 @@ export type UserDoc = Document & {
   // Thư mục gốc của người dùng
   directory_id: Types.ObjectId;
 
-  // THAY ĐỔI: Cơ chế giới hạn mới dựa trên token
   remainingTokens: number;
   lastUsageResetAt: Date;
   plan: Plan;
@@ -39,7 +46,6 @@ export type UserDoc = Document & {
   // Thành tích đã mở khóa
   achievements: UnlockedAchievement[];
 
-  //timestamp
   createdAt: Date;
   updatedAt: Date;
 };
@@ -51,8 +57,8 @@ const userSchema = new Schema<UserDoc>(
       required: true,
       unique: true,
       trim: true,
-      lowercase: true, // Tự động chuyển thành chữ thường
-      match: [/^[a-z0-9_]+$/, "Username không hợp lệ"], // Ràng buộc định dạng
+      lowercase: true,
+      match: [/^[a-z0-9_]+$/, "Username không hợp lệ"],
     },
     email: {
       type: String,
@@ -61,7 +67,7 @@ const userSchema = new Schema<UserDoc>(
       trim: true,
       lowercase: true,
     },
-    password: { type: String, required: true, select: false },
+    password: { type: String, required: true, select: false, trim: true },
     role: {
       type: String,
       enum: ["user", "de", "admin"],
@@ -70,11 +76,18 @@ const userSchema = new Schema<UserDoc>(
     },
     firstName: { type: String, trim: true },
     lastName: { type: String, trim: true },
+    country: { type: String, trim: true },
+    city: { type: String, trim: true },
+    phoneNumber: { type: String, trim: true },
     avatarPath: { type: String, trim: true },
+    address: { type: String, trim: true },
+    notification_settings: {
+      email_alert: { type: Boolean, default: true },
+    },
     verify: { type: Boolean, default: false },
     isDeleted: { type: Boolean, default: false, select: false },
 
-    // THAY ĐỔI: Thêm trường token
+
     remainingTokens: {
       type: Number,
       default: 10,

@@ -5,15 +5,15 @@ import { trackVisit, trackEvent } from "../controllers/analytics.controller";
 const router = Router();
 
 /**
- * @route POST /api/analytics/track-visit
+ * @route POST /track-visit
  * @desc Ghi nhận một lượt truy cập trang
  * @access Public
- */ 
-router.post("/api/analytics/track-visit", optionalAuthMiddleware, trackVisit);
+ */
+router.post("/track-visit", optionalAuthMiddleware, trackVisit);
 
 /**
  * @swagger
- * /api/analytics/track-event:
+ * /track-event:
  *   post:
  *     summary: Ghi nhận một sự kiện tùy chỉnh
  *     tags: [Analytics]
@@ -31,6 +31,6 @@ router.post("/api/analytics/track-visit", optionalAuthMiddleware, trackVisit);
  *       200:
  *         description: Ghi nhận sự kiện thành công.
  */
-router.post("/api/analytics/track-event", optionalAuthMiddleware, trackEvent);
+router.post("/track-event", optionalAuthMiddleware, trackEvent);
 
 export default router;

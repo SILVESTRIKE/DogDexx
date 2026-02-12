@@ -1,5 +1,3 @@
-// src/services/feedback.service.ts
-
 import { PredictionHistoryModel } from '../models/prediction_history.model';
 import { FeedbackModel, FeedbackDoc } from '../models/feedback.model';
 import { NotFoundError, BadRequestError, NotAuthorizedError } from '../errors';
@@ -11,7 +9,7 @@ import { MediaModel } from '../models/medias.model';
 import { cloudinary } from '../config/cloudinary.config'; // Import cloudinary
 import { slugify } from '../utils/slugify.util';
 import { PREDICTION_SOURCES } from '../constants/prediction.constants';
-
+import { logger } from '../utils/logger.util';
 interface QueryFilters {
   status?: FeedbackDoc['status']
   username?: string
@@ -21,7 +19,7 @@ interface QueryFilters {
 }
 
 export const feedbackService = {
-  // --- Dành cho USER ---
+
   async submitFeedback(userId: Types.ObjectId, data: { prediction_id: string; isCorrect: boolean; user_submitted_label?: string; notes?: string; file_path?: string; }) {
     const { prediction_id, isCorrect, user_submitted_label, notes } = data;
 
@@ -47,35 +45,34 @@ export const feedbackService = {
       const to_public_id = `dataset/pending/${path.basename(from_public_id)}`;
 
       try {
-        console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
-        
-        // GIẢI PHÁP: Sử dụng uploader.rename và cập nhật asset_folder ngay sau đó.
-        // Cloudinary API không cho phép đổi asset_folder và rename trong cùng một lệnh.
+        logger.info(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+
+
         const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
         await cloudinary.uploader.explicit(renameResult.public_id, {
           type: 'upload',
           asset_folder: `dataset/pending`
         });
 
-        final_file_path = to_public_id; 
+        final_file_path = to_public_id;
         const fileExtension = path.extname(file_path);
         const final_file_path_with_ext = `${to_public_id}${fileExtension}`;
-        console.log(`[Feedback Service] Successfully moved Cloudinary resource. New public_id: ${final_file_path}`);
+        logger.info(`[Feedback Service] Successfully moved Cloudinary resource. New public_id: ${final_file_path}`);
 
         if (prediction.media) {
           await MediaModel.updateOne({ _id: prediction.media }, { $set: { mediaPath: final_file_path_with_ext } });
-          console.log(`[Feedback Service] Updated Media entry ${prediction.media} to new path: ${final_file_path_with_ext}`);
+          logger.info(`[Feedback Service] Updated Media entry ${prediction.media} to new path: ${final_file_path_with_ext}`);
         }
         await PredictionHistoryModel.updateOne({ _id: prediction._id }, { $set: { mediaPath: final_file_path_with_ext } });
-        console.log(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
+        logger.info(`[Feedback Service] Updated PredictionHistory entry ${prediction._id} to new path: ${final_file_path_with_ext}`);
 
       } catch (error) {
-        console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
+        logger.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}'. Error: ${(error as Error).message}`);
       }
     } else {
-      console.log(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
+      logger.info(`[Feedback Service] File from source '${prediction.source}' will not be moved. Path remains: ${file_path}`);
     }
-    
+
     const predictionAfterUpdate = await PredictionHistoryModel.findById(prediction._id);
     const final_path_for_feedback = predictionAfterUpdate?.mediaPath || file_path;
 
@@ -89,10 +86,22 @@ export const feedbackService = {
       status: 'pending_review',
     });
 
+    // Send thank you email immediately on feedback submission
+    const user = await UserModel.findById(userId).select('email username firstName');
+    if (user && user.email) {
+      const breedLabel = user_submitted_label || (await PredictionHistoryModel.findById(prediction_id).select('predictions'))?.predictions?.[0]?.class || 'Unknown';
+      emailService.sendFeedbackThankYouEmail({
+        to: user.email,
+        userName: user.firstName || user.username || 'bạn',
+        breedLabel: breedLabel,
+        language: 'vi',
+      }).catch(err => logger.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
+    }
+
     return feedback;
   },
 
-  // --- Dành cho ADMIN ---
+
   // ... (các hàm khác không thay đổi)
   async getFeedbacks(filters: QueryFilters, pagination: { page: number; limit: number; }) {
     const { status, username, submittedLabel, startDate, endDate } = filters;
@@ -121,25 +130,25 @@ export const feedbackService = {
 
     const feedbacks = await FeedbackModel.find(query)
       .populate('user_id', 'username')
-      .populate('prediction_id') // THÊM DÒNG NÀY ĐỂ LÀM GIÀU DỮ LIỆU
+      .populate('prediction_id')
       .sort({ createdAt: -1 }).skip(skip).limit(limit);
     const total = await FeedbackModel.countDocuments(query);
 
     return { data: feedbacks, total, page, limit, totalPages: Math.ceil(total / limit) };
   },
-  
+
   /**
    * [Admin] Lấy toàn bộ dữ liệu cho trang quản lý feedback, bao gồm danh sách, thống kê tổng quan và thống kê người dùng.
    */
   async getAdminFeedbackPageData(filters: QueryFilters, pagination: { page: number; limit: number; }) {
-    // --- TỐI ƯU: Gộp các truy vấn thống kê bằng $facet ---
+
     const [
       feedbackResult,
       statsResult,
     ] = await Promise.all([
       // 1. Lấy danh sách feedback có phân trang
       this.getFeedbacks(filters, pagination),
-  
+
       // 2. Gộp các truy vấn thống kê
       FeedbackModel.aggregate([
         {
@@ -163,7 +172,7 @@ export const feedbackService = {
         }
       ])
     ]);
-  
+
     // Định dạng lại overallStats
     const stats = {
       pending_review: 0,
@@ -180,7 +189,7 @@ export const feedbackService = {
   },
 
   async getFeedbackById(id: string) {
-    const feedback = await FeedbackModel.findById(id).populate({ path: 'prediction_id', populate: { path: 'media' }}).populate('user_id', 'username email');
+    const feedback = await FeedbackModel.findById(id).populate({ path: 'prediction_id', populate: { path: 'media' } }).populate('user_id', 'username email');
     if (!feedback) throw new NotFoundError('Không tìm thấy feedback.');
     return feedback;
   },
@@ -220,7 +229,7 @@ export const feedbackService = {
               : feedback.user_submitted_label;
           const breedName = slugify(rawBreedName || '');
           if (!breedName) {
-            console.warn(`[Feedback Service] Could not determine breed name for feedback ${id}. Using 'unknown'. Raw name: ${rawBreedName}`);
+            logger.warn(`[Feedback Service] Could not determine breed name for feedback ${id}. Using 'unknown'. Raw name: ${rawBreedName}`);
             to_public_id = `dataset/approved/unknown/${fileName}`;
           } else {
             to_public_id = `dataset/approved/${breedName}/${fileName}`;
@@ -230,30 +239,40 @@ export const feedbackService = {
         }
 
         try {
-          console.log(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
-          
-          // GIẢI PHÁP: Tương tự như trên, rename rồi explicit để cập nhật asset_folder.
+          logger.info(`[Feedback Service] Attempting to move Cloudinary resource from '${from_public_id}' to '${to_public_id}' and update asset_folder.`);
+
+
           const renameResult = await cloudinary.uploader.rename(from_public_id, to_public_id, { overwrite: true, invalidate: true });
           const newAssetFolder = to_public_id.split('/').slice(0, -1).join('/'); // e.g., "dataset/approved/poodle"
+
+          const new_path_with_ext = `${to_public_id}${fileExtension}`;
 
           await cloudinary.uploader.explicit(renameResult.public_id, {
             type: 'upload',
             asset_folder: newAssetFolder
           });
-          
-          feedback.file_path = `${to_public_id}${fileExtension}`;
-          console.log(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
+
+          feedback.file_path = new_path_with_ext;
+          logger.info(`[Feedback Service] Successfully moved Cloudinary resource for feedback ${id}. New public_id: ${to_public_id}`);
+
+
+          const predictionId = (feedback.prediction_id as any)?._id;
+          if (predictionId) {
+            await PredictionHistoryModel.updateOne({ _id: predictionId }, { $set: { mediaPath: new_path_with_ext } });
+            await MediaModel.updateOne({ _id: (feedback.prediction_id as any).media }, { $set: { mediaPath: new_path_with_ext } });
+            logger.info(`[Feedback Service] Updated paths for PredictionHistory ${predictionId} and its Media.`);
+          }
         } catch (error) {
-          console.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
+          logger.warn(`[Feedback Service] Could not move Cloudinary resource from '${from_public_id}' to '${to_public_id}' during status update. Error: ${(error as Error).message}`);
         }
       } else {
-        console.log(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
+        logger.info(`[Feedback Service] File for feedback ${id} is not in 'dataset/pending/' or has no path. Skipping move. Path: ${from_public_id}`);
       }
     }
     await feedback.save();
     return feedback;
   },
-  
+
   // ... (các hàm còn lại không đổi)
   async deleteFeedback(id: string, force: boolean = false) {
     const feedback = await FeedbackModel.findById(id);
@@ -265,19 +284,19 @@ export const feedbackService = {
       try {
         if (feedback.file_path && feedback.file_path.startsWith('dataset/')) {
           const public_id = feedback.file_path.substring(0, feedback.file_path.lastIndexOf('.')) || feedback.file_path;
-          console.log(`[Feedback Service] Deleting Cloudinary resource: ${public_id}`);
+          logger.info(`[Feedback Service] Deleting Cloudinary resource: ${public_id}`);
           await cloudinary.uploader.destroy(public_id);
         }
       } catch (error: any) {
         if (error.http_code !== 404) { // Ignore if not found
-          console.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
+          logger.error(`Không thể xóa file trên Cloudinary ${feedback.file_path}:`, error.message);
         }
       }
       await PredictionHistoryModel.updateOne({ _id: feedback.prediction_id }, { $set: { isCorrect: null } });
       await feedback.deleteOne();
       return { message: 'Feedback đã được xóa vĩnh viễn.' };
     }
-    
+
     // Logic xóa mềm (mặc định)
     feedback.isDeleted = true;
     await feedback.save();
@@ -288,43 +307,32 @@ export const feedbackService = {
    * [Admin] Duyệt một feedback.
    */
   async approveFeedback(id: string, adminId: Types.ObjectId, correctedLabel?: string): Promise<FeedbackDoc> {
-    const feedback = await this.getFeedbackById(id); // Reuse getById to get populated data
+    const feedback = await this.getFeedbackById(id);
 
     if (feedback.status !== 'pending_review') {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
-    // Nếu admin cung cấp label đã sửa, cập nhật nó
     if (correctedLabel && correctedLabel.trim() !== '') {
       feedback.user_submitted_label = correctedLabel.trim();
-      feedback.isCorrect = false; // Coi như là "sai" so với AI, vì admin đã sửa lại
+      feedback.isCorrect = false;
     }
 
-    // Sử dụng updateFeedback để xử lý logic di chuyển file
     const updatedFeedback = await this.updateFeedback(id, {
       status: "approved_for_training",
       admin_id: adminId,
     },
-    correctedLabel); // Truyền correctedLabel vào đây
+      correctedLabel);
     await updatedFeedback.populate("user_id", "username email");
 
-    // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
-    // SỬA LỖI: `updatedFeedback.prediction_id` là một object đã được populate,
-    // cần phải truy cập vào trường `_id` của nó để thực hiện query.
+
     const predictionId = (updatedFeedback.prediction_id as any)._id;
     await PredictionHistoryModel.updateOne(
       { _id: predictionId },
-      { $set: { isCorrect: false } }
+      { $set: { isCorrect: updatedFeedback.isCorrect } }
     );
 
-    // Gửi email cảm ơn nếu có thông tin người dùng
-    const user = updatedFeedback.user_id as any;
-    if (user && user.email) {
-      const subject = 'Cảm ơn bạn đã đóng góp cho DogBreedID!';
-      const text = `Chào ${user.username},\n\nChúng tôi đã xem xét và duyệt phản hồi của bạn cho giống chó "${updatedFeedback.user_submitted_label}".\n\nSự đóng góp của bạn rất quý giá và giúp chúng tôi cải thiện độ chính xác của hệ thống. Cảm ơn bạn rất nhiều!\n\nTrân trọng,\nĐội ngũ DogBreedID`;
-      
-      emailService.sendEmail(user.email, subject, text).catch(err => console.error(`Không thể gửi email cảm ơn đến ${user.email}:`, err));
-    }
+    // Thank you email is now sent on submit, not on approve
 
     return updatedFeedback;
   },
@@ -339,7 +347,6 @@ export const feedbackService = {
       throw new BadRequestError('Feedback này đã được xử lý.');
     }
 
-    // Sử dụng updateFeedback để xử lý logic di chuyển file
     const updatedFeedback = await this.updateFeedback(id, {
       status: "rejected",
       admin_id: adminId,
@@ -347,12 +354,11 @@ export const feedbackService = {
     });
     await updatedFeedback.populate("user_id", "username email");
 
-    // CẬP NHẬT: Đồng bộ trạng thái isCorrect vào PredictionHistory
-    // SỬA LỖI: Tương tự như approve, `updatedFeedback.prediction_id` là một object đã được populate.
+
     const predictionId = (updatedFeedback.prediction_id as any)._id;
     await PredictionHistoryModel.updateOne(
       { _id: predictionId },
-      { $set: { isCorrect: true } } // Khi từ chối, coi như dự đoán gốc là đúng
+      { $set: { isCorrect: true } }
     );
 
     return updatedFeedback;
