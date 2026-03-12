@@ -5,6 +5,8 @@ import express from "express";
 import path from "path";
 import cookieParser from "cookie-parser";
 import Fingerprint from 'express-fingerprint';
+import compression from 'compression';
+import helmet from 'helmet';
 
 import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
 import { corsMiddleware } from "./middlewares/cors.middleware";
@@ -29,6 +31,9 @@ import { options as swaggerOptions } from "../swaggerConfig.js";
 const swaggerSpec = swaggerJSDoc(swaggerOptions);
 const app = express();
 app.set("trust proxy", 1);
+
+app.use(helmet()); // Security Headers
+app.use(compression()); // Gzip Compression
 
 app.use(corsMiddleware);
 app.use(express.json({ limit: "50mb" }));

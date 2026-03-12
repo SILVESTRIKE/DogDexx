@@ -8,6 +8,7 @@ pillow
 python-multipart
 imageio
 imageio[ffmpeg]
+imageio-ffmpeg
 pymongo
 huggingface_hub
 python-dotenv

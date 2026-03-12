@@ -143,7 +143,7 @@ const optimizeImage = async (filePath: string): Promise<Buffer> => {
   return image.jpeg({ quality: 85 }).toBuffer();
 };
 
-const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
+const optimizeVideoFile = async (filePath: string): Promise<Buffer> => {
   if (process.env.SKIP_VIDEO_OPTIMIZATION === '1') {
     logger.warn('[PredictionService] SKIP_VIDEO_OPTIMIZATION enabled — sending raw video buffer to AI service');
     return fs.promises.readFile(filePath);
@@ -157,49 +157,41 @@ const optimizeVideoFile = (filePath: string): Promise<Buffer> => {
   // eslint-disable-next-line @typescript-eslint/no-var-requires
   const ffmpeg = require('fluent-ffmpeg');
 
-  if (!VIDEO_PREPROCESS_ENABLED) {
+  // Helper function to run ffmpeg with error handling
+  const runFfmpeg = (command: any): Promise<Buffer> => {
     return new Promise((resolve, reject) => {
       const chunks: Buffer[] = [];
+      const outputStream = command.pipe();
+      outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
+      command.on('end', () => resolve(Buffer.concat(chunks)));
+      command.on('error', (err: Error) => reject(err));
+    });
+  };
 
-      // SỬA: Truyền filePath trực tiếp vào ffmpeg, KHÔNG dùng .input(stream)
+  try {
+    if (!VIDEO_PREPROCESS_ENABLED) {
       const command = ffmpeg(filePath)
         .videoBitrate(VIDEO_TARGET_BITRATE)
         .withVideoCodec('libx264')
         .addOption('-preset', 'fast')
         .addOption('-movflags', 'frag_keyframe+empty_moov')
-        .outputFormat('mp4')
-        .on('end', () => resolve(Buffer.concat(chunks)))
-        .on('error', (err: Error) => {
-          logger.error('[FFMPEG Error] Lỗi trong quá trình xử lý video (fallback).', err);
-          reject(new Error(`Lỗi khi tối ưu hóa video: ${err.message}`));
-        });
+        .outputFormat('mp4');
 
-      const outputStream = command.pipe();
-      outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    });
-  }
-
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-
-    try {
-      const scaleFilter = `scale=${VIDEO_PREPROCESS_MAX_WIDTH}:-2:force_original_aspect_ratio=decrease`;
-
-      // SỬA: Truyền filePath trực tiếp vào ffmpeg
-      const command = ffmpeg(filePath)
-        .withVideoCodec('libx264')
-        .videoBitrate(VIDEO_PREPROCESS_BITRATE)
-        .addOption('-preset', VIDEO_PREPROCESS_PRESET)
-        .format('mp4')
-        .on('error', (err: any) => reject(err))
-        .on('end', () => resolve(Buffer.concat(chunks)));
-
-      const outputStream = command.pipe();
-      outputStream.on('data', (chunk: Buffer) => chunks.push(chunk));
-    } catch (err) {
-      reject(err);
+      return await runFfmpeg(command);
     }
-  });
+
+    const command = ffmpeg(filePath)
+      .withVideoCodec('libx264')
+      .videoBitrate(VIDEO_PREPROCESS_BITRATE)
+      .addOption('-preset', VIDEO_PREPROCESS_PRESET)
+      .format('mp4');
+
+    return await runFfmpeg(command);
+  } catch (err: any) {
+    // FALLBACK: If libx264 fails, send raw video to AI service
+    logger.warn(`[PredictionService] FFmpeg encoding failed (${err.message}). Sending raw video to AI service.`);
+    return fs.promises.readFile(filePath);
+  }
 };
 
 export const predictionService = {
@@ -632,7 +624,8 @@ export const predictionService = {
     const processedMediaPathForDb = await uploadBase64ToCloudinary(
       payload.processed_media_base64,
       'public/processed/images',
-      'image'
+      'image',
+      'private'
     );
 
     let directory_id: Types.ObjectId | undefined;

@@ -150,25 +150,23 @@ export function VerifyFoundModal({ dogId, dogName, targetBreed, targetBreedSlug,
         // Convert AI detection class to slug format for comparison
         const toSlug = (str: string) => str.toLowerCase().replace(/[\s_]+/g, '-').replace(/[^\w-]+/g, '').trim();
 
-        console.log("========= [AI DEBUG] =========");
-        console.log("[AI] Target Breed:", targetBreed, "| Slug:", targetBreedSlug);
-        console.log("[AI] All Detections:", detections.map((d: any) => `${d.class}: ${(d.confidence * 100).toFixed(1)}%`).join(", ") || "NONE");
+
 
         const detection = detections.find((d: any) => {
             const detectionSlug = toSlug(d.class);
             const isMatch = detectionSlug === targetBreedSlug;
-            if (isMatch) console.log(`[AI] ✅ Slug match: "${detectionSlug}" === "${targetBreedSlug}"`);
+
             return isMatch;
         });
 
         let isMatch = false;
 
         if (detection) {
-            console.log(`[AI] ✅ Match Candidate: ${detection.class} (${(detection.confidence * 100).toFixed(1)}%)`);
+
 
             // Case 1: High Confidence -> Instant
             if (detection.confidence > 0.75) {
-                console.log("[AI] 🎯 High confidence match! -> INSTANT MATCH");
+
                 isMatch = true;
             }
             // Case 2: Lower Confidence (> 35%) but Consistent -> Adaptive
@@ -177,14 +175,14 @@ export function VerifyFoundModal({ dogId, dogName, targetBreed, targetBreedSlug,
                 const currentLabel = detection.class.trim().toLowerCase();
                 const storedLabel = consistencyRef.current.label?.trim().toLowerCase();
 
-                console.log(`[AI] 🔄 Consistency Check: Current="${currentLabel}", Stored="${storedLabel}"`);
+
 
                 if (storedLabel === currentLabel) {
                     const diff = now - (consistencyRef.current.startTime || 0);
-                    console.log(`[AI] ⏱️ Holding for ${diff}ms / 3000ms required`);
+
 
                     if (consistencyRef.current.startTime && diff > 3000) { // 3 seconds
-                        console.log("[AI] ✅ Adaptive match confirmed!");
+
                         isMatch = true;
                         toast.info(t("verifyFound.camera.adaptiveMatch", { label: detection.class }));
                     } else {
@@ -193,7 +191,7 @@ export function VerifyFoundModal({ dogId, dogName, targetBreed, targetBreedSlug,
                         setDetectedLabel(`${detection.class} (${((diff / 3000) * 100).toFixed(0)}%)`);
                     }
                 } else {
-                    console.log("[AI] 🔄 Starting NEW consistency check for:", detection.class);
+
                     // Reset consistency timer for new candidate
                     consistencyRef.current = { label: detection.class, startTime: now };
                     // Show as detected (holding) state
@@ -202,19 +200,19 @@ export function VerifyFoundModal({ dogId, dogName, targetBreed, targetBreedSlug,
                 }
             } else {
                 // Too low, reset and show as low confidence detection
-                console.log(`[AI] ❌ Confidence too low (${(detection.confidence * 100).toFixed(1)}%), need >35% for consistency check`);
+
                 consistencyRef.current = { label: null, startTime: null };
                 // Show the detection but indicate it's weak
                 setAiStatus("wrong_breed");
                 setDetectedLabel(`${detection.class} (${(detection.confidence * 100).toFixed(0)}% - weak)`);
             }
         } else {
-            if (consistencyRef.current.label) console.log("[AI] ❌ No matching detection found, resetting.");
+
             consistencyRef.current = { label: null, startTime: null };
         }
 
         if (isMatch && detection) {
-            console.log("[AI] 🎉 FINAL MATCH! Transitioning to contact step...");
+
             setAiStatus("detected");
             setDetectedLabel(detection.class);
 
@@ -241,7 +239,7 @@ export function VerifyFoundModal({ dogId, dogName, targetBreed, targetBreedSlug,
             }
         } else if (!detection && detections.length > 0) {
             // Has detections but none match target breed -> wrong breed
-            console.log(`[AI] 🚫 Wrong breed detected: ${detections[0].class}`);
+
             setAiStatus("wrong_breed");
             setDetectedLabel(detections[0].class);
         } else if (detections.length === 0) {

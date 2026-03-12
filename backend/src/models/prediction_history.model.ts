@@ -96,6 +96,9 @@ predictionHistorySchema.virtual('feedback', {
   justOne: true,
 });
 
+// Index cho việc sort theo thời gian (Dashboard/History)
+predictionHistorySchema.index({ createdAt: -1 });
+
 export const PredictionHistoryModel = mongoose.model<PredictionHistoryDoc>(
   "PredictionHistory",
   predictionHistorySchema

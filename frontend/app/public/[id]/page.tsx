@@ -5,19 +5,14 @@ import { apiClient } from "@/lib/api-client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
-import { MapPin, MessageSquare, AlertTriangle, ShieldCheck, Calendar, Palette, User, Loader2, Mail, Home, Settings } from "lucide-react";
+import { MapPin, MessageSquare, ShieldCheck, Calendar, Palette, User, Loader2, Mail, Home, Settings, AlertTriangle } from "lucide-react";
 import { useI18n } from "@/lib/i18n-context";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-
-import { MapLocationPicker } from "@/components/MapLocationPicker";
+import { ReportFoundForm } from "@/components/ReportFoundForm";
 
 interface PublicDogProfile {
     id: string;
@@ -49,17 +44,6 @@ export default function PublicDogPage({ params }: { params: Promise<{ id: string
     // Check if current user is the owner
     const isOwner = user && dog && (dog.owner_id === user.id || dog.ownerEmail === user.email);
 
-    // Contact Form State
-    const [contactForm, setContactForm] = useState({
-        finderName: "",
-        finderPhone: "",
-        message: "",
-        locationAddress: "",
-        lat: 0,
-        lng: 0
-    });
-    const [sending, setSending] = useState(false);
-
     useEffect(() => {
         async function fetchDog() {
             try {
@@ -73,32 +57,6 @@ export default function PublicDogPage({ params }: { params: Promise<{ id: string
         }
         fetchDog();
     }, [id]);
-
-    async function handleContactSubmit(e: React.FormEvent) {
-        e.preventDefault();
-        if (!dog) return;
-
-        setSending(true);
-        try {
-            await apiClient.contactOwner({
-                dogId: dog.id,
-                finderName: contactForm.finderName,
-                finderPhone: contactForm.finderPhone,
-                message: contactForm.message,
-                location: {
-                    address: contactForm.locationAddress,
-                    lat: contactForm.lat,
-                    lng: contactForm.lng
-                }
-            });
-            toast.success(t("publicDog.messageSent"));
-            setContactForm({ finderName: "", finderPhone: "", message: "", locationAddress: "", lat: 0, lng: 0 });
-        } catch (error) {
-            toast.error(t("publicDog.sendFailed"));
-        } finally {
-            setSending(false);
-        }
-    }
 
     if (loading) return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
@@ -274,70 +232,12 @@ export default function PublicDogPage({ params }: { params: Promise<{ id: string
                                         {t("publicDog.phoneSecure") || "Your message will be sent directly to the owner via our secure system."}
                                     </p>
                                 </div>
-
-                                <form onSubmit={handleContactSubmit} className="space-y-5">
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                        <div className="space-y-2">
-                                            <Label className="font-semibold">{t("publicDog.yourName")}</Label>
-                                            <Input
-                                                required
-                                                value={contactForm.finderName}
-                                                onChange={e => setContactForm({ ...contactForm, finderName: e.target.value })}
-                                                placeholder="John Doe"
-                                                className="h-11 bg-muted/30"
-                                            />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="font-semibold">{t("publicDog.yourPhone")}</Label>
-                                            <Input
-                                                required
-                                                type="tel"
-                                                value={contactForm.finderPhone}
-                                                onChange={e => setContactForm({ ...contactForm, finderPhone: e.target.value })}
-                                                placeholder="0912..."
-                                                className="h-11 bg-muted/30"
-                                            />
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-2 col-span-1 md:col-span-2">
-                                        <Label className="font-semibold">{t("publicDog.currentLocation")}</Label>
-                                        <MapLocationPicker
-                                            onLocationSelect={(lat, lng, address) => {
-                                                setContactForm(prev => ({
-                                                    ...prev,
-                                                    locationAddress: address || "",
-                                                    lat: lat,
-                                                    lng: lng
-                                                }));
-                                            }}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <Label className="font-semibold">{t("publicDog.message")}</Label>
-                                        <Textarea
-                                            required
-                                            value={contactForm.message}
-                                            onChange={e => setContactForm({ ...contactForm, message: e.target.value })}
-                                            placeholder="I found a dog matching this profile..."
-                                            className="min-h-[120px] resize-none bg-muted/30"
-                                        />
-                                    </div>
-
-                                    <Button
-                                        type="submit"
-                                        size="lg"
-                                        className="w-full h-12 text-lg bg-red-600 hover:bg-red-700 text-white font-bold shadow-xl shadow-red-600/20 rounded-xl transition-all hover:scale-[1.01]"
-                                        disabled={sending}
-                                    >
-                                        {sending ? (
-                                            <><Loader2 className="animate-spin mr-2 h-5 w-5" /> {t("publicDog.sending")}</>
-                                        ) : (
-                                            <><AlertTriangle className="mr-2 h-5 w-5" /> {t("publicDog.sendAlert")}</>
-                                        )}
-                                    </Button>
-                                </form>
+                                <ReportFoundForm
+                                    dogId={dog.id}
+                                    dogName={dog.name}
+                                    dogBreed={dog.breed}
+                                    isLost={dog.isLost}
+                                />
                             </div>
                         ) : (
                             <div className="text-center py-10 bg-green-50 dark:bg-green-900/10 rounded-2xl border border-green-100 dark:border-green-900/30">

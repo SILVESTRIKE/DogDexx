@@ -74,7 +74,7 @@ export const MatchingService = {
             const actionText = isLost ? "Tìm thấy" : "Báo mất";
             const subjectEmoji = isLost ? "🔔" : "📢";
 
-            // Build match list HTML
+            // Build match list HTML (needed for dynamic content)
             const matchListHtml = matches.slice(0, 5).map((match, idx) => {
                 const thumbnail = match.photos && match.photos.length > 0 ? match.photos[0] : "";
                 const address = match.location?.address || "Không rõ địa chỉ";
@@ -94,35 +94,17 @@ export const MatchingService = {
                 `;
             }).join("");
 
-            const emailContent = `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                    <h2 style="color: #e53e3e;">${subjectEmoji} DOGDEX: ${actionText} ${matches.length} manh mối!</h2>
-                    <p>Xin chào <strong>${author.firstName || author.username || "bạn"}</strong>,</p>
-                    <p>Hệ thống đã tìm thấy <strong>${matches.length}</strong> bài đăng ${isLost ? "chó được tìm thấy" : "chó bị mất"} phù hợp với giống <strong>${criteria.breed}</strong> trong bán kính ${criteria.distanceInKm || 10}km.</p>
-                    
-                    <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                        ${matchListHtml}
-                    </table>
-
-                    ${matches.length > 5 ? `<p style="color: #666;">... và ${matches.length - 5} kết quả khác.</p>` : ""}
-
-                    <p style="margin-top: 20px;">
-                        <a href="${process.env.FRONTEND_URL || "http://localhost:3000"}/community/lost-found" 
-                           style="background: #e53e3e; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
-                            Xem tất cả trên bản đồ Radar
-                        </a>
-                    </p>
-
-                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #eee;" />
-                    <p style="color: #999; font-size: 12px;">Email này được gửi tự động từ hệ thống DOGDEX. Vui lòng không reply.</p>
-                </div>
-            `;
-
-            await emailService.sendEmail(
-                author.email,
-                `${subjectEmoji} [DOGDEX] ${matches.length} manh mối cho ${criteria.breed}!`,
-                emailContent
-            );
+            // Use consolidated email service
+            await emailService.sendMatchNotification({
+                to: author.email,
+                userName: author.firstName || author.username || "bạn",
+                breed: criteria.breed,
+                matchCount: matches.length,
+                isLost: isLost,
+                distanceKm: criteria.distanceInKm || 10,
+                matchListHtml: matchListHtml,
+                language: 'vi',
+            });
 
             logger.info(`[MatchingService] Sent notification to ${author.email} with ${matches.length} matches.`);
 

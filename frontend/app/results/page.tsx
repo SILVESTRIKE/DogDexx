@@ -34,46 +34,110 @@ import Loading from "./loading"; function ResultsContent() {
   const [specialMessage, setSpecialMessage] = useState<string | null>(null)
   const [hasFeedback, setHasFeedback] = useState(false);
 
-  // --- POLLING LOGIC ---
-  const pollForStatus = async (id: string) => {
+  // --- HYBRID: WEBSOCKET + BACKUP POLLING (for slow networks) ---
+  const subscribeToStatus = (id: string) => {
+    let isResolved = false; // Flag to prevent double-fetching
+    let pollInterval: NodeJS.Timeout | null = null;
+    let ws: WebSocket | null = null;
+
+    // Cleanup function
+    const cleanup = () => {
+      isResolved = true;
+      if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+      }
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.close();
+      }
+    };
+
+    // === WEBSOCKET (Primary - Fast) ===
+    try {
+      const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsHost = process.env.NEXT_PUBLIC_API_URL?.replace(/^https?:\/\//, '') || 'localhost:3000';
+      ws = new WebSocket(`${wsProtocol}//${wsHost}/ws/prediction-status`);
+
+      ws.onopen = () => {
+        ws?.send(JSON.stringify({ action: 'subscribe', predictionId: id }));
+      };
+
+      ws.onmessage = (event) => {
+        if (isResolved) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.event === 'completed' && data.predictionId === id) {
+            cleanup();
+            fetchHistoryById();
+          } else if (data.event === 'failed' && data.predictionId === id) {
+            cleanup();
+            setError(data.message || "Prediction failed.");
+            setLoading(false);
+          }
+        } catch (e) {
+          console.error("WebSocket message parse error:", e);
+        }
+      };
+
+      ws.onerror = () => {
+        console.warn("WebSocket error - backup polling will handle it");
+      };
+
+      // Timeout for WebSocket
+      setTimeout(() => {
+        if (!isResolved && ws?.readyState === WebSocket.OPEN) {
+          console.warn("WebSocket timeout - relying on backup polling");
+        }
+      }, 30 * 1000); // 30s WebSocket grace period
+    } catch (e) {
+      console.warn("WebSocket init failed:", e);
+    }
+
+    // === BACKUP POLLING (Secondary - Reliable) ===
+    // Runs alongside WebSocket with slower interval (every 5s)
     let attempts = 0;
-    const maxAttempts = 300; // 300 * 1s = 300s (5 phút) timeout
+    const maxAttempts = 60; // 60 * 5s = 5 minutes
 
     const poll = async () => {
-      if (attempts >= maxAttempts) {
-        setError("Timeout waiting for prediction result.");
-        setLoading(false);
+      if (isResolved || attempts >= maxAttempts) {
+        if (attempts >= maxAttempts && !isResolved) {
+          cleanup();
+          setError("Timeout waiting for prediction result.");
+          setLoading(false);
+        }
         return;
       }
 
       try {
         const status = await apiClient.getPredictionStatus(id);
-        console.log("Polling status:", status);
 
-        if (status.status === 'completed') {
-          // Nếu đã hoàn thành và có kết quả -> Dừng polling và lấy dữ liệu
-          if (status.result) {
-            console.log("Polling completed, fetching final history...");
+        if (status.status === 'completed' && status.result) {
+          if (!isResolved) {
+            cleanup();
             fetchHistoryById();
-            return;
           }
         } else if (status.status === 'failed') {
-          setError(status.message || "Prediction failed.");
-          setLoading(false);
-          return;
+          if (!isResolved) {
+            cleanup();
+            setError(status.message || "Prediction failed.");
+            setLoading(false);
+          }
         } else {
-          // Still processing or queued
           attempts++;
-          setTimeout(poll, 1000);
         }
       } catch (e) {
-        console.error("Polling error:", e);
+        console.error("Backup polling error:", e);
         attempts++;
-        setTimeout(poll, 1000);
       }
     };
 
-    poll();
+    // Start backup polling after 3s delay (give WebSocket a head start)
+    setTimeout(() => {
+      if (!isResolved) {
+        poll(); // First poll
+        pollInterval = setInterval(poll, 5000); // Then every 5s
+      }
+    }, 3000);
   };
 
   const processResultData = (result: BffPredictionResponse) => {
@@ -113,16 +177,14 @@ import Loading from "./loading"; function ResultsContent() {
 
       // Check if result is still processing (placeholder)
       if (result.processedMediaUrl === 'processing' || (result.processedMediaUrl && result.processedMediaUrl.includes('processing'))) {
-        console.log("Result is still processing, starting poll...");
-        pollForStatus(historyId);
+        subscribeToStatus(historyId);
       } else {
         processResultData(result);
         setLoading(false);
       }
     } catch (err) {
       console.error("[ResultsPage] Failed to fetch prediction history:", err);
-      console.log("Trying to poll status as fallback...");
-      pollForStatus(historyId);
+      subscribeToStatus(historyId);
     }
   };
 

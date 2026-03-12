@@ -171,13 +171,36 @@ export const getAchievements = async (req: Request, res: Response, next: NextFun
       : (req.headers['accept-language']?.split(',')[0].toLowerCase() === 'vi') ? 'vi' : 'en';
 
     const cacheKey = `${REDIS_KEYS.USER_ACHIEVEMENTS_PREFIX}${userId}:${lang}`;
+    const lockKey = `${cacheKey}:lock`;
+    const lockDuration = 5000;
+    const waitInterval = 100;
+    const maxRetries = 20;
+
     if (redisClient) {
-      const cachedData = await redisClient.get(cacheKey);
-      if (cachedData) {
-        logger.info(`[Achievements] Cache HIT for user ${userId}, lang ${lang}.`);
-        return res.status(200).json(JSON.parse(cachedData));
+      let attempts = 0;
+      while (attempts < maxRetries) {
+        // 1. Try cache
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+          logger.info(`[Achievements] Cache HIT for user ${userId}, lang ${lang}.`);
+          return res.status(200).json(JSON.parse(cachedData));
+        }
+
+        // 2. Try lock
+        const acquired = await redisClient.set(lockKey, 'locked', { NX: true, EX: 5 });
+        if (acquired) {
+          logger.info(`[Achievements] Lock acquired for user ${userId}. Processing...`);
+          break;
+        }
+
+        // 3. Wait
+        logger.info(`[Achievements] Lock busy for user ${userId}. Waiting...`);
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        attempts++;
       }
-      logger.info(`[Achievements] Cache MISS for user ${userId}, lang ${lang}.`);
+      if (attempts >= maxRetries) {
+        logger.warn(`[Achievements] Lock timeout for user ${userId}. Proceeding without lock/cache.`);
+      }
     }
 
     if (!userId) throw new NotFoundError('User not found to get achievements.');
@@ -188,6 +211,7 @@ export const getAchievements = async (req: Request, res: Response, next: NextFun
     ]);
 
     if (!user) {
+      if (redisClient) await redisClient.del(lockKey);
       throw new NotFoundError('User not found');
     }
 
@@ -223,6 +247,8 @@ export const getAchievements = async (req: Request, res: Response, next: NextFun
 
     if (redisClient) {
       await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 });
+      await redisClient.del(lockKey);
+      logger.info(`[Achievements] Cache SET and Lock RELEASED for user ${userId}.`);
     }
 
     res.status(200).json(responseData);
@@ -255,13 +281,42 @@ export const getAchievementStats = async (req: Request, res: Response, next: Nex
       : 'en';
 
     const cacheKey = `${REDIS_KEYS.USER_ACHIEVEMENT_STATS_PREFIX}${userId}:${lang}`;
+    const lockKey = `${cacheKey}:lock`;
+    const lockDuration = 5000; // 5 seconds (milliseconds handled by pSet if needed, but SET NX EX uses seconds)
+    const waitInterval = 100; // 100ms
+    const maxRetries = 20; // 2 seconds timeout
+
     if (redisClient) {
-      const cachedData = await redisClient.get(cacheKey);
-      if (cachedData) {
-        logger.info(`[Achievement Stats] Cache HIT for user ${userId}, lang ${lang}.`);
-        return res.status(200).json(JSON.parse(cachedData));
+      let attempts = 0;
+      while (attempts < maxRetries) {
+        // 1. Try to get data from cache
+        const cachedData = await redisClient.get(cacheKey);
+        if (cachedData) {
+          logger.info(`[Achievement Stats] Cache HIT for user ${userId}, lang ${lang}.`);
+          return res.status(200).json(JSON.parse(cachedData));
+        }
+
+        // 2. Try to acquire lock
+        // NX: Only set if key does not exist. EX: Expire in 5 seconds.
+        const acquired = await redisClient.set(lockKey, 'locked', { NX: true, EX: 5 });
+
+        if (acquired) {
+          logger.info(`[Achievement Stats] Lock acquired for user ${userId}. Processing...`);
+          // Lock acquired! Exitting loop to proceed with computation
+          break;
+        }
+
+        // 3. Lock busy, wait and retry
+        logger.info(`[Achievement Stats] Lock busy for user ${userId}. Waiting...`);
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        attempts++;
       }
-      logger.info(`[Achievement Stats] Cache MISS for user ${userId}, lang ${lang}.`);
+
+      if (attempts >= maxRetries) {
+        logger.warn(`[Achievement Stats] Lock timeout for user ${userId}. Proceeding without lock/cache.`);
+      }
+    } else {
+      logger.warn('[Achievement Stats] Redis not available.');
     }
 
     const [user, userCollections, totalBreedsInSystem] = await Promise.all([
@@ -271,6 +326,8 @@ export const getAchievementStats = async (req: Request, res: Response, next: Nex
     ]);
 
     if (!user) {
+      // Release lock if we acquired it (checking isn't strictly necessary as it auto-expires, but good practice)
+      if (redisClient) await redisClient.del(lockKey);
       throw new NotFoundError('User not found');
     }
 
@@ -286,6 +343,8 @@ export const getAchievementStats = async (req: Request, res: Response, next: Nex
 
     if (redisClient) {
       await redisClient.set(cacheKey, JSON.stringify(responseData), { EX: 300 });
+      await redisClient.del(lockKey); // Release lock
+      logger.info(`[Achievement Stats] Cache SET and Lock RELEASED for user ${userId}.`);
     }
 
     res.status(200).json(responseData);

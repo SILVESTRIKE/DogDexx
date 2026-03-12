@@ -154,7 +154,7 @@ export function ResultModal({ isOpen, onClose, resultData, onCleanup }: ResultMo
               variant="secondary"
               className="flex-1 gap-2"
               onClick={() => {
-                router.push(`/community/lost-found?breed=${encodeURIComponent(detection.detectedBreed)}`);
+                router.push(`/community?breed=${encodeURIComponent(detection.detectedBreed)}`);
                 onClose();
               }}
               disabled={isSaving}

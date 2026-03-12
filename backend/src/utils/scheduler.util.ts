@@ -109,35 +109,17 @@ async function sendHealthReminders() {
           weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
 
-        const emailContent = `
-          <div style="font-family: 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 24px; text-align: center;">
-              <h1 style="color: #fff; margin: 0; font-size: 24px;">🐕 DogDex - Nhắc lịch hẹn</h1>
-            </div>
-            <div style="background: ${urgencyColor}; color: white; padding: 12px; text-align: center;">
-              <strong style="font-size: 16px;">⏰ ${urgency}</strong>
-            </div>
-            <div style="padding: 24px;">
-              <p style="color: #374151; margin: 0 0 16px 0;">Xin chào <strong>${owner.firstName || owner.username}</strong>,</p>
-              <p style="color: #374151; margin: 0 0 24px 0;">Đây là lời nhắc về lịch hẹn sức khỏe sắp tới cho bé <strong>${dog.name}</strong>:</p>
-              <div style="background: #f3f4f6; border-radius: 12px; padding: 20px; border-left: 4px solid ${urgencyColor};">
-                <p style="margin: 0 0 8px 0; color: #6b7280; font-size: 12px; text-transform: uppercase;">Thông tin lịch hẹn</p>
-                <p style="margin: 0 0 8px 0; color: #111827; font-size: 18px; font-weight: 600;">${record.title}</p>
-                <p style="margin: 0 0 4px 0; color: #374151;">📅 <strong>Ngày:</strong> ${formattedDate}</p>
-                <p style="margin: 0; color: #374151;">🏥 <strong>Loại:</strong> ${getRecordTypeLabel(record.type)}</p>
-              </div>
-            </div>
-            <div style="background: #f9fafb; padding: 16px 24px; text-align: center; border-top: 1px solid #e5e7eb;">
-              <p style="color: #9ca3af; font-size: 11px; margin: 0;">© ${new Date().getFullYear()} DogDex 🐕💚</p>
-            </div>
-          </div>
-        `;
-
-        await emailService.sendEmail(
-          owner.email,
-          `🔔 [DogDex] Nhắc lịch hẹn ${urgency}: ${record.title} - ${dog.name}`,
-          emailContent
-        );
+        // Use consolidated email service with consistent template
+        await emailService.sendHealthReminder({
+          to: owner.email,
+          ownerName: owner.firstName || owner.username,
+          dogName: dog.name,
+          recordTitle: record.title,
+          recordType: record.type,
+          formattedDate,
+          isToday,
+          language: 'vi',
+        });
 
         await HealthRecord.updateOne({ _id: record._id }, { $set: { reminderSent: true } });
         logger.info(`[SCHEDULER] Sent reminder for record ${record._id} to ${owner.email}`);

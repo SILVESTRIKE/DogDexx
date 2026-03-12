@@ -16,9 +16,11 @@ FROM node:20-slim
 
 WORKDIR /server
 
-# 1. Cài đặt ffmpeg và các dependencies cần thiết để cài MongoDB Tools
+# 1. Cài đặt ffmpeg VỚI ĐẦY ĐỦ CODECS và các dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    libx264-dev \
+    libx265-dev \
     wget \
     && rm -rf /var/lib/apt/lists/*
 

@@ -44,7 +44,13 @@ export class PostService {
     static async createPost(data: CreatePostDTO, authorId: string, req: any, trustedAiMetadata?: any): Promise<CommunityPostDoc> {
 
         // --- AI GATEKEEPER & AUTO-FILL ---
-        let aiMetadata = {
+        let aiMetadata: {
+            breed: string;
+            breed_slug: string;
+            confidence: number;
+            color: string;
+            verificationType?: 'camera' | 'qr';
+        } = {
             breed: "Unknown",
             breed_slug: "unknown",
             confidence: 0,
@@ -54,6 +60,26 @@ export class PostService {
         // If trusted metadata is provided (e.g. from System/Owner Report Lost), use it
         if (trustedAiMetadata) {
             aiMetadata = trustedAiMetadata;
+        } else if (data.dog_id) {
+            // QR Scan scenario: Get metadata from linked DogProfile
+            const linkedDog = await DogProfile.findById(data.dog_id);
+            if (linkedDog) {
+                aiMetadata = {
+                    breed: linkedDog.breed,
+                    breed_slug: toSlug(linkedDog.breed),
+                    confidence: 1.0, // Trusted from profile
+                    color: linkedDog.attributes?.color || "Unknown",
+                    verificationType: 'qr' as const
+                };
+                // Use dog's photos if no photos provided
+                if (!data.photos || data.photos.length === 0) {
+                    data.photos = linkedDog.photos?.length > 0
+                        ? linkedDog.photos
+                        : (linkedDog.avatarPath ? [linkedDog.avatarPath] : []);
+                }
+            } else {
+                throw new BadRequestError("Linked dog profile not found.");
+            }
         } else {
             // Validate: Must have at least one photo for AI check
             if (!data.photos || data.photos.length === 0) {

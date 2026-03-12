@@ -170,7 +170,7 @@ function NewDogContent() {
         </div>
 
         <Card className="border-0 shadow-2xl bg-card/60 backdrop-blur-xl ring-1 ring-white/10 overflow-hidden">
-          <CardHeader className="bg-muted/30 border-b border-border/50">
+          <CardHeader className="pt-2">
             <div className="flex items-center gap-2">
               <div className="p-2 bg-primary/10 rounded-lg">
                 <Dog className="h-5 w-5 text-primary" />
@@ -181,10 +181,8 @@ function NewDogContent() {
               </div>
             </div>
           </CardHeader>
-
-          <CardContent className="p-6 md:p-8">
+          <CardContent>
             <form onSubmit={handleSubmit} className="space-y-8">
-
               {/* AI SCANNER SECTION */}
               <div className="relative group">
                 <input

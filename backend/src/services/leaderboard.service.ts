@@ -22,12 +22,25 @@ export const leaderboardService = {
     limit: number = 50
   ): Promise<LeaderboardEntry[]> {
     // 1. Tạo Cache Key
+    // 1. Tạo Cache Key & Lock Key
     const cleanValue = value ? value.trim().toUpperCase().replace(/\s+/g, '_') : 'ALL';
     const cacheKey = `leaderboard:${scope}:${cleanValue}:top${limit}`;
+    const lockKey = `${cacheKey}:lock`;
+    const waitInterval = 200; // 200ms for leaderboard (heavy query)
+    const maxRetries = 50; // 10 seconds timeout
 
     if (redisClient) {
-      const cached = await redisClient.get(cacheKey);
-      if (cached) return JSON.parse(cached);
+      let attempts = 0;
+      while (attempts < maxRetries) {
+        const cached = await redisClient.get(cacheKey);
+        if (cached) return JSON.parse(cached);
+
+        const acquired = await redisClient.set(lockKey, 'locked', { NX: true, EX: 15 }); // 15s lock for heavy aggregation
+        if (acquired) break; // Proceed to compute
+
+        await new Promise(resolve => setTimeout(resolve, waitInterval));
+        attempts++;
+      }
     }
 
     // 2. Pipeline Aggregation
@@ -41,15 +54,15 @@ export const leaderboardService = {
     });
     pipeline.push({ $unwind: "$userInfo" });
     pipeline.push({ $match: { "userInfo.isDeleted": false } });
-    
+
     // Lọc bỏ người dùng có vai trò 'admin' hoặc 'dev'
     pipeline.push({ $match: { "userInfo.role": { $nin: ["admin", "dev"] } } });
 
     // Lọc theo Country/City
     if (scope === 'country' && value) {
-        pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.country": { $regex: new RegExp(`^${value}$`, 'i') } } });
     } else if (scope === 'city' && value) {
-        pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
+      pipeline.push({ $match: { "userInfo.city": { $regex: new RegExp(`^${value}$`, 'i') } } });
     }
 
     pipeline.push({ $sort: { collectionSize: -1, updatedAt: 1 } });
@@ -85,6 +98,7 @@ export const leaderboardService = {
 
     if (redisClient) {
       await redisClient.set(cacheKey, JSON.stringify(leaderboard), { EX: CACHE_TTL });
+      await redisClient.del(lockKey); // Release lock
     }
 
     return leaderboard;
@@ -107,7 +121,7 @@ export const leaderboardService = {
       { $unwind: "$userInfo" },
       { $match: { "userInfo.isDeleted": false } },
       { $group: { _id: type === 'country' ? "$userInfo.country" : "$userInfo.city" } },
-      { $match: { _id: { $ne: null} } },
+      { $match: { _id: { $ne: null } } },
       { $sort: { _id: 1 } }
     ]);
 

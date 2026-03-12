@@ -47,7 +47,8 @@ export default {
     pricing: "Upgrade",
     tokens: "Tokens",
     rank: "Rank",
-
+    myPets: "My Pets",
+    lostFound: "Lost & Found",
   },
   auth: {
     loginTitle: "Login",
@@ -904,6 +905,14 @@ export default {
     details: "Details",
     verifySuccess: "Thank you! Information has been sent to the owner.",
     back: "Back",
+  },
+  lostFound: {
+    loading: "Loading more...",
+    noMore: "You've seen all posts",
+    noResults: "No results found",
+    noResultsHint: "No posts match your current filters. Try changing keywords or filters.",
+    clearFilters: "Clear filters",
+    share: "Share",
   },
   report: {
     postTitle: "URGENT: Lost Dog {name} - Breed {breed}",

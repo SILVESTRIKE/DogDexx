@@ -13,6 +13,7 @@ import { checkTokenLimit } from './middlewares/tokenLimiter.middleware'
 import { tokenConfig } from './config/token.config';
 import { Request, Response, NextFunction } from "express";
 import { uploadQueue } from "./utils/UploadQueue.util";
+import { predictionNotifier } from './utils/predictionNotifier.util';
 
 const startServer = async () => {
 
@@ -23,10 +24,10 @@ const startServer = async () => {
   await connectDB();
 
   try {
-    console.log("--> Đang xóa queue cũ...");
+    logger.info("--> Đang xóa queue cũ...");
     await uploadQueue.drain();
     await uploadQueue.obliterate({ force: true });
-    console.log("--> Đã xóa sạch queue!");
+    logger.info("--> Đã xóa sạch queue!");
   } catch (error) {
     logger.error("[Queue] Clean up error:", error);
   }
@@ -41,6 +42,28 @@ const startServer = async () => {
       middleware(req, {} as Response, next);
     };
   };
+
+  // WebSocket endpoint for prediction status push notifications
+  wsApp.ws('/ws/prediction-status', (ws, req) => {
+    ws.on('message', (msg: string) => {
+      try {
+        const data = JSON.parse(msg);
+        if (data.action === 'subscribe' && data.predictionId) {
+          predictionNotifier.subscribe(data.predictionId, ws);
+          ws.send(JSON.stringify({ event: 'subscribed', predictionId: data.predictionId }));
+        } else if (data.action === 'unsubscribe' && data.predictionId) {
+          predictionNotifier.unsubscribe(data.predictionId, ws);
+        }
+      } catch (e) {
+        logger.warn('[WS] Invalid message format');
+      }
+    });
+
+    ws.on('close', () => {
+      predictionNotifier.removeConnection(ws);
+    });
+  });
+
   wsApp.ws('/bff/predict/stream', wsOptionalAuthMiddleware, wsMiddlewareAdapter(checkTokenLimit(tokenConfig.costs.streamSession, 'single')), bffPredictionController.handleStreamPrediction);
 
   const httpServer = server.listen(PORT, () => {
